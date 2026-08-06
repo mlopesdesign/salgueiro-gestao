@@ -3,7 +3,7 @@
 > Mapa técnico gerado automaticamente por `tools/graphify.js`.
 > **Não edite à mão.** Regere com `node tools/graphify.js` a cada alteração estrutural.
 
-**Versão:** 3.3.0 · **Gerado em:** 2026-08-06
+**Versão:** 3.4.0 · **Gerado em:** 2026-08-06
 **Aplicação:** `br.com.mllopes.salgueirogestao` (Neutralino 6 + WebView2)
 **Cliente:** Boutique do Salgueiro · **Autor:** ML Lopes Design
 
@@ -90,7 +90,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `pontos.js` | 110 | 9 | ajustar, calcularGanho, calcularResgate, creditar, debitar, getConfig, historico, saldo, +1 |
 | `produtos.js` | 212 | 7 | excluirCategoria, excluirProduto, listarCategorias, listarProdutos, obterProduto, salvarCategoria, salvarProduto |
 | `rede.js` | 150 | 3 | SOMENTE_LOCAL, imprimir, iniciar, listarImpressoras, parar, preparar, status |
-| `relatorios.js` | 739 | 18 | TAXAS_PADRAO, consignadosMensal, curvaAbc, eventosVenda, pecasParadas, ranking, rankingPeriodo, receitaPorLoja, +2 |
+| `relatorios.js` | 864 | 19 | TAXAS_PADRAO, consignadosMensal, curvaAbc, estoqueDetalhado, eventosVenda, pecasParadas, ranking, rankingPeriodo, +3 |
 | `trocas.js` | 252 | 2 | DESTINOS, registrar |
 | `updater.js` | 50 | 1 | verificarAtualizacao |
 | `util.js` | 68 | 4 | auditar, codigoInterno, dvEan13, hashSenha, verificarSenha |
@@ -103,7 +103,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `ambiente.js` | 237 | 3 |
 | `db.js` | 518 | 5 |
 | `servidor-rede-embutido.js` | 440 | 15 |
-| `servidor.js` | 1343 | 8 |
+| `servidor.js` | 1346 | 8 |
 
 ## 6. Telas (`src/js`)
 
@@ -119,14 +119,14 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `financeiro.js` | 260 | viewFinanceiro |
 | `mensagens.js` | 558 | abrirBalao, encerrarTelaMensagens, iniciarMensagens, pararMensagens, viewMensagens |
 | `neutralino.js` | 2 | — |
-| `novidades.js` | 258 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
+| `novidades.js` | 271 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
 | `pdv.js` | 1536 | calcResgateLocal, viewPdv |
 | `ranking.js` | 361 | viewRanking |
-| `relatorios.js` | 659 | viewRelatorios |
+| `relatorios.js` | 940 | viewRelatorios |
 
 ---
 
-## 7. Rotas da API (141)
+## 7. Rotas da API (142)
 
 Toda comunicação tela ↔ backend passa por `api('canal:acao', payload)`.
 A coluna **Permissão** vem de `PERMISSAO_ROTA` em `servidor.js` — sem entrada ali,
@@ -395,6 +395,7 @@ a rota exige apenas sessão válida.
 | `relatorios:vendas` | `relatorios.ver` | `relatorios.vendasPeriodo(db, p \|\| {})` |
 | `relatorios:abc` | `relatorios.ver` | `relatorios.curvaAbc(db, p \|\| {})` |
 | `relatorios:paradas` | `relatorios.ver` | `relatorios.pecasParadas(db, p \|\| {})` |
+| `relatorios:estoque` | `estoque.ver` | `relatorios.estoqueDetalhado(db, p \|\| {})` |
 | `relatorios:receitaPorLoja` | `dashboard.financeiro` | `relatorios.receitaPorLoja(db, p \|\| {})` |
 | `relatorios:consignados` | `relatorios.ver` | `relatorios.consignadosMensal(db, p \|\| {})` |
 | `relatorios:evento` | `relatorios.ver` | `relatorios.relatorioEvento(db, p \|\| {})` |

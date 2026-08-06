@@ -735,5 +735,130 @@ function ranking(db, p) {
   return saida;
 }
 
-export { vendasPeriodo, curvaAbc, pecasParadas, receitaPorLoja, consignadosMensal,
+
+// ── Relatório de estoque (v3.4.0) ───────────────────────────────────────────
+// Pedido do Marcio: a tela de Estoque lista variação por variação, numa lista
+// plana — não agrupa por produto nem soma nada. Aqui o estoque sai organizado:
+//   PRODUTO  →  suas variações  →  total do produto  →  ... →  TOTAL GERAL
+// com uma coluna por local (Almoxarifado, Loja…) para ver ONDE a peça está.
+//
+// Filtros: categoria, situação do estoque, fornecedor e o período de CADASTRO
+// do produto — é assim que se confere uma remessa que acabou de entrar.
+//
+// REGRA DE OURO respeitada: `variacoes.estoque` é o TOTAL; `estoque_saldos`
+// apenas reparte. Por isso a coluna Total vem de v.estoque e não da soma dos
+// locais — se as duas divergirem, o relatório mostra a divergência em vez de
+// escondê-la (campo `divergencia` no resumo).
+function estoqueDetalhado(db, p) {
+  p = p || {};
+  const catId = p.categoria_id ? Number(p.categoria_id) : null;
+  const fornId = p.fornecedor_id ? Number(p.fornecedor_id) : null;
+  const situacao = ['todos', 'com', 'sem'].includes(p.situacao) ? p.situacao : 'todos';
+  const de = String(p.de || '').trim();   // 'AAAA-MM-DD' — data de cadastro
+  const ate = String(p.ate || '').trim();
+
+  const locais = db.prepare(
+    "SELECT id, nome, tipo FROM estoques WHERE ativo=1 ORDER BY principal DESC, nome"
+  ).all();
+
+  const cond = [], arg = [];
+  if (catId)  { cond.push('p.categoria_id = ?'); arg.push(catId); }
+  if (fornId) { cond.push('p.fornecedor_id = ?'); arg.push(fornId); }
+  if (de)     { cond.push("date(p.criado_em) >= date(?)"); arg.push(de); }
+  if (ate)    { cond.push("date(p.criado_em) <= date(?)"); arg.push(ate); }
+  const filtro = cond.length ? ' AND ' + cond.join(' AND ') : '';
+
+  const linhas = db.prepare(`
+    SELECT p.id AS produto_id, p.nome AS produto, p.referencia, p.criado_em,
+           COALESCE(c.nome, 'Sem categoria') AS categoria,
+           COALESCE(f.nome, '') AS fornecedor,
+           p.preco_custo, p.preco_venda, p.consignado,
+           v.id AS variacao_id, v.cor, v.tamanho, v.codigo_barras, v.estoque,
+           v.estoque_minimo AS min_var, p.estoque_minimo AS min_prod
+    FROM variacoes v
+    JOIN produtos p ON p.id = v.produto_id
+    LEFT JOIN categorias c ON c.id = p.categoria_id
+    LEFT JOIN fornecedores f ON f.id = p.fornecedor_id
+    WHERE v.ativo = 1 AND p.ativo = 1${filtro}
+    ORDER BY p.nome, v.cor, v.tamanho
+  `).all(...arg);
+
+  // saldos por local, indexados por variação
+  const saldos = {};
+  for (const s of db.prepare('SELECT estoque_id, variacao_id, qtd FROM estoque_saldos').all()) {
+    (saldos[s.variacao_id] || (saldos[s.variacao_id] = {}))[s.estoque_id] = s.qtd;
+  }
+
+  const zeraLocais = () => { const o = {}; for (const l of locais) o[l.id] = 0; return o; };
+  const produtos = [];
+  let atual = null;
+
+  for (const l of linhas) {
+    const qtd = Number(l.estoque) || 0;
+    if (situacao === 'com' && qtd <= 0) continue;
+    if (situacao === 'sem' && qtd > 0) continue;
+
+    if (!atual || atual.id !== l.produto_id) {
+      atual = {
+        id: l.produto_id, nome: l.produto, referencia: l.referencia || '',
+        categoria: l.categoria, fornecedor: l.fornecedor,
+        consignado: !!l.consignado,
+        cadastrado_em: String(l.criado_em || '').slice(0, 10),
+        preco_custo: arred(l.preco_custo), preco_venda: arred(l.preco_venda),
+        variacoes: [], total: 0, valor_custo: 0, valor_venda: 0, por_local: zeraLocais()
+      };
+      produtos.push(atual);
+    }
+
+    const porLocal = zeraLocais();
+    let somaLocais = 0;
+    for (const l2 of locais) {
+      const q = Number((saldos[l.variacao_id] || {})[l2.id]) || 0;
+      porLocal[l2.id] = q;
+      somaLocais += q;
+      atual.por_local[l2.id] += q;
+    }
+    const minimo = Number(l.min_var) || Number(l.min_prod) || 0;
+    const vCusto = arred(qtd * (Number(l.preco_custo) || 0));
+    const vVenda = arred(qtd * (Number(l.preco_venda) || 0));
+
+    atual.variacoes.push({
+      id: l.variacao_id,
+      cor: l.cor, tamanho: l.tamanho, codigo_barras: l.codigo_barras || '',
+      total: qtd, por_local: porLocal,
+      sem_local: arred(qtd - somaLocais),   // parte que ainda não foi distribuída
+      minimo, abaixo: minimo > 0 && qtd < minimo,
+      valor_custo: vCusto, valor_venda: vVenda
+    });
+    atual.total += qtd;
+    atual.valor_custo = arred(atual.valor_custo + vCusto);
+    atual.valor_venda = arred(atual.valor_venda + vVenda);
+  }
+
+  // produtos que ficaram sem nenhuma variação depois do filtro
+  const lista = produtos.filter(pr => pr.variacoes.length);
+
+  const resumo = {
+    produtos: lista.length,
+    variacoes: lista.reduce((s, pr) => s + pr.variacoes.length, 0),
+    pecas: lista.reduce((s, pr) => s + pr.total, 0),
+    valor_custo: arred(lista.reduce((s, pr) => s + pr.valor_custo, 0)),
+    valor_venda: arred(lista.reduce((s, pr) => s + pr.valor_venda, 0)),
+    abaixo_minimo: lista.reduce((s, pr) => s + pr.variacoes.filter(v => v.abaixo).length, 0),
+    por_local: (() => {
+      const o = zeraLocais();
+      for (const pr of lista) for (const l of locais) o[l.id] += pr.por_local[l.id];
+      return o;
+    })()
+  };
+  // total das colunas de local tem que fechar com o total geral
+  resumo.divergencia = arred(
+    resumo.pecas - locais.reduce((s, l) => s + resumo.por_local[l.id], 0)
+  );
+
+  return { ok: true, locais, produtos: lista, resumo, filtros: { catId, fornId, situacao, de, ate } };
+}
+
+export {
+  estoqueDetalhado, vendasPeriodo, curvaAbc, pecasParadas, receitaPorLoja, consignadosMensal,
   relatorioEvento, ranking, rankingPeriodo, eventosVenda, TAXAS_PADRAO };

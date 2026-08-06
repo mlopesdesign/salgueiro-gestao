@@ -1,7 +1,7 @@
 # Manual do Usuário — Salgueiro Gestão
 
 **Sistema de gestão para loja de roupas**
-Versão 3.3.0 · ML Lopes Design
+Versão 3.4.0 · ML Lopes Design
 
 ---
 
@@ -741,6 +741,52 @@ PDF" para enviar por WhatsApp) e **📊 Excel**, que gera uma aba para cada seç
 
 ---
 
+### 📦 Estoque (conferência e inventário)
+
+A tela **Estoque** mostra uma lista corrida, variação por variação, sem somar nada. Este relatório é o estoque **organizado e somado**:
+
+```
+VESTIDO LONGO                    Almox.  Loja   TOTAL
+  Vinho / M                          4     2       6
+  Vinho / G                          3     0       3
+  Preto / M                          1     5       6
+  Total do produto                   8     7      15
+
+BLUSA SEDA
+  Preto / P                          2     1       3
+  Total do produto                   2     1       3
+
+TOTAL GERAL                         10     8      18
+```
+
+#### Para que serve
+
+| Situação | O que fazer |
+|---|---|
+| **Bater o estoque com o físico** | Marque **Coluna "Contado"**, imprima e conte peça por peça. O papel sai com espaço em branco para escrever a contagem e a diferença |
+| **Conferir uma remessa que chegou** | Preencha **Cadastrados de/até** com o dia do recebimento |
+| **Conferir uma remessa antiga** | Em **Agrupar por**, escolha **Data de cadastro**: cada dia vira um bloco separado, com o total daquele dia |
+| **Ver onde está cada peça** | Deixe **Colunas por local** marcado |
+| **Saber quanto vale o estoque** | Deixe **Valor de custo** e **Valor de venda** marcados |
+
+#### Filtros
+
+- **Categoria** e **Fornecedor**
+- **Situação:** só com estoque · todos · só zerados
+- **Cadastrados de / até** — o período em que os produtos foram cadastrados
+- **Agrupar por:** Produto · Data de cadastro · Categoria
+
+#### O que o relatório destaca
+
+- Peça **abaixo do estoque mínimo** aparece com a linha marcada e um ▼ ao lado do total
+- Se alguma peça está no total mas **sem lugar definido**, aparece um aviso em âmbar no topo. Isso acontece quando a peça entrou no sistema mas nunca foi distribuída entre os locais — resolva em **🏢 Estoques**
+
+> Este relatório é uma **foto de agora**. As datas do topo da tela de Relatórios não valem aqui: quem manda são os filtros da própria aba.
+
+Botões **🖨️ Imprimir** e **📄 PDF** no topo da tela, e **📊 Excel** na própria aba. As colunas exportadas são as mesmas que você marcou.
+
+---
+
 ## 15. Ranking
 
 Menu **🏆 Ranking**. Mostra os produtos mais vendidos.
@@ -984,6 +1030,10 @@ Use isso depois de atualizar, para saber o que apareceu de novo no sistema.
 | **Não sei quem deu um desconto** | Relatórios → Evento → seção 🏷️ Descontos autorizados |
 | **A foto da variação some ao salvar** | Corrigido na 3.3.0. Atualize o aplicativo |
 | **Categoria de cliente perdeu o desconto** | Bug corrigido na 3.3.0. Reponha o percentual em Clientes → Categorias |
+| **Preciso conferir o estoque na mão** | Relatórios → 📦 Estoque → marque "Coluna Contado" → Imprimir |
+| **Chegou mercadoria e quero conferir** | Relatórios → 📦 Estoque → preencha "Cadastrados de/até" |
+| **Não conferi no dia do recebimento** | Relatórios → 📦 Estoque → Agrupar por **Data de cadastro** |
+| **Aviso de peça sem lugar definido** | A peça existe no total mas não foi distribuída. Vá em 🏢 Estoques e faça a distribuição |
 | **Preciso cadastrar peça igual a outra** | Botão **Duplicar** na linha do produto |
 | **Não consigo excluir o Consumidor final** | É cliente do sistema: recebe as vendas sem identificação |
 | **Não consigo digitar a quantidade** | Corrigido na versão 3.2.0. Clique no campo Qtd (o valor já vem selecionado), digite por cima e aperte Enter |
@@ -1007,4 +1057,4 @@ Esta confusão é comum e afeta os relatórios:
 **Suporte técnico**
 ML Lopes Design — mlopesdesign@gmail.com
 
-*Manual referente à versão 3.3.0*
+*Manual referente à versão 3.4.0*

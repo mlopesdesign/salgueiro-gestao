@@ -3,6 +3,19 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.4.0', data: '2026-08-06',
+    titulo: 'Relatório de estoque para conferir na mão',
+    itens: [
+      'Nova aba 📦 Estoque em Relatórios. O estoque sai organizado: o produto, embaixo dele cada cor e tamanho, o total do produto, e no fim o total geral. A tela de Estoque continua sendo a lista corrida — este é o relatório somado.',
+      'Uma coluna para cada lugar (Almoxarifado, Loja), então você vê onde está cada peça sem abrir outra tela.',
+      'Marque “Coluna Contado” e imprima: sai com espaço em branco para escrever a contagem e a diferença peça por peça. É o papel para bater o estoque com o físico.',
+      'Para conferir uma remessa que chegou, preencha “Cadastrados de/até” — e se preferir, escolha agrupar por Data de cadastro: cada dia vira um bloco, com o total daquele dia. Assim dá para conferir depois, mesmo sem ter conferido no dia.',
+      'Também dá para agrupar por categoria, filtrar por fornecedor, e mostrar só o que tem estoque ou só o que está zerado.',
+      'Peça abaixo do estoque mínimo aparece destacada. Se alguma peça estiver no total mas sem lugar definido, o relatório avisa em vez de esconder.',
+      'Exporta em Excel e imprime (ou salva em PDF) com as mesmas colunas que você escolheu na tela.'
+    ]
+  },
+  {
     versao: '3.3.0', data: '2026-08-05',
     titulo: 'Desconto sem chamar o administrador, e duplicar produto',
     itens: [

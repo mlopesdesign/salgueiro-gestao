@@ -183,6 +183,25 @@ O cadastro abre preenchido — ajuste nome e preço e salve.
 
 ---
 
+## Conferir o estoque (inventário ou recebimento)
+
+1. Menu **📈 Relatórios** → aba **📦 Estoque**
+2. Escolha os filtros e clique em **Gerar relatório**
+3. Marque **Coluna "Contado"** para sair espaço em branco
+4. **🖨️ Imprimir** e contar peça por peça
+
+O relatório sai assim: o produto, embaixo cada cor e tamanho, o **total do
+produto**, e no fim o **TOTAL GERAL**. Uma coluna para cada lugar
+(Almoxarifado, Loja).
+
+**Chegou mercadoria?** Preencha **Cadastrados de/até** com o dia do
+recebimento. Se já passou e você não conferiu no dia, escolha
+**Agrupar por → Data de cadastro**: cada dia vira um bloco com o total dele.
+
+> Peça abaixo do mínimo sai destacada. Exporta em **Excel** também.
+
+---
+
 ## Fechando o dia
 
 1. No PDV, clique em **Fechar caixa**
@@ -296,4 +315,4 @@ lista todas as versões e o que cada uma trouxe. A sua aparece com o selo verde
 
 **Suporte:** ML Lopes Design — mlopesdesign@gmail.com
 
-*Guia referente à versão 3.3.0*
+*Guia referente à versão 3.4.0*

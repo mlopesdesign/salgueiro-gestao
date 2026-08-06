@@ -69,12 +69,13 @@ export async function viewRelatorios(alvo) {
         <button data-aba="consignados">Consignados</button>
         <button data-aba="abc">Curva ABC</button>
         <button data-aba="paradas">Peças paradas</button>
+        ${pode('estoque.ver') ? '<button data-aba="estoque">📦 Estoque</button>' : ''}
       </div>
       <div id="aba-conteudo"></div>
     </div>`);
   const corpo = tela.querySelector('#aba-conteudo');
   const periodo = () => ({ de: tela.querySelector('#r-de').value, ate: tela.querySelector('#r-ate').value });
-  const abas = { vendas: abaVendas, evento: abaEvento, lojas: abaPorLoja, consignados: abaConsignados, abc: abaAbc, paradas: abaParadas };
+  const abas = { vendas: abaVendas, evento: abaEvento, lojas: abaPorLoja, consignados: abaConsignados, abc: abaAbc, paradas: abaParadas, estoque: abaEstoque };
   const rotuloAba = () => (tela.querySelector('.abas button.ativa')?.textContent || 'Relatório').trim();
   tela.querySelector('#r-imprimir').onclick = () => imprimirRelatorio(
     `${rotuloAba()} — ${tela.querySelector('#r-de').value} a ${tela.querySelector('#r-ate').value}`, corpo.innerHTML);
@@ -655,4 +656,284 @@ async function abaParadas(corpo) {
   bloco.querySelector('#pp-dias').addEventListener('change', carregar);
   corpo.appendChild(bloco);
   carregar();
+}
+
+
+// ── Aba: Estoque (v3.4.0) ───────────────────────────────────────────────────
+// Serve para três coisas que o Marcio faz na prática:
+//   1. ver o estoque organizado (produto → variações → total), que a tela de
+//      Estoque não faz: lá é uma lista plana, sem soma nenhuma
+//   2. BATER O ESTOQUE COM O FÍSICO — por isso a coluna "Contado" em branco
+//   3. CONFERIR RECEBIMENTO — por isso o filtro por data de cadastro
+// O período do topo da tela não vale aqui: estoque é uma foto de AGORA.
+async function abaEstoque(corpo) {
+  _estiloEstoqueRel();
+  const [cats, forns] = await Promise.all([
+    api('categorias:listar'), api('fornecedores:listar', {})
+  ]);
+  const optCats = '<option value="">Todas as categorias</option>' +
+    ((cats.ok && cats.categorias) || []).map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join('');
+  const optForns = '<option value="">Todos os fornecedores</option>' +
+    ((forns.ok && forns.fornecedores) || []).map(f => `<option value="${f.id}">${esc(f.nome)}</option>`).join('');
+
+  const painel = el(`
+    <div class="painel">
+      <div class="est-filtros">
+        <div class="campo"><label>Categoria</label><select id="es-cat">${optCats}</select></div>
+        <div class="campo"><label>Fornecedor</label><select id="es-forn">${optForns}</select></div>
+        <div class="campo"><label>Situação</label>
+          <select id="es-sit">
+            <option value="com">Só com estoque</option>
+            <option value="todos">Todos</option>
+            <option value="sem">Só zerados</option>
+          </select></div>
+        <div class="campo"><label>Cadastrados de</label><input id="es-de" type="date"></div>
+        <div class="campo"><label>até</label><input id="es-ate" type="date"></div>
+        <div class="campo"><label>Agrupar por</label>
+          <select id="es-grupo">
+            <option value="produto">Produto</option>
+            <option value="data">Data de cadastro (recebimento)</option>
+            <option value="categoria">Categoria</option>
+          </select></div>
+      </div>
+      <div class="est-opcoes">
+        <label><input type="checkbox" id="es-locais" checked> Colunas por local</label>
+        <label><input type="checkbox" id="es-codigo"> Código de barras</label>
+        ${pode('produtos.custo') ? '<label><input type="checkbox" id="es-custo" checked> Valor de custo</label>' : ''}
+        <label><input type="checkbox" id="es-venda" checked> Valor de venda</label>
+        <label title="Coluna vazia para escrever a contagem à mão"><input type="checkbox" id="es-contado"> Coluna “Contado” (conferência)</label>
+        <button class="btn btn-primario" id="es-gerar">Gerar relatório</button>
+        <button class="btn btn-suave" id="es-xlsx" disabled>📊 Excel</button>
+      </div>
+      <p class="est-dica">
+        Para <b>bater o estoque com o físico</b>, marque “Contado”, imprima e conte peça por peça.
+        Para <b>conferir uma remessa</b>, preencha o período em “Cadastrados de/até”.
+      </p>
+      <div id="es-saida"><div class="vazio">Escolha os filtros e clique em <b>Gerar relatório</b>.</div></div>
+    </div>`);
+  corpo.appendChild(painel);
+
+  const q = (sel) => painel.querySelector(sel);
+  let ultimo = null;
+
+  async function gerar() {
+    q('#es-saida').innerHTML = '<div class="vazio">Carregando…</div>';
+    const r = await api('relatorios:estoque', {
+      categoria_id: q('#es-cat').value || null,
+      fornecedor_id: q('#es-forn').value || null,
+      situacao: q('#es-sit').value,
+      de: q('#es-de').value || '',
+      ate: q('#es-ate').value || ''
+    });
+    if (!r.ok) { q('#es-saida').innerHTML = `<div class="vazio">${esc(r.erro || 'Erro ao gerar.')}</div>`; return; }
+    ultimo = r;
+    q('#es-xlsx').disabled = !r.produtos.length;
+    q('#es-saida').innerHTML = montarHtml(r, opcoes());
+  }
+
+  const opcoes = () => ({
+    grupo: q('#es-grupo').value,
+    locais: q('#es-locais').checked,
+    codigo: q('#es-codigo').checked,
+    custo: !!q('#es-custo')?.checked,
+    venda: q('#es-venda').checked,
+    contado: q('#es-contado').checked
+  });
+
+  q('#es-gerar').onclick = gerar;
+  // marcar/desmarcar coluna redesenha na hora, sem ir ao banco de novo
+  ['#es-locais', '#es-codigo', '#es-custo', '#es-venda', '#es-contado', '#es-grupo'].forEach(sel => {
+    q(sel)?.addEventListener('change', () => { if (ultimo) q('#es-saida').innerHTML = montarHtml(ultimo, opcoes()); });
+  });
+
+  q('#es-xlsx').onclick = () => {
+    if (!ultimo) return;
+    const o = opcoes();
+    const cab = ['Produto', 'Referência', 'Categoria', 'Cadastrado em', 'Cor', 'Tamanho'];
+    if (o.codigo) cab.push('Cód. barras');
+    if (o.locais) for (const l of ultimo.locais) cab.push(l.nome);
+    cab.push('Total');
+    if (o.contado) cab.push('Contado', 'Diferença');
+    if (o.custo) cab.push('Valor custo');
+    if (o.venda) cab.push('Valor venda');
+
+    const linhas = [];
+    for (const p of ultimo.produtos) {
+      for (const v of p.variacoes) {
+        const li = [p.nome, p.referencia, p.categoria, dataBr(p.cadastrado_em), v.cor, v.tamanho];
+        if (o.codigo) li.push(v.codigo_barras);
+        if (o.locais) for (const l of ultimo.locais) li.push(v.por_local[l.id]);
+        li.push(v.total);
+        if (o.contado) li.push('', '');
+        if (o.custo) li.push(v.valor_custo);
+        if (o.venda) li.push(v.valor_venda);
+        linhas.push(li);
+      }
+      // linha de subtotal do produto
+      const sub = [`TOTAL — ${p.nome}`, '', '', '', '', ''];
+      if (o.codigo) sub.push('');
+      if (o.locais) for (const l of ultimo.locais) sub.push(p.por_local[l.id]);
+      sub.push(p.total);
+      if (o.contado) sub.push('', '');
+      if (o.custo) sub.push(p.valor_custo);
+      if (o.venda) sub.push(p.valor_venda);
+      linhas.push(sub);
+    }
+    const fim = ['TOTAL GERAL', '', '', '', '', ''];
+    if (o.codigo) fim.push('');
+    if (o.locais) for (const l of ultimo.locais) fim.push(ultimo.resumo.por_local[l.id]);
+    fim.push(ultimo.resumo.pecas);
+    if (o.contado) fim.push('', '');
+    if (o.custo) fim.push(ultimo.resumo.valor_custo);
+    if (o.venda) fim.push(ultimo.resumo.valor_venda);
+    linhas.push(fim);
+
+    baixarCsv(`estoque-${hoje()}`, cab, linhas);
+  };
+
+  function montarHtml(r, o) {
+    if (!r.produtos.length) return '<div class="vazio">Nenhum produto com esses filtros.</div>';
+    const nLoc = o.locais ? r.locais.length : 0;
+    let cols = 2 + (o.codigo ? 1 : 0) + nLoc + 1 + (o.contado ? 2 : 0) + (o.custo ? 1 : 0) + (o.venda ? 1 : 0);
+
+    const cab = `<tr>
+      <th>Cor</th><th>Tamanho</th>
+      ${o.codigo ? '<th>Cód. barras</th>' : ''}
+      ${o.locais ? r.locais.map(l => `<th class="num">${esc(l.nome)}</th>`).join('') : ''}
+      <th class="num">Total</th>
+      ${o.contado ? '<th class="num est-branco">Contado</th><th class="num est-branco">Dif.</th>' : ''}
+      ${o.custo ? '<th class="num">Custo</th>' : ''}
+      ${o.venda ? '<th class="num">Venda</th>' : ''}
+    </tr>`;
+
+    let h = `<div class="est-resumo">
+      <span><b>${r.resumo.produtos}</b> produto(s)</span>
+      <span><b>${r.resumo.variacoes}</b> variação(ões)</span>
+      <span><b>${r.resumo.pecas}</b> peça(s)</span>
+      ${o.custo ? `<span>Custo <b>${moeda(r.resumo.valor_custo)}</b></span>` : ''}
+      ${o.venda ? `<span>Venda <b>${moeda(r.resumo.valor_venda)}</b></span>` : ''}
+      ${r.resumo.abaixo_minimo ? `<span class="est-alerta">${r.resumo.abaixo_minimo} abaixo do mínimo</span>` : ''}
+    </div>`;
+
+    if (r.resumo.divergencia) {
+      h += `<div class="est-divergencia">⚠️ ${Math.abs(r.resumo.divergencia)} peça(s) sem local definido —
+        aparecem no Total mas não estão em nenhum estoque. Use 🏢 Estoques para distribuir.</div>`;
+    }
+
+    // Agrupamento: "data" junta tudo que foi cadastrado no mesmo dia — é assim
+    // que se confere uma remessa recebida dias atrás. "categoria" agrupa por
+    // seção da loja. "produto" (padrão) não quebra nada.
+    const blocos = agrupar(r.produtos, o.grupo);
+
+    for (const bloco of blocos) {
+      if (bloco.rotulo) {
+        const pecas = bloco.itens.reduce((s2, x) => s2 + x.total, 0);
+        h += `<div class="est-bloco">
+          <span>${esc(bloco.rotulo)}</span>
+          <span class="est-bloco-tot">${bloco.itens.length} produto(s) · ${pecas} peça(s)</span>
+        </div>`;
+      }
+      for (const p of bloco.itens) {
+      h += `<table class="est-tabela">
+        <thead>
+          <tr class="est-prod"><th colspan="${cols}">
+            ${esc(p.nome)}
+            ${p.referencia ? `<span class="est-ref">Ref. ${esc(p.referencia)}</span>` : ''}
+            <span class="est-cat">${esc(p.categoria)}</span>
+            ${p.consignado ? '<span class="est-consig">consignado</span>' : ''}
+            <span class="est-data">cadastrado em ${dataBr(p.cadastrado_em)}</span>
+          </th></tr>
+          ${cab}
+        </thead>
+        <tbody>
+          ${p.variacoes.map(v => `<tr${v.abaixo ? ' class="est-baixo"' : ''}>
+            <td>${esc(v.cor)}</td><td>${esc(v.tamanho)}</td>
+            ${o.codigo ? `<td class="est-cod">${esc(v.codigo_barras)}</td>` : ''}
+            ${o.locais ? r.locais.map(l => `<td class="num">${v.por_local[l.id] || '—'}</td>`).join('') : ''}
+            <td class="num"><b>${v.total}</b>${v.abaixo ? ` <small title="mínimo ${v.minimo}">▼</small>` : ''}</td>
+            ${o.contado ? '<td class="est-branco"></td><td class="est-branco"></td>' : ''}
+            ${o.custo ? `<td class="num">${moeda(v.valor_custo)}</td>` : ''}
+            ${o.venda ? `<td class="num">${moeda(v.valor_venda)}</td>` : ''}
+          </tr>`).join('')}
+          <tr class="est-subtotal">
+            <td colspan="${2 + (o.codigo ? 1 : 0)}"><b>Total do produto</b></td>
+            ${o.locais ? r.locais.map(l => `<td class="num"><b>${p.por_local[l.id]}</b></td>`).join('') : ''}
+            <td class="num"><b>${p.total}</b></td>
+            ${o.contado ? '<td class="est-branco"></td><td class="est-branco"></td>' : ''}
+            ${o.custo ? `<td class="num"><b>${moeda(p.valor_custo)}</b></td>` : ''}
+            ${o.venda ? `<td class="num"><b>${moeda(p.valor_venda)}</b></td>` : ''}
+          </tr>
+        </tbody>
+      </table>`;
+      }
+    }
+
+    h += `<table class="est-tabela est-geral"><tbody><tr>
+      <td><b>TOTAL GERAL</b> — ${r.resumo.produtos} produto(s), ${r.resumo.variacoes} variação(ões)</td>
+      ${o.locais ? r.locais.map(l => `<td class="num"><b>${r.resumo.por_local[l.id]}</b><small>${esc(l.nome)}</small></td>`).join('') : ''}
+      <td class="num est-total-final"><b>${r.resumo.pecas}</b><small>peças</small></td>
+      ${o.custo ? `<td class="num"><b>${moeda(r.resumo.valor_custo)}</b><small>custo</small></td>` : ''}
+      ${o.venda ? `<td class="num"><b>${moeda(r.resumo.valor_venda)}</b><small>venda</small></td>` : ''}
+    </tr></tbody></table>`;
+    return h;
+  }
+
+  gerar();
+}
+
+// Quebra a lista de produtos em blocos conforme o agrupamento escolhido.
+// Sem agrupamento devolve um bloco único e sem rótulo.
+function agrupar(produtos, modo) {
+  if (modo !== 'data' && modo !== 'categoria') return [{ rotulo: '', itens: produtos }];
+  const mapa = new Map();
+  for (const p of produtos) {
+    const chave = modo === 'data' ? (p.cadastrado_em || 'sem data') : (p.categoria || 'Sem categoria');
+    if (!mapa.has(chave)) mapa.set(chave, []);
+    mapa.get(chave).push(p);
+  }
+  const chaves = [...mapa.keys()].sort();
+  if (modo === 'data') chaves.reverse();   // recebimento mais recente primeiro
+  return chaves.map(k => ({
+    rotulo: modo === 'data'
+      ? `📅 Cadastrados em ${dataBr(k)}`
+      : `🏷️ ${k}`,
+    itens: mapa.get(k)
+  }));
+}
+
+function _estiloEstoqueRel() {
+  if (document.getElementById('estilo-estoque-rel')) return;
+  const st = document.createElement('style');
+  st.id = 'estilo-estoque-rel';
+  st.textContent = `
+    .est-filtros{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:10px}
+    .est-filtros .campo{margin:0}
+    .est-opcoes{display:flex;flex-wrap:wrap;gap:14px;align-items:center;padding:10px 0;border-top:1px solid var(--borda)}
+    .est-opcoes label{display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer}
+    .est-opcoes .btn{margin-left:auto}
+    .est-dica{font-size:11.5px;color:var(--texto-suave);margin:0 0 12px}
+    .est-resumo{display:flex;flex-wrap:wrap;gap:16px;background:var(--creme);border-radius:8px;padding:9px 14px;margin-bottom:12px;font-size:12.5px}
+    .est-alerta{color:var(--vermelho,#dc2626);font-weight:600}
+    .est-divergencia{background:#FDF8EC;border-left:3px solid var(--destaque,#F2C14E);padding:7px 12px;margin-bottom:12px;font-size:12px;border-radius:4px}
+    .est-bloco{display:flex;justify-content:space-between;align-items:center;background:var(--creme);border-left:4px solid var(--vinho);padding:7px 12px;margin:16px 0 8px;font-weight:700;font-size:13px;color:var(--vinho);border-radius:0 6px 6px 0}
+    .est-bloco-tot{font-weight:600;font-size:11.5px;color:var(--texto-suave)}
+    .est-tabela{width:100%;border-collapse:collapse;margin-bottom:14px;font-size:12px;page-break-inside:avoid}
+    .est-tabela th,.est-tabela td{border:1px solid var(--borda);padding:4px 7px}
+    .est-prod th{background:var(--vinho);color:#fff;text-align:left;font-size:13px;padding:6px 9px}
+    .est-ref,.est-cat,.est-consig,.est-data{font-weight:400;font-size:11px;opacity:.85;margin-left:10px}
+    .est-tabela thead tr:not(.est-prod) th{background:#F6E9E9;color:var(--vinho);font-size:11px}
+    .est-subtotal td{background:var(--creme)}
+    .est-baixo td{background:#FFF6F6}
+    .est-cod{font-family:monospace;font-size:10.5px}
+    .est-branco{background:#fff !important;min-width:62px}
+    .est-geral td{background:var(--vinho);color:#fff;font-size:13px;padding:9px}
+    .est-geral small{display:block;font-size:10px;opacity:.8;font-weight:400}
+    .est-total-final{font-size:15px}
+    @media print{
+      .est-opcoes,.est-filtros,.est-dica{display:none !important}
+      .est-prod th{background:#7E1114 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      .est-geral td{background:#7E1114 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      .est-subtotal td,.est-resumo{background:#F6E9E9 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    }`;
+  document.head.appendChild(st);
 }
