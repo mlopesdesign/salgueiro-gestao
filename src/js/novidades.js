@@ -3,7 +3,7 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
-    versao: '3.4.0', data: '2026-08-06',
+    versao: '3.4.1', data: '2026-08-06',
     titulo: 'Relatório de estoque para conferir na mão',
     itens: [
       'Nova aba 📦 Estoque em Relatórios. O estoque sai organizado: o produto, embaixo dele cada cor e tamanho, o total do produto, e no fim o total geral. A tela de Estoque continua sendo a lista corrida — este é o relatório somado.',

@@ -1,7 +1,7 @@
 # Manual do Usuário — Salgueiro Gestão
 
 **Sistema de gestão para loja de roupas**
-Versão 3.4.0 · ML Lopes Design
+Versão 3.4.1 · ML Lopes Design
 
 ---
 
@@ -1097,4 +1097,4 @@ Esta confusão é comum e afeta os relatórios:
 **Suporte técnico**
 ML Lopes Design — mlopesdesign@gmail.com
 
-*Manual referente à versão 3.4.0*
+*Manual referente à versão 3.4.1*
