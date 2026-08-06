@@ -3,6 +3,16 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.5.2', data: '2026-08-06',
+    titulo: 'Correção: o estoque inicial do produto novo não era gravado',
+    itens: [
+      'CORREÇÃO IMPORTANTE. Ao cadastrar um produto novo digitando só a quantidade — sem preencher cor e tamanho — o estoque era perdido: você salvava e o produto nascia zerado, obrigando a dar entrada depois pelo módulo Estoque.',
+      'Agora a quantidade é gravada normalmente. A peça vira uma variação "Única / U" com o estoque que você digitou, já distribuída no Almoxarifado Central e com o movimento de entrada registrado.',
+      'Quem preenche cor e tamanho não é afetado — esse caminho sempre funcionou.',
+      'Se você cadastrou peças nos últimos dias e elas ficaram zeradas, confira em Relatórios → 📦 Estoque com o filtro "Cadastrados de/até".'
+    ]
+  },
+  {
     versao: '3.5.1', data: '2026-08-06',
     titulo: 'Transferência: todas as variações sempre à vista',
     itens: [

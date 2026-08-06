@@ -105,7 +105,10 @@ function salvarProduto(db, p, quem) {
 
   const variacoes = Array.isArray(p.variacoes) && p.variacoes.length
     ? p.variacoes
-    : [{ cor: 'Única', tamanho: 'U', estoque: 0 }];
+    // Produto salvo sem nenhuma linha na grade: cria a variação padrão.
+    // O estoque vem de `p.estoque_inicial` quando a tela mandar — assim quem
+    // digita só a quantidade não perde o número (ver app.js).
+    : [{ cor: 'Única', tamanho: 'U', estoque: Number(p.estoque_inicial) || 0 }];
 
   // valida duplicidade cor+tamanho no formulário
   const chaves = new Set();

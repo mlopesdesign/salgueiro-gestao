@@ -3,7 +3,7 @@
 > Mapa técnico gerado automaticamente por `tools/graphify.js`.
 > **Não edite à mão.** Regere com `node tools/graphify.js` a cada alteração estrutural.
 
-**Versão:** 3.5.1 · **Gerado em:** 2026-08-06
+**Versão:** 3.5.2 · **Gerado em:** 2026-08-06
 **Aplicação:** `br.com.mllopes.salgueirogestao` (Neutralino 6 + WebView2)
 **Cliente:** Boutique do Salgueiro · **Autor:** ML Lopes Design
 
@@ -88,7 +88,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `pdv.js` | 413 | 10 | abrirCaixa, caixaAtual, cancelarVenda, fecharCaixa, listarVendas, listarVendasGeral, movimentoCaixa, obterVenda, +2 |
 | `permissoes.js` | 94 | 3 | CATALOGO, DEFAULTS, TODAS, efetivas, normalizar, pode |
 | `pontos.js` | 110 | 9 | ajustar, calcularGanho, calcularResgate, creditar, debitar, getConfig, historico, saldo, +1 |
-| `produtos.js` | 212 | 7 | excluirCategoria, excluirProduto, listarCategorias, listarProdutos, obterProduto, salvarCategoria, salvarProduto |
+| `produtos.js` | 215 | 7 | excluirCategoria, excluirProduto, listarCategorias, listarProdutos, obterProduto, salvarCategoria, salvarProduto |
 | `rede.js` | 150 | 3 | SOMENTE_LOCAL, imprimir, iniciar, listarImpressoras, parar, preparar, status |
 | `relatorios.js` | 917 | 19 | TAXAS_PADRAO, consignadosMensal, curvaAbc, estoqueDetalhado, eventosVenda, pecasParadas, ranking, rankingPeriodo, +3 |
 | `trocas.js` | 252 | 2 | DESTINOS, registrar |
@@ -109,7 +109,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 
 | Arquivo | Linhas | Exporta |
 |---|---|---|
-| `app.js` | 1583 | EM_REDE, api, aplicarTema, el, esc |
+| `app.js` | 1592 | EM_REDE, api, aplicarTema, el, esc |
 | `clientes.js` | 490 | viewClientes |
 | `compras.js` | 227 | viewCompras |
 | `configuracoes.js` | 1333 | viewConfiguracoes |
@@ -119,7 +119,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `financeiro.js` | 260 | viewFinanceiro |
 | `mensagens.js` | 558 | abrirBalao, encerrarTelaMensagens, iniciarMensagens, pararMensagens, viewMensagens |
 | `neutralino.js` | 2 | — |
-| `novidades.js` | 298 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
+| `novidades.js` | 308 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
 | `pdv.js` | 1536 | calcResgateLocal, viewPdv |
 | `ranking.js` | 361 | viewRanking |
 | `relatorios.js` | 1081 | viewRelatorios |

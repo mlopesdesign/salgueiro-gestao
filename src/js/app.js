@@ -14,7 +14,7 @@ import { viewMensagens, iniciarMensagens, pararMensagens, encerrarTelaMensagens 
 const $app = document.getElementById('app');
 let usuario = null;
 let categoriasCache = [];
-let APP_VERSION = '3.5.1'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
+let APP_VERSION = '3.5.2'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
 
 // API dupla: no aplicativo usa IPC (preload); num terminal em rede (navegador),
 // conversa com o servidor do computador principal via HTTP com token de sessão.
@@ -1276,7 +1276,16 @@ function formProduto(prod, variacoes, aoConcluir, duplicando) {
       // `foto` PRECISA ir aqui. Desde a v2.7.0 o core aceita foto por variação
       // (produtos.js:146), mas a tela não a enviava: o usuário escolhia a
       // imagem, via a miniatura na grade, salvava — e a foto sumia.
-      variacoes: linhas.filter(l => (l.cor || l.tamanho || l.id))
+      // A linha vai para o backend se tiver QUALQUER coisa preenchida.
+      // Antes o filtro era só `l.cor || l.tamanho || l.id`: quem cadastrava uma
+      // peça sem variação — digitando apenas a quantidade e deixando cor e
+      // tamanho em branco — tinha a linha DESCARTADA aqui. O core então criava
+      // uma variação Única/U com estoque 0 (produtos.js:108) e o produto nascia
+      // zerado, obrigando a dar entrada pelo módulo Estoque depois.
+      variacoes: linhas.filter(l =>
+        l.id || l.cor || l.tamanho ||
+        Number(l.estoque) > 0 || Number(l.estoque_minimo) > 0 ||
+        l.codigo_barras || l.foto)
         .map(l => ({ id: l.id, cor: l.cor, tamanho: l.tamanho,
           estoque: Number(l.estoque) || 0, estoque_minimo: Number(l.estoque_minimo) || 0,
           codigo_barras: l.codigo_barras, foto: l.foto ?? null }))
