@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Salgueiro Gestão</title>
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+    // Mostra qualquer erro de carregamento na tela (evita "tela branca" muda)
+    (function () {
+      function mostrar(txt) {
+        var d = document.getElementById('erro-boot');
+        if (!d) {
+          d = document.createElement('div');
+          d.id = 'erro-boot';
+          d.style.cssText = 'position:fixed;inset:0;background:#7E1114;color:#fff;font:13px/1.5 ui-monospace,Consolas,monospace;padding:24px;overflow:auto;z-index:99999;white-space:pre-wrap';
+          d.textContent = 'Ocorreu um erro ao abrir o sistema. Mostre isto ao suporte:\n\n';
+          (document.body || document.documentElement).appendChild(d);
+        }
+        d.textContent += txt + '\n\n';
+      }
+      window.addEventListener('error', function (ev) {
+        mostrar('ERRO: ' + (ev.message || '') + '\n@ ' + (ev.filename || '') + ':' + (ev.lineno || '') + ':' + (ev.colno || '') +
+          (ev.error && ev.error.stack ? '\n' + ev.error.stack : ''));
+      });
+      window.addEventListener('unhandledrejection', function (ev) {
+        var r = ev.reason || {};
+        mostrar('FALHA: ' + (r.message || r) + (r.stack ? '\n' + r.stack : ''));
+      });
+    })();
+  </script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

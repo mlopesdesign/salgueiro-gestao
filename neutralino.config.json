@@ -1,0 +1,47 @@
+{
+  "applicationId": "br.com.mllopes.salgueirogestao",
+  "version": "3.2.1",
+  "defaultMode": "window",
+  "documentRoot": "/src/",
+  "url": "/",
+  "enableServer": true,
+  "enableNativeAPI": true,
+  "nativeAllowList": [
+    "app.*",
+    "os.*",
+    "filesystem.*",
+    "window.*",
+    "events.*",
+    "debug.log",
+    "extensions.*"
+  ],
+  "modes": {
+    "window": {
+      "title": "Salgueiro Gestão",
+      "width": 1280,
+      "height": 800,
+      "minWidth": 1024,
+      "minHeight": 700,
+      "center": true,
+      "icon": "/src/img/icon.ico",
+      "enableInspector": false,
+      "exitProcessOnClose": false,
+      "maximized": true
+    }
+  },
+  "cli": {
+    "binaryName": "salgueiro-gestao",
+    "resourcesPath": "/src/",
+    "extensionsPath": "/extensions/",
+    "binaryVersion": "6.3.0",
+    "clientVersion": "6.3.0"
+  },
+  "enableExtensions": true,
+  "extensions": [
+    {
+      "id": "br.com.mllopes.salgueiro.rede",
+      "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"${NL_PATH}/extensions/rede/servidor-rede.ps1\""
+    }
+  ],
+  "tokenSecurity": "none"
+}

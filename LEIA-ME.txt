@@ -1,0 +1,20 @@
+SALGUEIRO GESTÃO V2 — VERSÃO PORTABLE (para validação)
+
+Como testar: clique duas vezes em "Salgueiro Gestao.exe".
+(Mantenha os arquivos e a pasta "extensions" juntos.)
+
+Login do sistema:  admin  /  admin123
+Suporte técnico (área do desenvolvedor):  dev-mlopesdesign  /  mldev@2026
+
+Nesta versão: dados da Boutique embutidos (logo, produtos, licença,
+setores), PDV, estoque, clientes, financeiro, relatórios (com aba
+Consignados), fechamento de caixa detalhado, fornecedor CNPJ/CPF,
+olhinho nas senhas e ACESSO EM REDE (multiterminal) FUNCIONANDO:
+ligue em Configurações → Rede → Aplicar e abra o endereço mostrado
+no navegador de outro computador ou celular na mesma rede Wi-Fi.
+Se o Firewall do Windows perguntar, permita em redes privadas.
+
+Ainda em fase seguinte: impressão silenciosa (por ora abre a janela
+de impressão do Windows) e backup em nuvem.
+
+Seus dados ficam em: %APPDATA%\SalgueiroGestao\dados

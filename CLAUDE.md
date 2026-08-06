@@ -1,0 +1,255 @@
+# Salgueiro Gestão V2 — Contexto do Projeto
+
+## Local de trabalho (decidido 2026-07-31)
+
+**`D:\Projetos\LOJA FISICA SALGUEIRO V2` é o ÚNICO local de trabalho.**
+O experimento de sincronizar por Google Drive foi encerrado: o shell (sandbox
+Linux) **não monta unidades do Drive** (`H:`, `B:`), então dá para ler e editar
+mas **não dá para buildar** — o `resources.neu` não sai. Trabalhar em duas
+máquinas custou uma sessão inteira travada.
+
+> Não mover o projeto para unidade de rede/Drive de novo sem antes confirmar que
+> o shell monta o caminho (`ls /sessions/*/mnt/`).
+
+### Regra de diagnóstico (imposta pelo Marcio em 31/07/2026)
+
+**Nunca teorizar, supor ou "achar".** Todo diagnóstico é feito lendo o código e
+citando **arquivo e linha**. Se faltar informação para concluir, pedir a
+informação — não preencher a lacuna com hipótese. Um diagnóstico errado entregue
+com confiança custou dados do cliente em produção.
+
+## Histórico: máquinas de trabalho (DESCONTINUADO)
+
+O projeto fica sincronizado via Google Drive entre duas máquinas. Os caminhos são:
+
+- **Laptop (rua):** `H:\Meu Drive\Projetos\LOJA FISICA SALGUEIRO V2`
+- **Desktop (casa):** `B:\Meu Drive\Projetos\LOJA FISICA SALGUEIRO V2`
+
+**Claude identifica a máquina atual** pelo caminho da pasta montada no Cowork (visível no contexto do sistema).
+
+### Regras obrigatórias de sessão
+
+1. **Ao iniciar qualquer sessão**, Claude verifica se existe o arquivo `.session-lock` na raiz do projeto. Se existir e tiver menos de 8 horas, avisar Marcio imediatamente: *"⚠️ Sessão ativa detectada em outra máquina. Confirme que o outro computador está fechado antes de continuar."* Não fazer nenhuma alteração até Marcio confirmar.
+
+2. **Ao começar a trabalhar** (primeiro tool call de escrita/build), criar ou atualizar `.session-lock` com conteúdo: `máquina: <laptop|desktop> · início: <data/hora>`.
+
+3. **GRAPHIFY é obrigatório** antes de qualquer mudança estrutural (nova tabela, nova rota, novo módulo, alteração em schema.sql, alteração em servidor.js). Sem exceção. Ler `GRAPHIFY.md` e confirmar o impacto antes de editar.
+
+4. `.session-lock` **não sincroniza** entre máquinas — cada uma tem o seu. Adicionar ao Google Drive como "ignorado" não é possível nativamente; em vez disso, o arquivo é sobrescrito pela máquina ativa, então sempre reflete quem está trabalhando agora.
+
+## O que é
+Sistema de gestão completo para a Boutique do Salgueiro (loja física de roupas), em pt-BR, instalável no Windows. Cliente: Boutique do Salgueiro. Autor: ML Lopes Design (Marcio, mlopesdesign@gmail.com). Todo projeto é premium e profissional.
+
+## Objetivo da V2
+Migrar da V1 (Electron, build quebrava) para **Neutralino.js 6** (binário pré-compilado + WebView2), reaproveitando o HTML/CSS/JS. Entregáveis: portable (Salgueiro Gestao.exe + resources.neu) e instalador NSIS, ambos gerados pelo Claude no sandbox — zero ferramentas na máquina do Marcio.
+
+## Regras (importantes!)
+- Pasta original E:\Projetos\LF SALGUEIRO\LOJA FISICA SALGUEIRO = versão aprovada pelo cliente — NUNCA modificar.
+- Marcio NÃO executa .bat nem passos manuais. Claude entrega pronto; só pedir algo se impossível fazer sozinho.
+- SEMPRE entregar PORTABLE para validação antes do instalador.
+- Sem downgrades, sem versões intermediárias quebradas. Interface 100% pt-BR. Explicações simples.
+- NUNCA entregar sem antes rodar o TESTE VISUAL no sandbox (seção abaixo).
+- CUIDADO: gravações na pasta montada podem TRUNCAR/corromper arquivos (Write/Edit e até heredoc). Após TODA gravação, verificar em comando separado: wc -c + tail + node --check. Preferir: gerar em /tmp e cp para o mount, depois sha256sum dos dois lados.
+- index.html DEVE ter BOM UTF-8 (EF BB BF) + meta http-equiv charset=UTF-8 — sem isso o WebView2 do Windows quebra os acentos.
+
+## Por que Neutralino (decidido 2026-07-10, após testes reais)
+- Electron vetado (quebras V1). Tauri descartado: crates.io BLOQUEADO no sandbox + exigiria ~7GB na máquina do Marcio.
+- Neutralino: binários prontos do GitHub; neu build só empacota; makensis Linux gera o Setup.
+
+## Pipeline de build (reconstruir a cada sessão)
+1. npm config set prefix ~/.npm-global && npm install -g @neutralinojs/neu (node não resolve DNS: baixar binários com CURL, nunca neu update).
+2. curl -L github: neutralinojs/neutralinojs/releases/download/v6.3.0/neutralinojs-v6.3.0.zip e neutralinojs/neutralino.js/releases/download/v6.3.0/neutralino.js
+3. NSIS: apt-get download nsis nsis-common && dpkg -x *.deb ~/nsis; usar NSISDIR=~/nsis/usr/share/nsis ~/nsis/usr/bin/makensis (script .nsi de teste já validado em sessão anterior).
+4. Build: copiar projeto para /tmp/build-vXXX (mount lento), neu build --release → dist/salgueiro-gestao/.
+5. Ícone do exe: ~/.local/bin/peresed (pip pe_tools — já instalado): extrai as 7 imagens de recursos/icon.ico → --set-resource 3 <1..7> 1033 + RT_GROUP_ICON (14) **id 1** (não 0!) gerado com struct GRPICONDIR; aplicar com --remove-signature --clear --set-resource ... --update-checksum. O exe tem recursos de 7 imagens (16px…256px).
+6. NSIS inclui regra de firewall: ExecShell powershell.exe netsh para porta 8750 inbound TCP.
+
+## Teste visual no sandbox (OBRIGATÓRIO antes de entregar)
+1. Libs GTK: apt-get download libgtk-3-0 libgdk-pixbuf-2.0-0 libpango-1.0-0 libpangocairo-1.0-0 libatk1.0-0 libepoxy0 libcairo-gobject2 libatk-bridge2.0-0 libpangoft2-1.0-0 libatspi2.0-0 libxtst6 libxcomposite1 libxdamage1 libxrandr2 libxcursor1 libxi6 libwayland-cursor0 libwayland-egl1 libxkbcommon0 libxinerama1 → dpkg -x em ~/libs; LD_LIBRARY_PATH=~/libs/usr/lib/x86_64-linux-gnu.
+2. Chromium: usar playwright@1.44.1 (rev 1117 — versões mais novas falham no CDN). npm i playwright@1.44.1 em /tmp/vend; curl https://cdn.playwright.dev/dbazure/download/playwright/builds/chromium/1117/chromium-linux.zip → unzip em ~/.cache/ms-playwright/chromium-1117/ + touch INSTALLATION_COMPLETE; launch({executablePath: .../chrome-linux/chrome, args:['--no-sandbox']}).
+3. Rodar TUDO num único comando bash (processos morrem entre comandos): ./neutralino-linux_x64 --mode=cloud --export-auth-info & → abrir http://127.0.0.1:<porta>/?connectToken=<nlConnectToken> (de .tmp/auth_info.json), selector login: #lg-usuario / botão: #lg-entrar, screenshot login, preencher admin/admin123, screenshot dashboard, ler console.
+
+## Estrutura
+- legado/ — V1 Electron 1.0.4, só referência (app/ frontend | src/core 20 módulos | src/db.js wrapper | schema.sql 27 tabelas | main.js rotas ~569 linhas)
+- src/ — app V2: index.html (BOM+charset, overlay erro, boot-status, espelho console→log, gancho __fecharComSalvamento), js/app.js (bridge NO_APP linha ~36, APP_VERSION), js/backend/ (ambiente.js versaoApp(), db.js, servidor.js, core/17 módulos ESM), js/vendor/ (sql-asm, scrypt, sha256, xlsx.full.min, qrcode), js/neutralino.js, schema.sql, img/icon.png
+- Portable/ — entrega atual (resources.neu + Salgueiro Gestao Setup.exe) | recursos/ — ícones (icon.ico 7 tamanhos) | docs/ — escopo/plano/proposta | neutralino.config.json
+
+## Arquitetura V2
+- Lógica de negócio em JS no WebView (portada de legado/src/core), testável com Node.
+- Banco: sql.js asm no WebView; persistência: bytes → Neutralino.filesystem (atômico tmp+move, debounce 300ms + ao fechar); dados em %APPDATA%/SalgueiroGestao/dados.
+- api(canal,payload): Neutralino presente → servidor.js local; senão fetch('/api') (terminal em rede).
+- Senhas: scrypt-js com parâmetros do Node (N=16384 r=8 p=1, 32 bytes, salt hex como utf-8) — hashes V1 validam.
+- licenca.js: JSONs em cache na memória (iniciar()), sha256/hmac via js-sha256. DEV_USUARIO='dev-mlopesdesign'; senha mestre do suporte embutida como SHA256 (não salvar a senha em texto aqui).
+- Rede: extensão PowerShell extensions/rede/servidor-rede.ps1; TcpListener em 0.0.0.0:8750; tokenSecurity:'none' no config. Firewall: porta 8750 inbound TCP (regra criada pelo Setup.exe via netsh). Terminal acessa http://IP:8750 no browser.
+- Etiqueta: 60×40mm Pimaco TR6040, impressão via api('config:imprimir', {tipo:'etiqueta'}); CSS @page 60mm 40mm em servidor.js (cssEtq). EAN-13 gerado em JS (ean13Svg).
+- Cupom térmico: 80mm, impressão silenciosa via Edge headless→PDF→SumatraPDF (baixado na 1ª impressão de ~6MB do GitHub). Log em %APPDATA%/SalgueiroGestao/impressao.log.
+- Stubs AVISO_FASE: nuvem:*, rede:aplicar/abrirNavegador.
+
+## Documentação (OBRIGATÓRIO a cada rodada — regra do Marcio)
+Toda alteração estrutural entra na documentação **na mesma entrega**. Não é etapa opcional nem "depois".
+
+1. `docs/MANUAL-DO-USUARIO.md` — manual completo, escrito **para leigo**: o que é, para que serve, passo a passo numerado, o que acontece por trás, e uma linha na tabela de problemas comuns da seção final. Atualizar também a tabela do menu (seção 2) e o Sumário quando entrar tela nova.
+2. `docs/GUIA-RAPIDO.md` — o resumido, "em uma folha": só o passo a passo do dia a dia, sem explicação longa.
+3. Regerar os dois PDFs (`MANUAL-DO-USUARIO.pdf`, `GUIA-RAPIDO.pdf`) — é o que o Marcio manda para a loja.
+4. `node tools/graphify.js` → regera `GRAPHIFY.md`, o mapa técnico (rotas, tabelas, módulos, pontos de estoque, armadilhas). **Ler o GRAPHIFY antes de mexer em qualquer coisa estrutural.**
+5. Bloco novo no topo de `src/js/novidades.js` (aba Atualização) — texto para o usuário da loja.
+6. Entrada nova em "Versões publicadas" aqui embaixo.
+
+Tom dos manuais: frase curta, sem jargão, tabela quando houver comparação, `>` para avisos. Explicar **por que** existe, não só onde clicar.
+
+## Versionamento (OBRIGATÓRIO a cada correção)
+Fonte de verdade única: `neutralino.config.json` → campo `"version"`.
+Regra: **qualquer alteração em src/ que gere novo build = bump de versão.**
+- Correção de bug → patch: 2.0.0 → 2.0.1 → 2.0.2 …
+- Nova funcionalidade → minor: 2.0.x → 2.1.0
+- Quebra de compatibilidade → major: 2.x.x → 3.0.0
+
+**Checklist de bump (Claude executa tudo sem pedir pra Marcio):**
+1. `neutralino.config.json` → atualizar `"version"`
+2. `src/js/app.js` linha com `let APP_VERSION =` → mesmo valor (fallback)
+3. `src/js/backend/ambiente.js` fallback em `versaoApp()` → mesmo valor
+4. Rebuild `resources.neu` (pipeline normal do CLAUDE.md)
+5. Copiar para `Portable/resources.neu`
+6. Fornecer dados da GitHub Release na mesma resposta, no formato exato abaixo — OBRIGATÓRIO ao fim de todo build:
+
+**Tag:** `vX.Y.Z`
+**Título:** `vX.Y.Z — descrição curta`
+**Texto do release:**
+```
+## O que mudou
+- item 1
+- item 2
+
+## Como atualizar
+1. Baixe o `resources.neu` abaixo
+2. Substitua em `%LOCALAPPDATA%\SalgueiroGestao\resources.neu`
+3. Reinicie o aplicativo
+
+Ou aguarde a notificação automática dentro do app.
+
+## Arquivo
+- `resources.neu` — SHA256: `<hash>`
+```
+
+**Versões publicadas:**
+- v3.2.1 (2026-08-04): **O DESCONTO DA COMPRA PASSA A ACOMPANHAR A TROCA.** Furo achado pelo Marcio na revisão da 3.2.0: o crédito da peça devolvida saía LÍQUIDO (`trocas.js:20`, `fator = total/subtotal`) mas a peça nova entrava pelo PREÇO CHEIO de tabela (`trocas.js:58`). Resultado: quem comprou uma peça de R$100 com 10% (pagou R$90) e trocava por outra de R$100 era cobrado dos R$10 do desconto. **Regra do Marcio: "o total tem que ser o mesmo" e "não pode haver perda"** — é como devolver o valor cheio e dar o mesmo desconto na peça nova INTEIRA (decisão dele: vale inclusive para a parte que excede o crédito). Novo `fatorNovo` em `trocas.js` aplicado a `preco_unit`; `itens_novo[].preco_unit` passa a ser sempre PREÇO DE TABELA e quem desconta é o core (fonte de verdade única — a tela só espelha). A nova venda grava `subtotal` = tabela, `desconto` = herdado, `total` = líquido, no MESMO formato de `pdv.registrarVenda`: assim `devolucoes.itensVenda` recalcula o fator certo se ela for trocada de novo, sem desconto em cascata. `venda_itens` guarda preço de tabela e total bruto (gravar líquido aplicaria o desconto duas vezes). **Cortesia fica de fora** (`tot > 0` na guarda): fator 0 daria peça nova de graça. Tela mostra badge verde do percentual, preço de tabela riscado no carrinho e as linhas Tabela/Desconto/Total. **Prova de que a loja não perde:** em todo cenário a loja fica com o mesmo percentual da tabela da peça entregue — R$100→R$90, R$200→R$180, R$50→R$45 (`/tmp/tt/teste-desconto.mjs`, 17 asserções, inclui a segunda troca herdando o mesmo fator). Total da versão: 115 asserções. — **v3.2.0 no mesmo dia:** A TROCA NUNCA FUNCIONOU — três defeitos somados em `core/trocas.js` faziam `trocas:registrar` lançar exceção sempre**, e o painel de troca (entregue na v2.0.50) nunca chegou a concluir uma operação. **Causa raiz:** (1) `trocas.js:111` fazia `INSERT INTO vendas (…, fechado_em)` — **a tabela `vendas` não tem essa coluna** (`fechado_em` é de `caixas`); (2) `trocas.js:130` gravava `venda_pagamentos.forma='troca'`, valor **fora do CHECK**; (3) `trocas.js:141` gravava `caixa_movimentos.tipo='venda'`, também **fora do CHECK** (`sangria`/`suprimento`) — e desnecessário, porque `resumoCaixa` já soma o dinheiro da venda por `venda_pagamentos`. Bônus: o SELECT da linha 13 não trazia `loja_id`, mas a linha 77 usava `venda.loja_id` → `estoques.daLoja(db, undefined)` → `estoque_saldos` ficava sem atualizar, e a nova venda nascia sem `loja_id` (sumia dos relatórios por loja). **Correções:** `trocas.js` reescrito com as mesmas colunas de `pdv.registrarVenda`; migração reconstrói `venda_pagamentos` aceitando `'troca'` (guarda testando **com aspas**, mesmo rito da cortesia); nenhum lançamento em `caixa_movimentos` para venda. **Destino do excedente virou escolha do operador** (`p.destino_excedente`): `vale` (emite vale-troca) · `dinheiro` (sangria no caixa) · `estorno` (só registro — a maquininha faz) · `nada`; antes emitia vale sempre, sem perguntar. `devolucoes.forma_reembolso` guarda o destino (ou `'troca'` quando não sobrou nada) e `devolucoes.tipo` passou a ser `'troca'`. **Botão 🔄 Troca na barra do PDV (F6)** com `modalBuscarVendaTroca()`: período começa em hoje, busca por nº de venda ou cliente, reusa `pdv:listarVendasGeral`. **Permissão de `trocas:registrar` passou de `pdv.devolucao` para `pdv.ver`** (decisão do Marcio: vendedor e gerente resolvem na hora) — o mesmo gate vale para os botões em Vendas do caixa e Histórico. **Vale-troca com validade:** coluna `vales_troca.validade` (ALTER simples), `config.vale_validade_dias` (padrão 90, `0` = sem vencimento, editável em Configurações → PDV); **não existe status `'expirado'`** — o vencimento é calculado pela data em `estaVencido()`, o que evita reconstruir o CHECK de `status`. `consultar()` recusa vencido; tela de Vales-Troca mostra "Válido até". **Campo de quantidade digitável:** `pdv.js:170` escutava só `change` (as setas do input disparam `change` na hora; digitar só commita no blur) e o handler chamava `desenhar()`, que **recriava a tabela inteira** e matava o cursor — por isso só dava para mudar quantidade pelo leitor ou pelas setas. Novo helper `ligarCampoQtd()` (evento `input`, aceita campo vazio durante a digitação, normaliza no blur/Enter, `select()` no foco, `aoLimitar` avisa quando estoura o máximo), aplicado no carrinho do PDV, na devolução e nos dois lados da troca. `formasDisponiveis()` deixou de oferecer `'troca'` no combo de pagamento (é lançamento interno do sistema). **ARMADILHA DESCOBERTA (achada pelo teste de DOM):** o `blur` de um campo dispara **antes** do foco chegar no próximo — se o handler redesenhar outra parte da tela, o elemento que o usuário acabou de clicar é destruído. Por isso os campos do lado esquerdo da troca chamam `_recalcular()` e **nunca** `_atualizarTotais()` (que redesenha o carrinho). **Verificação:** 87 asserções automatizadas — 41 no fluxo de troca contra SQLite real (`/tmp/tt/teste-troca.mjs`: mesmo valor, diferença a pagar, os 4 destinos do excedente, vale vencido, e `variacoes.estoque = SUM(estoque_saldos.qtd)`), 10 na migração sobre banco no formato antigo (251 pagamentos preservados, cortesia intacta) e 36 no DOM com jsdom (`/tmp/fe/teste-dom.mjs`: render do PDV sem erro de console, digitação da quantidade, busca da venda, painel de troca e payload enviado ao backend). **O teste visual com o binário Neutralino NÃO rodou:** o proxy do sandbox passou a bloquear `archive.ubuntu.com`, então não há como instalar GTK/WebKit nem rodar o Chromium do playwright (falta `libXdamage.so.1`). Só npm, PyPI e o CDN do playwright passam. Os PDFs foram gerados por **pandoc → WeasyPrint** (emoji do `@fontsource/noto-emoji`, 11 subsets mesclados com fontTools), substituindo o Chromium.
+- v3.1.0 (2026-07-31): **Chat interno de volta**, restaurado de `_chat-v3.0.0/` com a correção que faltava. `core/mensagens.js` e `src/js/mensagens.js` reinstalados, 6 tabelas de volta no `schema.sql`, CSS no `app.css`, 10 rotas no `servidor.js` (`mensagens:*` e `avisos:*`), `mensagens.usar`/`mensagens.avisar` no CATALOGO + DEFAULTS de caixa e estoque, item `💬 Mensagens` no MENU + PERM_TELA, `iniciarMensagens()` após o `navegar('dashboard')`, `pararMensagens()` no `telaLogin()` e `encerrarTelaMensagens()` no `navegar()` quando sai da tela. Migration **`migr_mensagens_v310`** (chave nova — a `_v300` pode já estar marcada em bancos que passaram pela 3.0.0) acrescenta `mensagens.usar` a quem tinha permissões personalizadas. **A diferença para a 3.0.0:** `registrarPing` usa `runVolatil()`, então o polling de presença (4–12 s) **não reescreve mais o banco em disco** — foi isso que multiplicou por ~1.000 as gravações e ajudou a apagar os dados do cliente. **Comprovado em teste automatizado:** com o painel do chat aberto e 4+ pings, o `mtime` do `salgueiro.db` não mudou (`/tmp/tp2.mjs`, resultado APROVADO). Teste visual E2E: menu, balão, envio de mensagem no canal geral (bolha desenhada), tela cheia e botão de aviso — sem erro no console. **REGRA PERMANENTE: qualquer dado de alta frequência usa `runVolatil()`, nunca `.run()`.**
+- v3.0.1 (2026-07-31): **CORREÇÃO CRÍTICA — a atualização apagava os dados do cliente.** Publicada como 3.0.1 (e não 2.9.0) porque **`updater.js:36` só oferece versão MAIOR** (`_cmp(tag, versaoAtual) > 0`) — um cliente na 3.0.0 jamais receberia a 2.9.0 e ficaria preso na versão defeituosa. **O chat da 3.0.0 foi retirado nesta versão** (as 6 tabelas continuam no banco, inertes); será devolvido depois, já com `runVolatil()`. Aconteceu em produção. **Causa raiz (3 falhas somadas):** (1) `configuracoes.js` chamava `Neutralino.app.restartProcess()` 2 s depois do `move /Y` **sem nenhum `db.salvarAgora()`** — o gancho `window.__fecharComSalvamento` (servidor.js) só dispara ao fechar a janela, nunca no restart do updater; (2) `ambiente.js::_escreverAtomico` fazia `writeBinaryFile(tmp)` → **`remove(arquivo)`** → `move(tmp, arquivo)`, deixando o banco **inexistente** entre o remove e o move; (3) todo `.run()` do wrapper chama `_agendarSalvar()` (db.js) — qualquer escrita frequente reescreve o banco inteiro e multiplica a chance de o processo morrer dentro da janela do item 2. **Correções:** `_escreverAtomico` agora faz tmp → renomeia atual para `.old` → move tmp → apaga `.old` (**sempre existe uma cópia íntegra**), com `_recuperarSeFaltando()` no `lerBanco()` reconstruindo de `.old`/`.tmp`; `runVolatil()` novo no `SqlJsStatement` (aplica em memória sem agendar gravação) para dados de alta frequência; rota **`backup:preAtualizacao`** que o botão "Baixar e instalar" chama **antes do curl** e **aborta a atualização** se falhar; rota `backup:salvarAgora` chamada imediatamente antes do `restartProcess`. **Agravantes corrigidos:** `validarBackup` só testava `COUNT(*) FROM usuarios` — **banco vazio passava**, e foi por isso que uma restauração "bem-sucedida" deixou o sistema zerado; agora existe `radiografar(bytes)` (usuarios/produtos/vendas/clientes + `tabelasOk` + `temDados`) e o `validarBackup` exige todas as tabelas essenciais. `salvarBackupDiario` só grava banco **com dados** (antes, abrir o app quebrado transformava o estrago no "backup do dia"). **Auto-recuperação no boot:** se o banco vier sem tabela essencial ou vazio, o `_iniciar()` varre `backups/`, restaura a cópia boa mais recente, guarda o arquivo ruim como `banco-com-problema-<hora>.db` e expõe `app:recuperacao` — o `app.js` alerta o usuário. **Tela de Backup refeita:** lista clicável com data, origem (🛡️ antes de atualizar / ✋ manual / 🗓️ automático), **conteúdo** (nº de vendas/produtos/clientes), tamanho e botão **↩️ Restaurar** por linha; backup danificado não ganha botão; confirmação mostra os números lado a lado e alerta quando o backup tem menos dados que o atual; rota `backup:restaurarLocal` (com `confirmado`) e helper `_restaurarBytes()` unificando os dois caminhos — que **reinicia o app sozinho**. **Fotos dos produtos:** o listener do lightbox roda em **fase de captura com `stopPropagation()`** e sequestrava o clique da miniatura; a troca só existia no clique direito, anunciada só no `title` — a foto ficava presa. Agora as imagens da área de produtos levam a classe **`foto-editavel`**, excluída de `SEL_ZOOM`/`SEL_HOVER`, e o clique abre o file-picker; a foto principal ganhou clique no `.foto-preview` e cada variação um **✕** (`.var-foto-rem`, no hover). PDV e listas inalterados. **ARMADILHA: `Neutralino.filesystem.move` no Windows falha se o destino existir** — por isso renomear o atual para `.old` antes, nunca remover. **ARMADILHA: todo `.run()` persiste o banco inteiro** — para alta frequência use `runVolatil()`. **Regra de UI: em tela de edição clicar TROCA; em tela de consulta clicar AMPLIA.**
+- v2.8.0 (2026-07-30): **romaneios PDF + isolamento multiterminal** — `estoques:romaneio-pdf` (Edge headless → base64 → download) e `estoques:relatorio-transferencias-pdf` (landscape A4 com histórico). Frontend: `viewRomaneio(id)` overlay com botões 🖨️ e 📄; `abrirRomaneio` chama `viewRomaneio`; toast clicável após criar transferência (`toast(msg, false, () => viewRomaneio(id))`); botão **📋 Ver** na lista de romaneios; botão **📊 Relatório PDF** no cabeçalho. **Isolamento de sessão multiterminal:** `processar()` em `servidor.js` fazia override temporário `sessao.usuario = sess.usuario` (try/finally) — terminais em rede não veem mais o painel do admin. `_gerarPdfBase64(html)` escreve base64 em `.b64` via `[System.IO.File]::WriteAllText` (evita truncamento de stdout). PERM_ROTA: `estoque.ver` para ambas as novas rotas.
+- v2.7.0 (2026-07-30): **fotos por variação e lightbox** — `variacoes.foto TEXT` no schema; migration em `db.js`; `produtos.js` salva e devolve `foto` por variação; `estoque.js` usa `COALESCE(v.foto, p.foto)` para priorizar foto da variação no PDV e na busca. Frontend: coluna 📷 na grade de cor/tamanho (clique no ícone abre file-picker; imagem redimensionada 400×400 e salva como JPEG 0.72); hover sobre qualquer miniatura (`img.thumb`) mostra card 200×200 ao lado do cursor; clique abre lightbox tela cheia; `.foto-preview img` também abre lightbox. CSS: `#lb`, `#img-hov`, `.var-foto-cell`, `.var-foto-thumb`, `.var-foto-btn`. **Obs. build:** `chromium --headless=old --print-to-pdf` substitui playwright para PDFs (playwright@1.44.1 --ignore-scripts demora >60s para instalar no sandbox) — pipeline: `pandoc md→html`, depois `chromium --print-to-pdf`.
+- v2.6.2 (2026-07-28): **estoque de loja facultativo** — `lojas.estoque_id` agora aponta explicitamente para qual estoque usar nas vendas daquela loja; opções: criar estoque próprio (padrão), usar o Almoxarifado Central ou o estoque de outra loja (ex.: "Loja WhatsApp" compartilha estoque da física). Backend: `schema.sql` ganhou a coluna; `db.js` migra bancos existentes preenchendo `estoque_id` a partir do vínculo antigo `estoques.loja_id`; `estoques.daLoja()` lê o ponteiro direto em vez de pesquisar; `lojas.salvar()` aceita `estoque_id` ('proprio' ou número). Frontend: `formLoja()` carrega lista de estoques e exibe select; `abaLojas()` mostra coluna "Estoque vinculado" na tabela. PDFs e GRAPHIFY atualizados.
+- v2.6.1 (2026-07-28): menu lateral **sem barra de rolagem** (`.menu` com `scrollbar-width:none` + `::-webkit-scrollbar{width:0}` — ficou visível quando entraram Ranking e Estoques); **`tools/graphify.js`** criado (gera `GRAPHIFY.md`: identidade, arquitetura, telas, módulos, 127 rotas com permissão, 31 tabelas, regra de ouro do estoque, armadilhas e checklist); `docs/MANUAL-DO-USUARIO.md` e `docs/GUIA-RAPIDO.md` atualizados de 2.0.55 → 2.6.1 (cortesia, relatório de evento, ranking, estoques por local, novidades) + PDFs regerados. **NSIS mudou de `/SOLID lzma` para `/SOLID zlib`**: o lzma leva mais de 60s e o sandbox mata o processo, gerando Setup truncado (8,6 MB em vez de 12,1 MB) — com zlib compila em 8s e sai 15,3 MB. PDF dos manuais: `pandoc → HTML → Chromium pdf()` (precisa de `LD_LIBRARY_PATH=~/libs/...`; a fonte de emoji veio de `npm pack @fontsource/noto-emoji`, woff2 convertidos para ttf em `~/.fonts`).
+- v2.6.0 (2026-07-27): **Estoque por local** — tabelas `estoques` (almoxarifado/loja/pessoa/online/outro, com `principal` e `loja_id`), `estoque_saldos` (PK estoque_id+variacao_id) e `transferencias`/`transferencia_itens`. **REGRA DE OURO: `variacoes.estoque` continua sendo o TOTAL** (nada dos 53 pontos existentes muda) e os locais apenas repartem esse total — `total = SUM(estoque_saldos.qtd)`. Entrada: total +N e central +N. Venda: total −N e local da loja do caixa −N. Transferência: total igual, origem −N, destino +N. Novo módulo `core/estoques.js` (`aplicar`, `daLoja`, `principal`, `transferir`, `conteudo`) chamado dos 8 pontos que mexem em estoque (pdv venda/cancelamento, devoluções, trocas, compras, ajuste manual, cadastro). Tela `src/js/estoques.js` com cards por local, balanço (tela/impressão/Excel), transferência com romaneio imprimível/PDF (campo de conferência + assinaturas) e histórico. `lojas.salvar` cria o estoque da loja junto. PDV **avisa** quando a peça acabou na loja (não bloqueia). Migração: todo o estoque vai para o Almoxarifado Central e as lojas nascem vazias (o Marcio faz o balanço e desce por romaneio). **ARMADILHA DESCOBERTA: `criarBanco()` divide o schema.sql por `;` — ponto-e-vírgula dentro de comentário parte o CREATE TABLE seguinte** (o erro aparece como `[schema] near "x": syntax error` e a tabela some sem alarde).
+- v2.5.0 (2026-07-27): **Novidades na aba Atualização** — `src/js/novidades.js` exporta `NOVIDADES` (array de `{versao, data, titulo, itens[]}`), `htmlNovidades(versaoAtual, esc)` e `CSS_NOVIDADES`. A aba virou 2 colunas (`.upd-colunas`, 1 coluna abaixo de 1100px): updater à esquerda, "📢 O que mudou" à direita, em `<details>` clicáveis, com a versão atual marcada `instalada` (verde) e versões mais novas que a instalada marcadas `disponível` (âmbar). Texto escrito para o usuário da loja, sem jargão. **A CADA RELEASE: acrescentar um bloco no TOPO de NOVIDADES**, senão a versão instalada não recebe o selo.
+- v2.4.0 (2026-07-27): **Ranking por EVENTO** — a loja não abre todo dia, então os cards fixos Hoje/Semana viravam tela vazia. Agora o período é escolhido: **Por evento** (o sistema detecta as sessões de venda sozinho — vendas separadas por mais de 6h viram eventos diferentes, então sáb 20h → dom 4h vira UM evento), **Data e hora** livre (datetime-local), **Mês atual** e **Ano atual**. O seletor mostra `sáb 01/08 21:20 → dom 02/08 02:15 · 3 venda(s) · R$ 375,00`. Campo **"Comparar com"**: evento anterior automático, evento específico ou nenhum — a variação de posição passa a ser evento × evento. Novas rotas `relatorios:eventos` (detecção), `relatorios:rankingPeriodo` e `relatorios:rankingPeriodoXlsx`. IMPORTANTE: os helpers `_rank*` e `_porHora` agora comparam `v.criado_em BETWEEN ? AND ?` (datetime, sem `date()`) — passar só 'YYYY-MM-DD' como `ate` exclui o último dia. `ranking()` (mês/ano) continua existindo e monta as janelas com ` 00:00:00`/` 23:59:59`.
+- v2.3.0 (2026-07-27): **Tela de Ranking** (menu próprio, `src/js/ranking.js`, rotas `relatorios:ranking` e `relatorios:rankingXlsx`, permissão `relatorios.ver`). 4 cards — Hoje / Esta semana (a partir de segunda) / Este mês / Este ano — com **top 10** na tela e **lista completa** na impressão/PDF e no Excel. Toggle **peças × receita** (o backend devolve `pos`/`delta` e `pos_receita`/`delta_receita`). **Variação de posição** contra o período equivalente anterior (▲ subiu, ▼ caiu, "novo"), mais % de variação de peças/receita no total. Extras: ranking de **categorias**, de **cor/tamanho** (com estoque atual, vermelho quando zerado — guia de reposição), **melhores clientes** e **movimento por hora** (dia/semana). Tudo líquido de devoluções. Menu registrado em MENU + PERM_TELA + MODULO_TELA + SETOR_TELA.
+- v2.2.0 (2026-07-27): **Cortesia (brinde) como forma de pagamento no PDV** — exige "Autorizado por" e "Para quem foi" (ambos campo livre, bloqueia a venda se vazios). A venda entra com **total 0** (o valor vira desconto), então não afeta faturamento, caixa nem taxas; o **estoque baixa normalmente**. Consignado PODE ser cortesia — a consignação é gerada e o fornecedor continua a receber. Relatório de Evento ganhou a seção **🎁 Cortesias** (venda, data/hora, produto, para quem, quem autorizou, peças, valor de tabela e **custo p/ loja** pelo preço de custo) + linha no fechamento + aba no Excel. Ticket médio agora ignora vendas de valor 0. **Migração de banco**: `venda_pagamentos` ganhou `autorizado_por`, `beneficiario`, `cortesia_valor` e a tabela é **reconstruída** para o CHECK aceitar `'cortesia'` (transação + conferência de contagem; rollback deixa o banco intacto). ARMADILHA: a guarda da migração testa `'cortesia'` COM aspas — sem elas casa com a coluna `cortesia_valor` e a reconstrução nunca roda.
+- v2.1.1 (2026-07-27): Relatório de Evento — nova seção final **📦 Produtos vendidos no evento** (consolidado por variação: produto, ref, cor/tam, qtd vendida, preço unit. médio, total, com linha de total de peças) na tela, no PDF e como aba própria no Excel; os itens de cada venda agora nascem **abertos** (antes só apareciam ao clicar — o produto vendido não ficava visível de imediato); clique passa a recolher/reabrir. OBS: o total da seção soma `venda_itens` (antes do desconto geral da venda), então pode ficar acima do faturamento bruto quando houve desconto no fechamento.
+- v2.1.0 (2026-07-27): **Relatório de Evento / Pós-venda** — nova aba em Relatórios com período por DATA + HORA (evento atravessa a meia-noite: sáb 20h → dom 4h). Lista de vendas discriminada (clique na venda abre os itens: produto, ref, cor/tam, qtd, unit., desconto, total), formas de pagamento com taxa da maquininha, comissão de consignados por fornecedor, devoluções e "líquido a receber". Seções escolhidas por checkbox (resumo/vendas/itens/pagamentos/consignado/vendedor/categoria) e exportação em PDF (impressão) e Excel multi-aba. Taxas Mercado Pago: Pix chave 0% · Pix maquininha 0,49% · débito 0,99% · crédito à vista 3,05% · crédito 2x–6x 3,25% (`TAXAS_PADRAO` em core/relatorios.js; Pix escolhido na tela). Rotas `relatorios:evento` e `relatorios:eventoXlsx`.
+- v2.0.0 (2026-07-11): release inicial — PDV, multiterminal, consignação, updater
+- v2.0.1 (2026-07-12): fix instalador NSIS ($LOCALAPPDATA, sem ler registro antigo)
+- v2.0.2 (2026-07-12): fix download updater (curl.exe via os.execCommand, evita CORS do WebView2); fix truncamento configuracoes.js
+- v2.0.3 (2026-07-12): auto-updater validado E2E por Marcio ✔
+- v2.0.4 (2026-07-12): versão visível na sidebar (rodapé sempre exibido)
+- v2.0.5 (2026-07-13): impressão cupom térmico (Epson TM-T20X-II): @page 80mm, PrintTo fix, @media print, fix encoding UTF-8 terminal rede
+- v2.0.9 (2026-07-16): etiqueta 50×30mm silenciosa via api('config:imprimir')
+- v2.0.10 (2026-07-16): senha mestre suporte embutida (SHA256 em licenca.js); etiqueta 50×30 redesenhada
+- v2.0.11 (2026-07-17): etiqueta 60×40mm Pimaco TR6040 com logo (nome loja), tamanho 22px destaque, EAN-13
+- v2.0.12 (2026-07-17): fix UTF-8 WebView2 (BOM+meta http-equiv no index.html); fix ícone exe (RT_GROUP_ICON id=1); Setup.exe cria regra firewall porta 8750
+- v2.0.13 (2026-07-17): impressão de etiquetas em lote (etiquetas.js — EAN-13 e QR Code por variação, modo cópias fixas ou por estoque)
+- v2.0.14 (2026-07-17): fix impressão silenciosa (SumatraPDF: URL 3.6.1+ZIP, timeout 90s, fallback popup com CSS correto); etiqueta tamanho 26px em destaque (flex-column no rodapé)
+- v2.0.15 (2026-07-17): SumatraPDF bundled no Setup.exe (extensions/rede/SumatraPDF.exe — impressão silenciosa funciona sem internet desde a instalação)
+- v2.0.16 (2026-07-17): fix impressão silenciosa (Edge --paper-width/height por tipo: etiqueta=60×40mm, cupom=80mm; timeout 12s cada; verifica exit code SumatraPDF; remove fallback PrintTo do PS1)
+- v2.0.17 (2026-07-17): novo layout etiqueta 60×40mm (coluna esq: nome+cor+ref+preço+EAN; badge tamanho dir com borda arredondada 28px); impressão local via _imprimirDireto() (Neutralino.os.execCommand + PS1 temp, bypassa extensão TCP); fix crítico banco: _jaInicializado guard impede dados-iniciais.db sobrescrever banco do cliente após reset de fábrica + atualização
+- v2.0.18 (2026-07-17): fix impressão — listarImpressoras via execCommand (sem extensão TCP); botão de teste passa impressora diretamente ao handler (sem precisar salvar antes); HTML teste etiqueta usa classes novas (et-left/et-right/et-tam-badge); toast de feedback no teste
+- v2.0.19 (2026-07-17): fix impressão silenciosa (& + splatting no PS1 para argumentos com espaços; polling PDF Edge em vez de -Wait; $LASTEXITCODE para SumatraPDF)
+- v2.0.20–2.0.23 (2026-07-17): diagnóstico impressão (alert debug), fix NL_PATH vs NL_CWD, auto-download SumatraPDF, captura output SumatraPDF
+- v2.0.24 (2026-07-17): fix crítico SumatraPDF: arquivo PDF como 1º arg + splatting (& $s $p '-print-to' $imp '-exit-when-done') — corrige "Couldn't open file TM-T20X for printing" causado por Start-Process que não citava nomes de impressora com espaços
+- v2.0.25–2.0.30 (2026-07-17–23): fix --disable-gpu (cupom em branco), noscale (sem scaling A4), thermal direto ELGIN, remoção alerts debug, oscilação portrait/landscape (tentativa errada 40×60)
+- v2.0.31 (2026-07-23): fix etiqueta paisagem (revert CSS 60×40mm, et-left+et-right, dimArgs 2.362×1.575); fix crash dashboard novo usuário (d.financeiro?.a_vencer?.pagar?.total ?? 0)
+- v2.0.32 (2026-07-23): fix dashboard permissions (lucro_bruto/valor_venda/receita ocultos para não-admin; linhas A pagar/receber só quando financeiro.ver); fix etiqueta: padding-left 5mm (não corta na borda), add .et-cor/.et-ref ao cssEtq (eram herdando fonte gigante), sincronizar CSS_ETQ etiquetas.js
+- v2.0.33 (2026-07-23): contabilidade devoluções: dashboard desconta valor_devolvido do total de hoje/mês/série e CMV; status "devolvida"/"dev. parcial" nas listas de vendas (pill colorido); botão ↩️ Devolver no Histórico de Vendas (com refresh inline após devolver); esconder botão devolver quando total_devolvido >= total
+- v2.0.34 (2026-07-23): etiquetas: fontes maiores (nome 10.5px, cor 8.5px, preço 10px); etiqueta individual por produto (botão 🏷️ abre qty por variação); categorias de clientes com desconto % (auto-aplicar no PDV); desconto geral PDV exige senha de admin (modalAutorizarDesconto); relatórios descontam devoluções do total/ticketMédio/por-dia/por-vendedor; logo e nome do cupom distintos do sistema (logo_cupom, cupom_nome); logo padrão do cupom embutida (logo-cupom.png → logo-default.js)
+- v2.0.35 (2026-07-23): fix cupom térmico: texto não cortado à esquerda (padding-left:4mm no body), data em formato dd/mm/aaaa hh:mm; relatórios: COUNT exclui vendas 100% devolvidas (CASE WHEN); estoque: botões 📄 Exportar PDF e 📊 Exportar Excel na tela de Estoque; categorias de clientes: somente admin pode criar/editar/excluir; importar/exportar clientes somente admin; ícone da barra de tarefas corrigido (icon.ico multi-resolução injetado no exe + window.icon → .ico); Setup.exe v2.0.35 gerado
+- v2.0.36 (2026-07-23): desconto automático à vista (dinheiro/PIX): configurável em Configurações → PDV (habilitar, percentual, valor mínimo); desconto NÃO se aplica se cliente tem desconto de categoria; badge verde no modal de pagamento com valor do desconto; Setup.exe v2.0.36 gerado
+- v2.0.37 (2026-07-23): fix crítico sessão: login/logout de terminal em rede não sobrescreve mais a sessão do app principal (bug causava "sem permissão" para admin quando rede estava ativa e terminal logava com outro usuário)
+- v2.0.38 (2026-07-23): fix financeiro (fluxo do mês): vendas e CMV descontam devoluções (valor_devolvido + devolucao_itens); fix aniversariantes: rota renomeada para clientes:aniversariantes (crediario: prefix bloqueava quando setor crediário estava desabilitado); fix ícone barra de tarefas permanente: Neutralino.window.setIcon() no boot (bypassa cache do Windows — não depende mais do PE do exe)
+- v2.0.39 (2026-07-23): fix categorias: reativa categoria desativada (soft delete) ao criar com mesmo nome em vez de retornar "já existe"
+- v2.0.40 (2026-07-23): reposição por variação: estoque mínimo configurável por cor/tamanho (campo na grade do produto); reposição lista cada variação individualmente; dashboard alerta por variação; mínimo do produto vira padrão quando variação não tem o seu próprio
+- v2.0.41 (2026-07-23): fix exclusão de variações: botão ✕ habilitado para variações existentes (confirmação se tem estoque > 0)
+- v2.0.42 (2026-07-24): mais vendidos e curva ABC descontam devoluções (pecas e receita líquidos); porCategoria também descontam devoluções por categoria
+- v2.0.43 (2026-07-24): etiqueta por produto: checkboxes "Mostrar na etiqueta" (Preço/Referência/Cor·Tamanho) — padrão sem preço, igual ao modo lote
+- v2.0.44 (2026-07-24): etiqueta: fontes maiores (nome 13px, cor 11px preto, ref 9px, preço 12px, nº barcode 7px) — textos legíveis na térmica
+- v2.0.45 (2026-07-24): fix ícone barra de tarefas definitivo: extrai icon.ico do bundle via fetch e grava em NL_PATH/icon.ico para que setIcon() funcione mesmo sem reinstalar o Setup
+- v2.0.46 (2026-07-24): etiqueta: cor "Única" e tamanho "U" omitidos (produtos sem variação ficam limpos); ícone barra integrado
+- v2.0.47 (2026-07-24): fix permissão dashboard: hoje.total, hoje.ticket, mes.total e serie[].total ocultados para não-admin (apenas qtd visível); gráfico 14 dias usa qtd para altura das barras quando sem permissão financeira
+- v2.0.48 (2026-07-24): fix cupom térmico: padding-right 5mm (corta `,00` dos valores à direita); fix devolução: valor_unit proporciona desconto_geral da venda (fator = total/subtotal) — caixa não vai mais negativo ao devolver venda com desconto
+- v2.0.49 (2026-07-24): migration automática no boot (migr_fix_dev_desconto_v2048): recalcula valor_devolvido de todas as devoluções anteriores de vendas com desconto geral, corrigindo registros feitos antes do fix da v2.0.48
+- v2.0.50 (2026-07-24): fix dashboard falso negativo — cards hoje/mês mostram vendas BRUTAS; devoluções aparecem como linha âmbar separada abaixo do card (nunca mais -R$88); totalPeriodo 14 dias usa bruto; lucro bruto continua calculado sobre líquido; sistema de Troca completo no PDV (botão 🔄 Troca em Vendas e Histórico — painel split: itens que voltaram + busca itens que vão sair + diferença/vale automático); rota trocas:registrar (transação atômica: devolução + nova venda + vale excedente)
+- v2.0.55 (2026-07-26): ícone do app configurável em Configurações → Aparência (aceita .ico ou PNG convertido em canvas 256×256 para container ICO); gravado em %APPDATA%/SalgueiroGestao/dados/icone.ico — pasta que updater e instalador NUNCA tocam, então o ícone nunca mais some; boot do index.html prioriza esse arquivo antes do NL_PATH/icon.ico; rotas config:iconeStatus/definirIcone/removerIcone; Setup.exe v2.0.55 regerado (estava parado na v2.0.36)
+- v2.0.54 (2026-07-24): fix cadastro de produto — campos numéricos da grade (Estoque inicial, Mínimo) e Mínimo padrão nascem VAZIOS com placeholder "0" em vez de pré-preenchidos; input vazio é tratado como 0 ao salvar (evita erro de digitação por não apagar o valor anterior)
+- v2.0.53 (2026-07-24): fix crítico modal exportar lista — modal() sempre chama aoSalvar(m,fechar) no botão do rodapé; passar null quebrava com "aoSalvar is not a function". Agora usa rodapé padrão ("Gerar lista") com campo Formato (PDF/Excel); layout refeito com CSS próprio (.exp-grid2/.exp-chks) alinhado ao resto do sistema
+- v2.0.52 (2026-07-24): exportação de lista de produtos com opções (botão 📋 Exportar lista na tela Produtos): modal permite escolher categoria, filtro de estoque (todos/com/sem), quais colunas incluir (ref, categoria, cor/tam, cód. barras, estoque, custo, preço venda, total, coluna "Conferido") e agrupamento por categoria; rota estoque:exportarXlsxFiltrado gera Excel respeitando as mesmas opções
+- v2.0.51 (2026-07-24): fix dashboard ao cancelar vendas: devoluções de vendas canceladas não aparecem mais no card nem na linha âmbar (JOIN vendas.status='concluida' nas queries de hojeDevol, mesDevol e serieDevol); top-5 produtos usa HAVING pecas > 0 em vez de receita > 0
+
+## Chat interno (retirado na v3.0.1 — código guardado)
+
+O chat/avisos da v3.0.0 **não foi perdido**: está inteiro em `_chat-v3.0.0/`
+(fora de `src/`, portanto não entra no build). Contém `core-mensagens.js`,
+`tela-mensagens.js`, `schema-chat.sql`, `estilos-chat.css` e `COMO-RELIGAR.md`
+com o checklist completo. O `core-mensagens.js` guardado **já tem a correção**
+(`registrarPing` usando `runVolatil`). As 6 tabelas continuam no banco do
+cliente — o histórico de conversas reaparece quando o chat voltar.
+
+## Backlog (próximas versões)
+- **Entregar o vale-troca de verdade, não mandar o cliente anotar** (pedido do
+  Marcio em 04/08/2026, olhando o modal "Vale-troca gerado"). Hoje o texto diz
+  *"Anote o código ou tire uma foto"* — solução tupiniquim. O modal fica em
+  `pdv.js`, no bloco `if (r.vale)` de `modalTroca` (e no equivalente de
+  `modalDevolucao`). Trocar por botões de envio:
+  · **WhatsApp** — `https://wa.me/55<DDD><numero>?text=<urlencode>`, aberto com
+    `Neutralino.os.open()`. O telefone já existe em `clientes.telefone`; a troca
+    conhece o cliente por `venda.cliente_id`. Precisa normalizar o número
+    (tirar máscara, prefixar 55) e ter um caminho para venda sem cliente:
+    pedir o telefone na hora.
+  · **E-mail** — `clientes.email` existe. Sem servidor SMTP no app; o caminho
+    barato é `mailto:` via `os.open()`. Se quiser envio de verdade, precisa
+    decidir o provedor com o Marcio — **não escolher sozinho**.
+  · **Imprimir o vale** na térmica de 80mm reusando `api('config:imprimir')`,
+    no mesmo molde do cupom (`cssCupom` em `servidor.js`). Provavelmente é o
+    mais útil no balcão, e funciona sem internet.
+  Guardar em `config` o que a loja prefere por padrão. Rever também a cópia do
+  modal — o "anote ou tire foto" só deve sobrar como último recurso.
+- **Teste visual E2E está bloqueado no sandbox atual** (proxy só libera npm/PyPI/CDN
+  do playwright; `apt` e `archive.ubuntu.com` dão 502/403). Sem GTK+WebKit o binário
+  Neutralino não roda, e o Chromium do playwright falta `libXdamage.so.1`. Enquanto
+  isso, o substituto é o teste de DOM com **jsdom** (`npm i jsdom`), que roda `pdv.js`
+  com um `app.js` falso ao lado e dispara eventos reais — foi ele que achou a
+  armadilha do blur na v3.2.0. **Pedir ao Marcio uma validação visual no Windows**
+  antes de considerar a entrega fechada.
+- PDFs dos manuais: pipeline novo é `pandoc -f gfm -t html5 -s` → **WeasyPrint**
+  (`pip install --break-system-packages weasyprint`), CSS em `/tmp/estilo.css`,
+  removendo o `<header id="title-block-header">` que o pandoc injeta. Emoji: os 11
+  subsets de `@fontsource/noto-emoji` mesclados com `fontTools.merge` em
+  `~/.fonts/NotoEmoji.ttf` (um subset sozinho não cobre os ícones do sistema).
+- Religar o chat interno a partir de `_chat-v3.0.0/` (ver `COMO-RELIGAR.md`).
+- Manuais e PDFs (`docs/`) atualizados para 3.2.0 na v3.2.0 — **falta ainda a seção
+  nova de Backup** (a tela foi refeita na v3.0.1 e nunca entrou no manual).
+- Impressoras: falha relatada pelo Marcio em 31/07. **Não diagnosticada.**
+  Investigar lendo o código (rotas `config:imprimir`, `_imprimirDireto()`,
+  `core/rede.js`, PS1 da extensão) e o `%APPDATA%\SalgueiroGestao\impressao.log`.
+  Não escrever hipótese sem confirmar em arquivo e linha.
+- PDV: ao abrir (F2 ou navegação), focar automaticamente o campo de busca/venda — hoje o usuário precisa clicar com o mouse antes de digitar. Fix: `input.focus()` no final de `viewPdv()`.
+
+## Status
+- [x] Backend portado completo; testes Node: 23/23 (outputs/teste-backend.mjs)
+- [x] Portable validado pelo cliente — ABRIU ✔ (Marcio confirmou)
+- [x] Banco V1 do cliente embutido (src/dados-iniciais.db); fornecedor aceita CNPJ/CPF; fechamento de caixa completo; relatórios com aba Consignados
+- [x] MULTITERMINAL FUNCIONANDO — extensão PS1, TcpListener 0.0.0.0:8750, terminal loga e abre painel
+- [x] Auto-updater VALIDADO E2E (v2.0.2→v2.0.3) ✔ curl.exe, move atômico, restartProcess
+- [x] Etiqueta 60×40mm Pimaco TR6040 — logo loja + nome produto + tamanho 22px + EAN-13
+- [x] Senha mestre suporte embutida em licenca.js (DEV_SENHA_HASH_PADRAO = SHA256 da senha)
+- [x] Setup.exe v2.0.17 gerado: instala em %LOCALAPPDATA%, atalho desktop+menu, abre firewall porta 8750, SumatraPDF bundled
+- [x] Troca funcional (v3.2.0) — 87 asserções automatizadas; **falta a validação visual do Marcio no Windows**
+- [ ] Impressão silenciosa cupom — AGUARDANDO Marcio informar nome da impressora no cliente
+- [ ] Rede multiterminal no cliente — testar após firewall liberado (porta 8750 TCP inbound)
