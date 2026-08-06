@@ -3,6 +3,15 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.5.1', data: '2026-08-06',
+    titulo: 'Transferência: todas as variações sempre à vista',
+    itens: [
+      'Correção: quando nenhuma peça do produto estava na origem escolhida, a grade inteira sumia e aparecia só um aviso. Agora as variações aparecem sempre — você vê que elas existem, mesmo quando as peças estão em outro lugar.',
+      'Coluna nova "Total na loja": ao lado do que há na origem, mostra o total daquela cor e tamanho somando todos os locais. Se a peça está zerada na origem mas tem 5 no total, você descobre na hora que ela está em outro estoque.',
+      'O cabeçalho do produto agora diz quantas variações ele tem e quantas têm peça na origem escolhida — dá para conferir de bate-pronto se está faltando alguma.'
+    ]
+  },
+  {
     versao: '3.5.0', data: '2026-08-06',
     titulo: 'Transferir estoque escolhendo o produto',
     itens: [

@@ -43,7 +43,9 @@ function estilo() {
   .tr-bloco-acoes .btn{padding:3px 9px;font-size:11px}
   .tr-grade{margin:0}
   .tr-grade th{font-size:11px}
-  .tr-vazia td{opacity:.45}
+  .tr-vazia td{opacity:.5}
+  .tr-aviso{background:#FDF8EC;border-left:3px solid var(--destaque,#F2C14E);
+    padding:7px 11px;font-size:11.5px;margin:0}
   .tr-resumo{background:var(--vinho);color:#fff;border-radius:8px;padding:8px 12px;margin-top:10px;font-size:13px}
   .es-busca-res { border:1px solid var(--borda); border-radius:8px; max-height:200px; overflow-y:auto; margin-top:4px }
     .es-busca-res div { padding:7px 10px; cursor:pointer; font-size:13px; border-bottom:1px solid var(--borda) }
@@ -287,6 +289,7 @@ function formTransferir(origemId, aoConcluir) {
   const $blocos = m.querySelector('#tr-blocos');
   const $resumo = m.querySelector('#tr-resumo');
   const origemAtual = () => Number(m.querySelector('#tr-origem').value);
+  const nomeOrigem = () => (locais.find(l => l.id === origemAtual()) || {}).nome || 'a origem';
 
   // trocar a origem recarrega os saldos de todos os produtos já escolhidos
   m.querySelector('#tr-origem').addEventListener('change', async () => {
@@ -338,7 +341,10 @@ function formTransferir(origemId, aoConcluir) {
       const cx = el(`<div class="tr-bloco">
         <div class="tr-bloco-cab">
           <span><b>${esc(b.produto.nome)}</b>${b.produto.referencia
-            ? ` <small style="opacity:.7">Ref. ${esc(b.produto.referencia)}</small>` : ''}</span>
+            ? ` <small style="opacity:.7">Ref. ${esc(b.produto.referencia)}</small>` : ''}
+            <small style="opacity:.7">· ${b.variacoes.length} variação(ões)${
+              b.variacoes.some(v => v.disponivel > 0)
+                ? `, ${b.variacoes.filter(v => v.disponivel > 0).length} com peça aqui` : ''}</small></span>
           <span class="tr-bloco-acoes">
             <button type="button" class="btn btn-suave tr-tudo" ${semSaldo ? 'disabled' : ''}
               title="Preencher cada linha com tudo o que há na origem">Levar tudo</button>
@@ -347,12 +353,15 @@ function formTransferir(origemId, aoConcluir) {
               title="Tirar este produto do romaneio">✕</button>
           </span>
         </div>
-        ${semSaldo
-          ? '<div class="vazio" style="padding:10px !important">Este produto não tem peças na origem escolhida.</div>'
-          : `<table class="es-tab tr-grade">
-              <thead><tr><th>Cor</th><th>Tamanho</th>
-                <th class="num">Na origem</th><th class="num" style="width:110px">Transferir</th></tr></thead>
-              <tbody></tbody></table>`}
+        ${semSaldo ? `<div class="tr-aviso">
+            Nenhuma peça deste produto está em <b>${esc(nomeOrigem())}</b>.
+            As variações aparecem abaixo para você conferir — troque a origem no topo para encontrá-las.
+          </div>` : ''}
+        <table class="es-tab tr-grade">
+          <thead><tr><th>Cor</th><th>Tamanho</th>
+            <th class="num">Na origem</th><th class="num">Total na loja</th>
+            <th class="num" style="width:110px">Transferir</th></tr></thead>
+          <tbody></tbody></table>
       </div>`);
 
       const tb = cx.querySelector('tbody');
@@ -360,11 +369,12 @@ function formTransferir(origemId, aoConcluir) {
         b.variacoes.forEach(v => {
           const tr = el(`<tr${v.disponivel <= 0 ? ' class="tr-vazia"' : ''}>
             <td>${esc(v.cor)}</td><td>${esc(v.tamanho)}</td>
-            <td class="num">${v.disponivel}</td>
+            <td class="num"><b>${v.disponivel}</b></td>
+            <td class="num" title="Total desta peça somando todos os locais">${v.total_geral}</td>
             <td class="num"><input type="number" min="0" max="${v.disponivel}" step="1"
               value="${v.qtd}" placeholder="0" inputmode="numeric"
               style="width:80px;text-align:right"
-              ${v.disponivel <= 0 ? 'disabled title="Sem peças na origem"' : ''}></td>
+              ${v.disponivel <= 0 ? 'disabled title="Esta peça não está na origem escolhida"' : ''}></td>
           </tr>`);
           const inp = tr.querySelector('input');
           if (inp) {

@@ -3,7 +3,7 @@
 > Mapa técnico gerado automaticamente por `tools/graphify.js`.
 > **Não edite à mão.** Regere com `node tools/graphify.js` a cada alteração estrutural.
 
-**Versão:** 3.5.0 · **Gerado em:** 2026-08-06
+**Versão:** 3.5.1 · **Gerado em:** 2026-08-06
 **Aplicação:** `br.com.mllopes.salgueirogestao` (Neutralino 6 + WebView2)
 **Cliente:** Boutique do Salgueiro · **Autor:** ML Lopes Design
 
@@ -114,12 +114,12 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `compras.js` | 227 | viewCompras |
 | `configuracoes.js` | 1333 | viewConfiguracoes |
 | `estoque.js` | 333 | abrirEtiquetas, ean13Svg, viewEstoque |
-| `estoques.js` | 596 | viewEstoques |
+| `estoques.js` | 606 | viewEstoques |
 | `etiquetas.js` | 146 | abrirEtiquetasLote |
 | `financeiro.js` | 260 | viewFinanceiro |
 | `mensagens.js` | 558 | abrirBalao, encerrarTelaMensagens, iniciarMensagens, pararMensagens, viewMensagens |
 | `neutralino.js` | 2 | — |
-| `novidades.js` | 289 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
+| `novidades.js` | 298 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
 | `pdv.js` | 1536 | calcResgateLocal, viewPdv |
 | `ranking.js` | 361 | viewRanking |
 | `relatorios.js` | 1081 | viewRelatorios |
