@@ -781,6 +781,44 @@ TOTAL GERAL                         10     8      18
 - Peça **abaixo do estoque mínimo** aparece com a linha marcada e um ▼ ao lado do total
 - Se alguma peça está no total mas **sem lugar definido**, aparece um aviso em âmbar no topo. Isso acontece quando a peça entrou no sistema mas nunca foi distribuída entre os locais — resolva em **🏢 Estoques**
 
+#### Bater o começo dos trabalhos com hoje
+
+Marque **Mostrar movimentação**. Aparecem quatro colunas novas ao lado do que está em estoque:
+
+| Coluna | O que é |
+|---|---|
+| **Entrou** | Tudo que entrou: estoque inicial do cadastro e compras recebidas |
+| **Vendeu** | Peças vendidas |
+| **Devolv.** | Peças que voltaram por devolução ou troca |
+| **Outros** | Ajustes manuais e inventário |
+| **Deveria ter** | Entrou − Vendeu + Devolvido ± Outros |
+
+Ao lado fica **Em estoque** (o que o sistema diz que tem hoje) e **Dif.** — a diferença entre os dois. Um **✓** significa que bate.
+
+O quadro **Fechamento**, no alto da folha, resume a conta:
+
+```
+   Entrou                 150
+(−) Vendido                32
+(+) Devolvido               3
+(±) Ajustes                 0
+=   Deveria ter           121
+    Em estoque hoje       121
+    Diferença               ✓ bate
+```
+
+> **Transferência entre locais não entra nessa conta** — ela só muda a peça de lugar, o total da loja não muda.
+
+**Período das vendas:** deixe **Vendas de/até** em branco para contar desde sempre — é assim que se bate o começo dos trabalhos com hoje. Preencha só quando quiser um recorte (ex.: o que vendeu nesta semana).
+
+> Se aparecer diferença, na maioria das vezes é estoque que já existia antes do período escolhido. Limpe as datas de venda e gere de novo.
+
+#### Totais por grupo
+
+Quando você agrupa por **data** ou **categoria**, cada grupo ganha a própria linha de total no fim — além do TOTAL GERAL. Assim dá para fechar remessa por remessa.
+
+Desmarcando **Mostrar cada variação**, o relatório fica só com os totais por produto: uma folha para a visão geral, em vez do detalhamento.
+
 > Este relatório é uma **foto de agora**. As datas do topo da tela de Relatórios não valem aqui: quem manda são os filtros da própria aba.
 
 Botões **🖨️ Imprimir** e **📄 PDF** no topo da tela, e **📊 Excel** na própria aba. As colunas exportadas são as mesmas que você marcou.
@@ -1033,6 +1071,8 @@ Use isso depois de atualizar, para saber o que apareceu de novo no sistema.
 | **Preciso conferir o estoque na mão** | Relatórios → 📦 Estoque → marque "Coluna Contado" → Imprimir |
 | **Chegou mercadoria e quero conferir** | Relatórios → 📦 Estoque → preencha "Cadastrados de/até" |
 | **Não conferi no dia do recebimento** | Relatórios → 📦 Estoque → Agrupar por **Data de cadastro** |
+| **Quero bater o estoque desde o começo** | Relatórios → 📦 Estoque → marque "Mostrar movimentação" e deixe as datas de venda em branco |
+| **O relatório acusa diferença** | Costuma ser estoque anterior ao período. Limpe "Vendas de/até" e gere de novo |
 | **Aviso de peça sem lugar definido** | A peça existe no total mas não foi distribuída. Vá em 🏢 Estoques e faça a distribuição |
 | **Preciso cadastrar peça igual a outra** | Botão **Duplicar** na linha do produto |
 | **Não consigo excluir o Consumidor final** | É cliente do sistema: recebe as vendas sem identificação |

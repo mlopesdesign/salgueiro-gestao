@@ -783,6 +783,30 @@ function estoqueDetalhado(db, p) {
     ORDER BY p.nome, v.cor, v.tamanho
   `).all(...arg);
 
+  // ── Movimentação do período (v3.4.1) ──────────────────────────────────────
+  // Para BATER o estoque: quanto entrou, quanto vendeu e o que deveria sobrar.
+  // A fonte é `movimentos_estoque` — o livro do estoque, que registra tudo com
+  // data. `venda` entra com qtd NEGATIVA, por isso o sinal invertido.
+  // TRANSFERÊNCIA fica de fora: ela só muda a peça de lugar, o total não muda.
+  const mov = {};
+  const usarMov = !!(p.mov_de || p.mov_ate || p.movimentacao);
+  if (usarMov) {
+    const cm = [], am = [];
+    if (p.mov_de)  { cm.push("date(criado_em) >= date(?)"); am.push(p.mov_de); }
+    if (p.mov_ate) { cm.push("date(criado_em) <= date(?)"); am.push(p.mov_ate); }
+    const wm = cm.length ? 'WHERE ' + cm.join(' AND ') : '';
+    for (const m of db.prepare(`
+      SELECT variacao_id,
+             SUM(CASE WHEN tipo='entrada'    THEN qtd ELSE 0 END) AS entrou,
+             SUM(CASE WHEN tipo='venda'      THEN -qtd ELSE 0 END) AS vendeu,
+             SUM(CASE WHEN tipo='devolucao'  THEN qtd ELSE 0 END) AS devolveu,
+             SUM(CASE WHEN tipo IN ('ajuste','saida','inventario') THEN qtd ELSE 0 END) AS outros,
+             MAX(CASE WHEN tipo='venda' THEN criado_em END) AS ultima_venda,
+             MIN(CASE WHEN tipo='venda' THEN criado_em END) AS primeira_venda
+      FROM movimentos_estoque ${wm} GROUP BY variacao_id
+    `).all(...am)) mov[m.variacao_id] = m;
+  }
+
   // saldos por local, indexados por variação
   const saldos = {};
   for (const s of db.prepare('SELECT estoque_id, variacao_id, qtd FROM estoque_saldos').all()) {
@@ -805,7 +829,8 @@ function estoqueDetalhado(db, p) {
         consignado: !!l.consignado,
         cadastrado_em: String(l.criado_em || '').slice(0, 10),
         preco_custo: arred(l.preco_custo), preco_venda: arred(l.preco_venda),
-        variacoes: [], total: 0, valor_custo: 0, valor_venda: 0, por_local: zeraLocais()
+        variacoes: [], total: 0, valor_custo: 0, valor_venda: 0, por_local: zeraLocais(),
+        entrou: 0, vendeu: 0, devolveu: 0, outros: 0, esperado: 0, dif_mov: 0
       };
       produtos.push(atual);
     }
@@ -822,15 +847,35 @@ function estoqueDetalhado(db, p) {
     const vCusto = arred(qtd * (Number(l.preco_custo) || 0));
     const vVenda = arred(qtd * (Number(l.preco_venda) || 0));
 
+    // conciliação: o que os movimentos dizem que deveria haver
+    const mv = mov[l.variacao_id] || {};
+    const entrou = Number(mv.entrou) || 0;
+    const vendeu = Number(mv.vendeu) || 0;
+    const devolveu = Number(mv.devolveu) || 0;
+    const outros = Number(mv.outros) || 0;
+    const esperado = arred(entrou - vendeu + devolveu + outros);
+
     atual.variacoes.push({
       id: l.variacao_id,
       cor: l.cor, tamanho: l.tamanho, codigo_barras: l.codigo_barras || '',
       total: qtd, por_local: porLocal,
+      entrou, vendeu, devolveu, outros, esperado,
+      // sobra/falta que os movimentos NÃO explicam — é o que o Marcio procura
+      // quando bate o começo dos trabalhos com o estoque de hoje
+      dif_mov: arred(qtd - esperado),
+      ultima_venda: mv.ultima_venda ? String(mv.ultima_venda).slice(0, 10) : '',
+      primeira_venda: mv.primeira_venda ? String(mv.primeira_venda).slice(0, 10) : '',
       sem_local: arred(qtd - somaLocais),   // parte que ainda não foi distribuída
       minimo, abaixo: minimo > 0 && qtd < minimo,
       valor_custo: vCusto, valor_venda: vVenda
     });
     atual.total += qtd;
+    atual.entrou = arred((atual.entrou || 0) + entrou);
+    atual.vendeu = arred((atual.vendeu || 0) + vendeu);
+    atual.devolveu = arred((atual.devolveu || 0) + devolveu);
+    atual.outros = arred((atual.outros || 0) + outros);
+    atual.esperado = arred((atual.esperado || 0) + esperado);
+    atual.dif_mov = arred(atual.total - atual.esperado);
     atual.valor_custo = arred(atual.valor_custo + vCusto);
     atual.valor_venda = arred(atual.valor_venda + vVenda);
   }
@@ -845,6 +890,12 @@ function estoqueDetalhado(db, p) {
     valor_custo: arred(lista.reduce((s, pr) => s + pr.valor_custo, 0)),
     valor_venda: arred(lista.reduce((s, pr) => s + pr.valor_venda, 0)),
     abaixo_minimo: lista.reduce((s, pr) => s + pr.variacoes.filter(v => v.abaixo).length, 0),
+    entrou: arred(lista.reduce((s, pr) => s + (pr.entrou || 0), 0)),
+    vendeu: arred(lista.reduce((s, pr) => s + (pr.vendeu || 0), 0)),
+    devolveu: arred(lista.reduce((s, pr) => s + (pr.devolveu || 0), 0)),
+    outros: arred(lista.reduce((s, pr) => s + (pr.outros || 0), 0)),
+    esperado: arred(lista.reduce((s, pr) => s + (pr.esperado || 0), 0)),
+    com_movimentacao: usarMov,
     por_local: (() => {
       const o = zeraLocais();
       for (const pr of lista) for (const l of locais) o[l.id] += pr.por_local[l.id];
@@ -856,7 +907,9 @@ function estoqueDetalhado(db, p) {
     resumo.pecas - locais.reduce((s, l) => s + resumo.por_local[l.id], 0)
   );
 
-  return { ok: true, locais, produtos: lista, resumo, filtros: { catId, fornId, situacao, de, ate } };
+  resumo.dif_mov = arred(resumo.pecas - resumo.esperado);
+  return { ok: true, locais, produtos: lista, resumo,
+    filtros: { catId, fornId, situacao, de, ate, mov_de: p.mov_de || '', mov_ate: p.mov_ate || '' } };
 }
 
 export {

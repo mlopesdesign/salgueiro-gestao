@@ -90,7 +90,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `pontos.js` | 110 | 9 | ajustar, calcularGanho, calcularResgate, creditar, debitar, getConfig, historico, saldo, +1 |
 | `produtos.js` | 212 | 7 | excluirCategoria, excluirProduto, listarCategorias, listarProdutos, obterProduto, salvarCategoria, salvarProduto |
 | `rede.js` | 150 | 3 | SOMENTE_LOCAL, imprimir, iniciar, listarImpressoras, parar, preparar, status |
-| `relatorios.js` | 864 | 19 | TAXAS_PADRAO, consignadosMensal, curvaAbc, estoqueDetalhado, eventosVenda, pecasParadas, ranking, rankingPeriodo, +3 |
+| `relatorios.js` | 917 | 19 | TAXAS_PADRAO, consignadosMensal, curvaAbc, estoqueDetalhado, eventosVenda, pecasParadas, ranking, rankingPeriodo, +3 |
 | `trocas.js` | 252 | 2 | DESTINOS, registrar |
 | `updater.js` | 50 | 1 | verificarAtualizacao |
 | `util.js` | 68 | 4 | auditar, codigoInterno, dvEan13, hashSenha, verificarSenha |
@@ -119,10 +119,10 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `financeiro.js` | 260 | viewFinanceiro |
 | `mensagens.js` | 558 | abrirBalao, encerrarTelaMensagens, iniciarMensagens, pararMensagens, viewMensagens |
 | `neutralino.js` | 2 | — |
-| `novidades.js` | 271 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
+| `novidades.js` | 275 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
 | `pdv.js` | 1536 | calcResgateLocal, viewPdv |
 | `ranking.js` | 361 | viewRanking |
-| `relatorios.js` | 940 | viewRelatorios |
+| `relatorios.js` | 1081 | viewRelatorios |
 
 ---
 

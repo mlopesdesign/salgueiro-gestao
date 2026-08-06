@@ -12,7 +12,11 @@ export const NOVIDADES = [
       'Para conferir uma remessa que chegou, preencha “Cadastrados de/até” — e se preferir, escolha agrupar por Data de cadastro: cada dia vira um bloco, com o total daquele dia. Assim dá para conferir depois, mesmo sem ter conferido no dia.',
       'Também dá para agrupar por categoria, filtrar por fornecedor, e mostrar só o que tem estoque ou só o que está zerado.',
       'Peça abaixo do estoque mínimo aparece destacada. Se alguma peça estiver no total mas sem lugar definido, o relatório avisa em vez de esconder.',
-      'Exporta em Excel e imprime (ou salva em PDF) com as mesmas colunas que você escolheu na tela.'
+      'Exporta em Excel e imprime (ou salva em PDF) com as mesmas colunas que você escolheu na tela.',
+      'BATER O COMEÇO DOS TRABALHOS COM HOJE: marque "Mostrar movimentação". Aparecem as colunas Entrou, Vendeu, Devolvido e Deveria ter, ao lado do que está em estoque agora. Se os números não fecharem, o relatório mostra a diferença em vermelho.',
+      'Um quadro de Fechamento no alto resume tudo: entrou, menos o vendido, mais devoluções, o que deveria ter e o que tem hoje. É a conta fechada numa olhada.',
+      'Quando você agrupa por data ou categoria, cada grupo ganha o total dele no fim — não só o total geral.',
+      'Marque "Última venda" para ver quando cada peça saiu pela última vez, e desmarque "Mostrar cada variação" quando quiser só os totais por produto.'
     ]
   },
   {

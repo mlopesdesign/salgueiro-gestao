@@ -198,7 +198,17 @@ produto**, e no fim o **TOTAL GERAL**. Uma coluna para cada lugar
 recebimento. Se já passou e você não conferiu no dia, escolha
 **Agrupar por → Data de cadastro**: cada dia vira um bloco com o total dele.
 
+**Bater o começo dos trabalhos com hoje:** marque **Mostrar movimentação** e
+deixe as datas de venda em branco. Saem as colunas:
+
+```
+Entrou  −  Vendeu  +  Devolvido  =  Deveria ter   |   Em estoque hoje   |   Dif.
+```
+
+O quadro **Fechamento** no alto fecha a conta. **✓ bate** = tudo certo.
+
 > Peça abaixo do mínimo sai destacada. Exporta em **Excel** também.
+> Agrupando por data ou categoria, cada grupo ganha o total dele no fim.
 
 ---
 
