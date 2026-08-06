@@ -159,6 +159,7 @@ const _SECOES = [
   ['pagamentos', 'Formas de pagamento e taxas', true],
   ['consignado', 'Comissão de consignados', true],
   ['cortesias', 'Cortesias (brindes)', true],
+  ['descontos', 'Descontos autorizados', true],
   ['vendedor', 'Por vendedor(a)', false],
   ['categoria', 'Por categoria', false]
 ];
@@ -344,6 +345,27 @@ async function abaEvento(corpo) {
            <td class="num"><b>${c.pecas}</b></td><td class="num"><b>${moeda(c.valor)}</b></td>
            <td class="num"><b>${moeda(c.custo)}</b></td></tr>`,
         '<span class="ev-dica" style="margin-left:auto">Saíram do estoque · não entram no faturamento</span>');
+    }
+
+    if (s.descontos && r.descontos && r.descontos.length) {
+      const d = r.resumo.descontos;
+      h += tabela('🏷️ Descontos autorizados',
+        `<th>Venda</th><th>Data / hora</th><th>Cliente</th><th>Quem lançou</th>
+         <th>Autorizado por</th><th>Motivo</th>
+         <th class="num">Tabela</th><th class="num">Desconto</th><th class="num">Pago</th>`,
+        r.descontos.map(x => `<tr><td>#${x.venda_id}</td>
+          <td>${dataBr(x.data)} <small>${esc(x.hora)}</small></td>
+          <td>${esc(x.cliente || '—')}</td>
+          <td>${esc(x.operador || '—')}</td>
+          <td><b>${esc(x.autorizado_por || '—')}</b></td>
+          <td>${esc(x.motivo || '—')}</td>
+          <td class="num">${moeda(x.subtotal)}</td>
+          <td class="num"><b style="color:var(--vermelho)">−${moeda(x.desconto)}</b>
+            <small>(${x.percent}%)</small></td>
+          <td class="num">${moeda(x.total)}</td></tr>`).join('')
+        + `<tr class="ev-final"><td colspan="7"><b>Total (${d.qtd} desconto${d.qtd > 1 ? 's' : ''})</b></td>
+           <td class="num"><b>−${moeda(d.valor)}</b></td><td></td></tr>`,
+        '<span class="ev-dica" style="margin-left:auto">Só os lançados na mão · categoria e pontos não entram</span>');
     }
 
     if (s.vendedor) {

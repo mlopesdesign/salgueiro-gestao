@@ -60,7 +60,9 @@ async function abaLista(corpo) {
     if (!lista.length) { tbody.appendChild(el(`<tr><td colspan="7" class="vazio">Nenhum cliente.</td></tr>`)); return; }
     for (const c of lista) {
       const tr = el(`<tr>
-        <td><b>${esc(c.nome)}</b></td>
+        <td><b>${esc(c.nome)}</b>${c.generico
+          ? ' <span class="pill" style="background:var(--creme);font-size:10px;color:var(--texto-suave)" title="Cliente do sistema: recebe as vendas sem identificação">do sistema</span>'
+          : ''}</td>
         <td><span class="pill" style="background:var(--creme)">${esc(c.categoria || '—')}</span></td>
         <td>${esc(c.telefone || '—')}</td>
         <td>${esc(c.cpf || '—')}</td>
@@ -69,18 +71,18 @@ async function abaLista(corpo) {
         <td class="acoes-linha">
           <button data-a="hist">Histórico</button>
           <button data-a="editar">Editar</button>
-          <button data-a="excluir" style="color:var(--vermelho)">Excluir</button>
+          ${c.generico ? '' : '<button data-a="excluir" style="color:var(--vermelho)">Excluir</button>'}
         </td></tr>`);
       tr.querySelector('[data-a=hist]').onclick = () => modalHistorico(c.id);
       tr.querySelector('[data-a=editar]').onclick = async () => {
         const d = await api('clientes:obter', { id: c.id });
         if (d.ok) formCliente(d.cliente, carregar); else toast(d.erro, true);
       };
-      tr.querySelector('[data-a=excluir]').onclick = async () => {
+      tr.querySelector('[data-a=excluir]')?.addEventListener('click', async () => {
         if (!confirm(`Excluir "${c.nome}"?`)) return;
         const r2 = await api('clientes:excluir', { id: c.id });
         r2.ok ? (toast('Cliente excluído.'), carregar()) : toast(r2.erro, true);
-      };
+      });
       tbody.appendChild(tr);
     }
   }
@@ -177,7 +179,7 @@ async function abaCategorias(corpo) {
     <div class="painel">
       <div class="barra" style="justify-content:flex-end">
         <button class="btn btn-primario" id="nova-cat">+ Nova categoria</button></div>
-      <table><thead><tr><th>Nome</th><th style="width:120px"></th></tr></thead>
+      <table><thead><tr><th>Nome</th><th class="num" style="width:110px">Desconto</th><th style="width:120px"></th></tr></thead>
         <tbody></tbody></table>
     </div>`);
   const tbody = painel.querySelector('tbody');
@@ -186,10 +188,13 @@ async function abaCategorias(corpo) {
     const r = await api('clientes:listarCategorias');
     tbody.innerHTML = '';
     const lista = r.ok ? r.categorias : [];
-    if (!lista.length) { tbody.appendChild(el(`<tr><td colspan="2" class="vazio">Nenhuma categoria cadastrada.</td></tr>`)); return; }
+    if (!lista.length) { tbody.appendChild(el(`<tr><td colspan="3" class="vazio">Nenhuma categoria cadastrada.</td></tr>`)); return; }
     for (const cat of lista) {
       const tr = el(`<tr>
         <td><b>${esc(cat.nome)}</b></td>
+        <td class="num">${cat.desconto_percent > 0
+          ? `<span style="color:var(--vinho);font-weight:700">${cat.desconto_percent}%</span>`
+          : '<span style="color:var(--texto-suave)">—</span>'}</td>
         <td class="acoes-linha">
           <button data-a="editar">Editar</button>
           <button data-a="excluir" style="color:var(--vermelho)">Excluir</button>
@@ -210,11 +215,28 @@ async function abaCategorias(corpo) {
 }
 
 function formCategoria(cat, aoConcluir) {
+  // ATENÇÃO: o campo de desconto é OBRIGATÓRIO neste formulário.
+  // Até a v3.2.1 esta tela mandava só { id, nome } e o core fazia
+  // `Number(undefined) || 0`, gravando desconto_percent = 0 — quem editasse o
+  // nome de uma categoria VIP aqui perdia os 10% sem nenhum aviso.
   modal(cat ? 'Editar categoria' : 'Nova categoria', `
     <div class="campo"><label>Nome *</label><input id="cat-nome" value="${esc(cat?.nome || '')}"></div>
+    <div class="campo"><label>Desconto automático (%)</label>
+      <input id="cat-desc" type="number" min="0" max="100" step="0.5"
+        value="${cat ? (cat.desconto_percent || 0) : 0}">
+      <small style="color:var(--texto-suave);font-size:11px">
+        Aplicado sozinho no PDV quando o cliente desta categoria é identificado. 0 = sem desconto.
+      </small>
+    </div>
     <div class="erro" id="cat-erro"></div>
   `, async (m, fechar) => {
-    const r = await api('clientes:salvarCategoria', { id: cat?.id, nome: m.querySelector('#cat-nome').value });
+    const desc = Number(m.querySelector('#cat-desc').value) || 0;
+    if (desc < 0 || desc > 100) {
+      m.querySelector('#cat-erro').textContent = 'O desconto deve ficar entre 0% e 100%.'; return;
+    }
+    const r = await api('clientes:salvarCategoria', {
+      id: cat?.id, nome: m.querySelector('#cat-nome').value, desconto_percent: desc
+    });
     if (!r.ok) { m.querySelector('#cat-erro').textContent = r.erro; return; }
     toast('Categoria salva.'); fechar(); aoConcluir();
   });

@@ -14,7 +14,7 @@ import { viewMensagens, iniciarMensagens, pararMensagens, encerrarTelaMensagens 
 const $app = document.getElementById('app');
 let usuario = null;
 let categoriasCache = [];
-let APP_VERSION = '3.2.1'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
+let APP_VERSION = '3.3.0'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
 
 // API dupla: no aplicativo usa IPC (preload); num terminal em rede (navegador),
 // conversa com o servidor do computador principal via HTTP com token de sessão.
@@ -1109,6 +1109,7 @@ async function viewProdutos(alvo) {
         <td><span class="pill ${baixo ? 'pill-baixo' : 'pill-ok'}">${baixo ? 'Repor' : 'OK'}</span></td>
         <td class="acoes-linha">
           ${pode('produtos.editar') ? '<button data-a="editar">Editar</button>' : ''}
+          ${pode('produtos.editar') ? '<button data-a="duplicar" title="Criar um produto novo a partir deste">Duplicar</button>' : ''}
           <button data-a="etq">Etiquetas</button>
           ${pode('produtos.excluir') ? '<button data-a="excluir" style="color:var(--vermelho)">Excluir</button>' : ''}
         </td></tr>`);
@@ -1121,6 +1122,29 @@ async function viewProdutos(alvo) {
         const d = await api('produtos:obter', { id: p.id });
         if (d.ok) formProduto(d.produto, d.variacoes, carregar); else toast(d.erro, true);
       };
+      // Duplicar: abre o formulário de PRODUTO NOVO já preenchido com os dados
+      // deste. Nada é gravado até o usuário salvar, então ele confere e ajusta
+      // antes. Estoque nasce zerado e o código de barras sai em branco (é
+      // UNIQUE — copiar quebraria o cadastro).
+      const bDup = tr.querySelector('[data-a=duplicar]');
+      if (bDup) bDup.onclick = async () => {
+        const d = await api('produtos:obter', { id: p.id });
+        if (!d.ok) { toast(d.erro, true); return; }
+        const copia = { ...d.produto };
+        delete copia.id;
+        copia.nome = `${copia.nome} (cópia)`;
+        copia.referencia = '';          // referência é única na prática — o usuário preenche
+        const vars = (d.variacoes || []).map(v => ({
+          cor: v.cor, tamanho: v.tamanho,
+          estoque: '',                  // peça copiada não traz estoque
+          estoque_minimo: v.estoque_minimo || '',
+          codigo_barras: '',            // gerado no salvar
+          foto: v.foto || null
+        }));
+        formProduto(copia, vars.length ? vars : [{ cor:'', tamanho:'', estoque:'' }], carregar, true);
+        toast('Confira os dados e salve para criar o produto novo.');
+      };
+
       const bExcluir = tr.querySelector('[data-a=excluir]');
       if (bExcluir) bExcluir.onclick = async () => {
         if (!confirm(`Excluir "${p.nome}"? O histórico é preservado.`)) return;
@@ -1178,13 +1202,15 @@ async function viewProdutos(alvo) {
   carregar();
 }
 
-function formProduto(prod, variacoes, aoConcluir) {
+// `duplicando` = os campos vêm preenchidos de outro produto, mas o registro é
+// NOVO: não há prod.id, o título muda e o estoque começa vazio.
+function formProduto(prod, variacoes, aoConcluir, duplicando) {
   // linha nova nasce sem estoque preenchido (campos em branco, não com 0/1)
   const linhas = (variacoes.length ? variacoes : [{ cor: '', tamanho: '', estoque: '' }])
     .map(v => ({ ...v }));
 
   let fotoAtual = prod?.foto || null;
-  const m = modal(prod ? 'Editar produto' : 'Novo produto', `
+  const m = modal(duplicando ? 'Duplicar produto' : (prod?.id ? 'Editar produto' : 'Novo produto'), `
     <div class="foto-campo">
       <div class="foto-preview" id="p-foto-prev">${prod?.foto ? '<img src="' + esc(prod.foto) + '">' : '<span>sem foto</span>'}</div>
       <div class="foto-acoes">
@@ -1230,7 +1256,7 @@ function formProduto(prod, variacoes, aoConcluir) {
       <button class="btn btn-suave" id="add-var" type="button">+ Variação</button>
     </div>
     <table class="grade">
-      <thead><tr><th class="var-foto-cell" title="Foto da variação">Foto</th><th>Cor</th><th>Tamanho</th><th>${prod ? 'Estoque' : 'Estoque inicial'}</th><th>Mínimo</th><th>Código de barras</th><th></th></tr></thead>
+      <thead><tr><th class="var-foto-cell" title="Foto da variação">Foto</th><th>Cor</th><th>Tamanho</th><th>${prod?.id ? 'Estoque' : 'Estoque inicial'}</th><th>Mínimo</th><th>Código de barras</th><th></th></tr></thead>
       <tbody id="grade-corpo"></tbody>
     </table>
     <div class="erro" id="p-erro"></div>
@@ -1247,10 +1273,13 @@ function formProduto(prod, variacoes, aoConcluir) {
       consignado: m.querySelector('#p-consig').checked ? 1 : 0,
       fornecedor_id: Number(m.querySelector('#p-forn').value) || null,
       pct_fornecedor: Number(m.querySelector('#p-pctf').value) || 0,
+      // `foto` PRECISA ir aqui. Desde a v2.7.0 o core aceita foto por variação
+      // (produtos.js:146), mas a tela não a enviava: o usuário escolhia a
+      // imagem, via a miniatura na grade, salvava — e a foto sumia.
       variacoes: linhas.filter(l => (l.cor || l.tamanho || l.id))
         .map(l => ({ id: l.id, cor: l.cor, tamanho: l.tamanho,
           estoque: Number(l.estoque) || 0, estoque_minimo: Number(l.estoque_minimo) || 0,
-          codigo_barras: l.codigo_barras }))
+          codigo_barras: l.codigo_barras, foto: l.foto ?? null }))
     };
     const r = await api('produtos:salvar', dados);
     if (!r.ok) { m.querySelector('#p-erro').textContent = r.erro; return; }
@@ -1319,7 +1348,10 @@ function formProduto(prod, variacoes, aoConcluir) {
         <td>${l.id
           ? `<span class="cod">${esc(l.codigo_barras || '')}</span>`
           : `<input data-c="codigo_barras" value="${esc(l.codigo_barras || '')}" placeholder="automático">`}</td>
-        <td class="acoes-linha"><button type="button" style="color:var(--vermelho)">✕</button></td>
+        <td class="acoes-linha">
+          <button type="button" class="var-dup" title="Duplicar esta variação (copia cor e foto)">⎘</button>
+          <button type="button" class="var-del" style="color:var(--vermelho)" title="Remover esta variação">✕</button>
+        </td>
       </tr>`);
       // ---- foto da variação ----
       const tdFoto = tr.querySelector('.var-foto-cell');
@@ -1380,7 +1412,26 @@ function formProduto(prod, variacoes, aoConcluir) {
             : inp.value;
         });
       });
-      const btnDel = tr.querySelector('button[style]');
+      // Duplicar variação: copia cor, tamanho, mínimo e foto da linha. Estoque e
+      // código de barras nascem em branco — o código é UNIQUE no banco e o
+      // estoque de uma variação nova é sempre zero. Entra logo abaixo da
+      // original, para a grade continuar legível.
+      const btnDup = tr.querySelector('.var-dup');
+      if (btnDup) {
+        btnDup.onclick = () => {
+          linhas.splice(i + 1, 0, {
+            cor: l.cor || '', tamanho: l.tamanho || '',
+            estoque: '', estoque_minimo: l.estoque_minimo || '',
+            codigo_barras: '', foto: l.foto || null
+          });
+          desenharGrade();
+          // foco no tamanho da linha nova — é quase sempre o que muda
+          const nova = corpo.children[i + 1];
+          if (nova) { const t = nova.querySelector('[data-c="tamanho"]'); if (t) { t.focus(); t.select(); } }
+        };
+      }
+
+      const btnDel = tr.querySelector('.var-del');
       if (btnDel) {
         btnDel.onclick = () => {
           if (l.id && (l.estoque || 0) > 0) {

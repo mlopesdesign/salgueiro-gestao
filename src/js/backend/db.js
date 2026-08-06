@@ -417,6 +417,50 @@ function migrar(db) {
     }
   } catch (e) { console.error('[migração] troca:', e.message); }
 
+  // ── v3.3.0 — desconto avulso com justificativa ────────────────────────────
+  // Quem autorizou e por quê. Colunas simples: ALTER resolve.
+  if (!temColuna('vendas', 'desconto_autorizado_por')) {
+    try { db.exec('ALTER TABLE vendas ADD COLUMN desconto_autorizado_por TEXT'); } catch {}
+  }
+  if (!temColuna('vendas', 'desconto_motivo')) {
+    try { db.exec('ALTER TABLE vendas ADD COLUMN desconto_motivo TEXT'); } catch {}
+  }
+
+  // ── v3.3.0 — Consumidor final vira cliente de verdade ─────────────────────
+  // Toda venda sem identificação passa a apontar para ele. `generico=1` o
+  // mantém fora de ranking de melhores clientes, pontos, crediário e
+  // aniversariantes — senão ele lideraria todas as listas.
+  if (tabelaExiste('clientes') && !temColuna('clientes', 'generico')) {
+    try {
+      db.exec('ALTER TABLE clientes ADD COLUMN generico INTEGER NOT NULL DEFAULT 0');
+      console.log('[migração] clientes.generico adicionado');
+    } catch (e) { console.error('[migração] clientes.generico:', e.message); }
+  }
+  try {
+    if (tabelaExiste('clientes') && tabelaExiste('categorias_clientes')) {
+      // Categoria própria, desconto 0 — o Marcio ajusta se quiser dar desconto
+      // padrão a quem não é cadastrado.
+      let cat = db.prepare("SELECT id FROM categorias_clientes WHERE nome='Consumidor final'").get();
+      if (!cat) {
+        const rc = db.prepare(
+          "INSERT INTO categorias_clientes (nome, desconto_percent) VALUES ('Consumidor final', 0)").run();
+        cat = { id: Number(rc.lastInsertRowid) };
+        console.log('[migração] categoria "Consumidor final" criada');
+      }
+      const ja = db.prepare('SELECT id FROM clientes WHERE generico=1 LIMIT 1').get();
+      if (!ja) {
+        const rcl = db.prepare(
+          "INSERT INTO clientes (nome, categoria_id, generico, obs) VALUES ('Consumidor final', ?, 1, ?)"
+        ).run(cat.id, 'Cliente do sistema: recebe as vendas sem identificação. Não excluir.');
+        const idGen = Number(rcl.lastInsertRowid);
+        // Vendas antigas sem cliente passam a apontar para ele, para o histórico
+        // ficar coerente com o que o PDV grava daqui em diante.
+        const n = db.prepare('UPDATE vendas SET cliente_id=? WHERE cliente_id IS NULL').run(idGen).changes;
+        console.log(`[migração] cliente "Consumidor final" criado (#${idGen}); ${n} venda(s) antiga(s) vinculada(s)`);
+      }
+    }
+  } catch (e) { console.error('[migração] consumidor final:', e.message); }
+
   // Validade do vale-troca. Coluna simples: ALTER resolve, sem reconstruir.
   // Vale vencido NÃO vira status novo (o CHECK de status continua intacto) —
   // o vencimento é calculado pela data em vales_troca.js.

@@ -71,7 +71,10 @@ const rotas = {
   'auth:listarUsuarios': () => auth.listarUsuarios(db),
   'auth:salvarUsuario': (p) => auth.salvarUsuario(db, p, sessao.usuario),
   'auth:trocarSenha': (p) => auth.trocarSenha(db, p, sessao.usuario),
-  'auth:autorizarDesconto': async (p) => auth.verificarAdmin(db, p.usuario, p.senha),
+  // v3.3.0: o desconto avulso deixou de exigir administrador. Quem está no PDV
+  // confirma com a PRÓPRIA senha (a sessão manda, não o payload) e informa quem
+  // autorizou e o motivo — que ficam gravados na venda.
+  'auth:autorizarDesconto': async (p) => auth.verificarOperador(db, sessao.usuario, p.senha),
 
   // Dashboard
   'dashboard:resumo': () => dashboard.resumo(db, sessao.usuario),

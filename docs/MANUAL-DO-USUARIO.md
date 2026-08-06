@@ -1,7 +1,7 @@
 # Manual do Usuário — Salgueiro Gestão
 
 **Sistema de gestão para loja de roupas**
-Versão 3.2.1 · ML Lopes Design
+Versão 3.3.0 · ML Lopes Design
 
 ---
 
@@ -153,8 +153,29 @@ Se o cliente pertence a uma categoria com desconto (ex.: "VIP — 10%"), o desco
 ### Descontos
 
 - **Desconto por item** — na própria linha do produto
-- **Desconto geral na venda** — exige senha de administrador
+- **Desconto geral na venda** — pede justificativa (veja abaixo)
 - **Desconto automático à vista** — se configurado, aplica um percentual quando o pagamento é em dinheiro ou PIX (não acumula com desconto de categoria)
+- **Desconto de categoria do cliente** — aplicado sozinho quando a cliente é identificada
+
+### Desconto na venda — quem autorizou
+
+Até a versão 3.2.1 o desconto exigia **login e senha de administrador**. Parava a fila no balcão e, pior, não registrava nada: a venda guardava só o valor, sem quem liberou nem por quê.
+
+Agora quem está no caixa resolve na hora. Ao finalizar uma venda com desconto, o sistema pede:
+
+| Campo | O que preencher |
+|---|---|
+| **Autorizado por** | Nome de quem liberou. Campo livre — vale para o dono, o gerente por telefone, um sócio |
+| **Motivo** | Por que o desconto foi dado. Ex.: peça com defeito, cliente antiga, fechamento de evento |
+| **Sua senha** | A senha de quem está operando o caixa — confirma que o lançamento foi seu |
+
+Os três são obrigatórios. Sem eles a venda não fecha.
+
+> **Não é mais preciso chamar o administrador.** Vendedor, caixa e gerente resolvem sozinhos.
+
+**Onde isso aparece depois:** Relatórios → Evento / Pós-venda → seção **🏷️ Descontos autorizados**, com a venda, a data, o cliente, quem lançou, quem autorizou, o motivo e o valor. O controle deixou de ser uma trava e virou registro.
+
+> Desconto de **categoria de cliente** e resgate de **pontos** não pedem justificativa — vêm da tabela, não da mão do operador.
 
 ### Finalizando (F10)
 
@@ -370,13 +391,37 @@ Use **+ Variação** para adicionar mais linhas e o **✕** para remover.
 
 > Os campos de quantidade começam vazios, com um "0" cinza como dica. Deixar em branco significa zero.
 
-**Ampliar fotos:** passe o mouse sobre qualquer miniatura para ver uma pré-visualização. Clique para abrir em tela cheia. Para trocar a foto de uma variação, clique com o botão direito na miniatura dela.
+**Ampliar fotos:** passe o mouse sobre qualquer miniatura para ver uma pré-visualização. Clique para abrir em tela cheia. Para trocar a foto de uma variação, clique na miniatura dela — o seletor de arquivos abre. O **✕** que aparece no canto remove a foto.
 
 **Produto consignado:** marque a caixa **🤝 Produto consignado** se a peça é de um fornecedor e você repassa uma parte da venda. Informe o fornecedor e o percentual dele — a cada venda o repasse fica registrado para o acerto.
 
 ### Editando
 
 Clique no botão de editar na linha do produto. O campo **Estoque** fica bloqueado na edição — ajustes de quantidade devem ser feitos pela tela **Estoque**, para manter o histórico.
+
+### Duplicar um produto
+
+Serve para cadastrar uma peça parecida com uma que já existe: mesma modelagem em outra estampa, mesma coleção em outra cor.
+
+1. Na linha do produto, clique em **Duplicar**
+2. O cadastro abre **já preenchido** com os dados da peça original
+3. Ajuste o que muda — nome, referência, preço
+4. Salvar
+
+**O que vem junto:** nome (com "(cópia)" no fim), categoria, preços, mínimo, consignação, foto do produto, e toda a grade de cor e tamanho com as fotos das variações.
+
+**O que não vem:** o **estoque começa zerado** e cada variação ganha um **código de barras novo** — dois produtos nunca podem dividir o mesmo código.
+
+> Nada é gravado até você clicar em salvar. Se abrir por engano, é só fechar.
+> A referência vem em branco de propósito, para você não ficar com duas peças iguais na busca.
+
+### Duplicar uma variação
+
+Dentro do cadastro, na grade de cor e tamanho, cada linha tem um botão de **duplicar** (⎘).
+
+Clique nele e a linha é copiada logo abaixo, já com a **cor**, o **mínimo** e a **foto** — o cursor vai direto para o campo Tamanho, que é quase sempre o que muda. Serve para cadastrar P, M, G e GG da mesma cor sem redigitar tudo.
+
+A cópia nasce com estoque vazio e ganha código de barras próprio ao salvar.
 
 ### Exportar lista
 
@@ -935,6 +980,12 @@ Use isso depois de atualizar, para saber o que apareceu de novo no sistema.
 | **A loja aparece com 0 peças** | Normal logo após a atualização: tudo começa no Almoxarifado Central. Faça o balanço e desça por romaneio |
 | **Ranking vazio** | Você está vendo um período sem venda. Troque para **Por evento** e escolha um evento da lista |
 | **Não consigo fechar a cortesia** | Os campos "Autorizado por" e "Para quem foi" são obrigatórios |
+| **Pede senha de administrador no desconto** | Corrigido na 3.3.0. Agora é a sua própria senha, mais quem autorizou e o motivo |
+| **Não sei quem deu um desconto** | Relatórios → Evento → seção 🏷️ Descontos autorizados |
+| **A foto da variação some ao salvar** | Corrigido na 3.3.0. Atualize o aplicativo |
+| **Categoria de cliente perdeu o desconto** | Bug corrigido na 3.3.0. Reponha o percentual em Clientes → Categorias |
+| **Preciso cadastrar peça igual a outra** | Botão **Duplicar** na linha do produto |
+| **Não consigo excluir o Consumidor final** | É cliente do sistema: recebe as vendas sem identificação |
 | **Não consigo digitar a quantidade** | Corrigido na versão 3.2.0. Clique no campo Qtd (o valor já vem selecionado), digite por cima e aperte Enter |
 | **A troca não conclui** | Corrigido na versão 3.2.0 — o sistema travava ao confirmar. Atualize o aplicativo |
 | **Não acho o botão de troca** | Está na barra de cima do PDV: **🔄 Troca** (ou tecla **F6**) |
@@ -956,4 +1007,4 @@ Esta confusão é comum e afeta os relatórios:
 **Suporte técnico**
 ML Lopes Design — mlopesdesign@gmail.com
 
-*Manual referente à versão 3.2.1*
+*Manual referente à versão 3.3.0*

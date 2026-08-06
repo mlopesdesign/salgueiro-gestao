@@ -204,10 +204,24 @@ function registrarVenda(db, p, quem) {
 
   db.exec('BEGIN');
   try {
-    const rv = db.prepare(`INSERT INTO vendas (caixa_id, loja_id, cliente_id, usuario_id, subtotal, desconto, total, obs)
-                           VALUES (?,?,?,?,?,?,?,?)`)
-      .run(cx.id, cx.loja_id || null, p.cliente_id || null, quem.id, subtotal,
-           arred(descontoGeral + cortesiaTotal), total, p.obs || null);
+    // Sem cliente identificado, a venda vai para o "Consumidor final"
+    // (clientes.generico=1). Ele existe desde a v3.3.0 e é criado na migração.
+    let clienteId = p.cliente_id || null;
+    if (!clienteId) {
+      const gen = db.prepare('SELECT id FROM clientes WHERE generico=1 AND ativo=1 LIMIT 1').get();
+      if (gen) clienteId = gen.id;
+    }
+    // Desconto avulso: quem autorizou e por quê (v3.3.0). Só faz sentido quando
+    // houve desconto manual — cortesia tem os campos próprios em venda_pagamentos.
+    const descAutor = descontoGeral > 0 ? String(p.desconto_autorizado_por || '').trim() || null : null;
+    const descMotivo = descontoGeral > 0 ? String(p.desconto_motivo || '').trim() || null : null;
+
+    const rv = db.prepare(`INSERT INTO vendas (caixa_id, loja_id, cliente_id, usuario_id, subtotal, desconto, total, obs,
+                                               desconto_autorizado_por, desconto_motivo)
+                           VALUES (?,?,?,?,?,?,?,?,?,?)`)
+      .run(cx.id, cx.loja_id || null, clienteId, quem.id, subtotal,
+           arred(descontoGeral + cortesiaTotal), total, p.obs || null,
+           descAutor, descMotivo);
     const vendaId = Number(rv.lastInsertRowid);
 
     const insItem = db.prepare(`INSERT INTO venda_itens (venda_id, variacao_id, qtd, preco_unit, desconto, total)

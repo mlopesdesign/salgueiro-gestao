@@ -111,6 +111,32 @@ Peça de R$ 100 comprada com 10% (pagou R$ 90):
 
 ---
 
+## Dar desconto na venda
+
+1. Digite o desconto no campo **Desconto geral** (ou por item)
+2. Aperte **F10** e o sistema pede três coisas:
+   - **Autorizado por** — quem liberou (nome livre)
+   - **Motivo** — por quê
+   - **Sua senha** — a de quem está no caixa
+3. Confirme e siga para o pagamento
+
+> **Não precisa mais chamar o administrador.** Fica tudo registrado na venda e
+> aparece em Relatórios → Evento → **🏷️ Descontos autorizados**.
+
+---
+
+## Cadastrar peça parecida com outra
+
+**Produto inteiro:** em **👗 Produtos**, clique em **Duplicar** na linha da peça.
+O cadastro abre preenchido — ajuste nome e preço e salve.
+
+**Só mais um tamanho:** dentro do cadastro, na grade de cor e tamanho, clique no botão de
+**duplicar** da linha. Ela é copiada com a cor e a foto, e o cursor vai para o Tamanho.
+
+> Nos dois casos o estoque começa zerado e o código de barras é novo.
+
+---
+
 ## Usar um vale-troca
 
 1. Faça a venda normalmente
@@ -250,6 +276,8 @@ diferentes. Na tela ficam os 10 primeiros; a impressão e o Excel trazem a lista
 | A loja aparece com 0 peças | Normal logo após a atualização. Faça o balanço e desça as peças por romaneio |
 | Ranking ou relatório vazio | Você está olhando um período sem venda. Use **Por evento** e escolha um evento da lista |
 | Não fecha a cortesia | "Autorizado por" e "Para quem foi" são obrigatórios |
+| Pede senha de admin no desconto | Corrigido na 3.3.0 — agora é a sua senha + justificativa |
+| Quero cadastrar peça igual a outra | Botão **Duplicar** na linha do produto |
 | Não dá para digitar a quantidade | Clique no campo **Qtd**, digite por cima e aperte **Enter** |
 | Não acho o botão de troca | Barra de cima do PDV: **🔄 Troca** — ou tecla **F6** |
 | "Nenhum caixa aberto" ao trocar | A troca gera uma venda: abra o caixa antes |
@@ -268,4 +296,4 @@ lista todas as versões e o que cada uma trouxe. A sua aparece com o selo verde
 
 **Suporte:** ML Lopes Design — mlopesdesign@gmail.com
 
-*Guia referente à versão 3.2.1*
+*Guia referente à versão 3.3.0*

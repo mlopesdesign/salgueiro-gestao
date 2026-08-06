@@ -423,6 +423,35 @@ function relatorioEvento(db, p) {
     custo: arred(cortesias.reduce((s, x) => s + x.custo, 0))
   };
 
+  // Descontos avulsos do período (v3.3.0). Só entram os que o operador lançou
+  // na mão — desconto de categoria e resgate de pontos não passam por aqui.
+  // O nome de quem autorizou é campo livre: quem libera nem sempre tem login.
+  const descontos = db.prepare(`
+    SELECT v.id venda_id, v.criado_em, v.subtotal, v.desconto, v.total,
+           v.desconto_autorizado_por autorizado_por, v.desconto_motivo motivo,
+           COALESCE(u.nome, '—') operador,
+           COALESCE(c.nome, '—') cliente
+    FROM vendas v
+    LEFT JOIN usuarios u ON u.id = v.usuario_id
+    LEFT JOIN clientes c ON c.id = v.cliente_id
+    WHERE v.status = 'concluida' AND v.desconto > 0
+      AND v.desconto_autorizado_por IS NOT NULL
+      AND v.criado_em BETWEEN ? AND ? ${fLoja}
+    ORDER BY v.criado_em
+  `).all(...ar);
+  for (const d of descontos) {
+    d.desconto = arred(d.desconto);
+    d.subtotal = arred(d.subtotal);
+    d.total = arred(d.total);
+    d.percent = d.subtotal > 0 ? Math.round((d.desconto / d.subtotal) * 1000) / 10 : 0;
+    d.data = String(d.criado_em).slice(0, 10);
+    d.hora = String(d.criado_em).slice(11, 16);
+  }
+  const descontoResumo = {
+    qtd: descontos.length,
+    valor: arred(descontos.reduce((s, d) => s + d.desconto, 0))
+  };
+
   const soma = (f) => arred(vendas.reduce((s, v) => s + (Number(f(v)) || 0), 0));
   const bruto = soma(v => v.total);
   const devolucoes = soma(v => v.devolvido);
@@ -433,7 +462,7 @@ function relatorioEvento(db, p) {
 
   return {
     ok: true, inicio, fim, pix_maquina: pixMaq, taxas,
-    vendas, cortesias,
+    vendas, cortesias, descontos,
     por_produto: prods,
     por_forma: [...porForma.values()],
     por_fornecedor: [...porFornecedor.values()],
@@ -444,6 +473,7 @@ function relatorioEvento(db, p) {
       bruto, devolucoes, liquido,
       taxas: taxaTotal, comissao: comissaoTotal,
       cortesias: cortesiaResumo,
+      descontos: descontoResumo,
       // ticket médio só sobre vendas que geraram receita (ignora cortesias)
       ticket: (() => {
         const pagas = vendas.filter(v => v.liquido > 0);
@@ -554,6 +584,7 @@ function _rankClientes(db, de, ate) {
     JOIN clientes cl ON cl.id = v.cliente_id
     LEFT JOIN categorias_clientes cc ON cc.id = cl.categoria_id
     WHERE v.status='concluida' AND v.criado_em BETWEEN ? AND ?
+      AND COALESCE(cl.generico,0) = 0
     GROUP BY cl.id HAVING gasto > 0
     ORDER BY gasto DESC LIMIT 30
   `).all(de, ate);

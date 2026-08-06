@@ -47,6 +47,7 @@ function listar(db, p) {
   const linhas = db.prepare(`
     SELECT c.id, c.nome, c.cpf, c.telefone, c.limite_credito,
            COALESCE(c.pontos, 0) AS pontos,
+           COALESCE(c.generico, 0) AS generico,
            c.categoria_id,
            cc.nome AS categoria,
            COALESCE(cc.desconto_percent, 0) AS categoria_desconto,
@@ -58,7 +59,7 @@ function listar(db, p) {
     WHERE c.ativo = 1
       AND (c.nome LIKE ? OR c.cpf LIKE ? OR c.telefone LIKE ?)
       AND (? IS NULL OR c.categoria_id = ?)
-    ORDER BY c.nome LIMIT 200
+    ORDER BY COALESCE(c.generico,0) DESC, c.nome LIMIT 200
   `).all(like, like, like, catId, catId);
   return { ok: true, clientes: linhas };
 }

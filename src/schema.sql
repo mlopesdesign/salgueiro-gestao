@@ -137,6 +137,10 @@ CREATE TABLE IF NOT EXISTS clientes (
   nascimento TEXT,
   limite_credito REAL NOT NULL DEFAULT 0,
   obs TEXT,
+  -- 1 = cliente do sistema, não é pessoa real. Hoje só o "Consumidor final",
+  -- que recebe as vendas sem identificação. Fica FORA de ranking de melhores
+  -- clientes, pontos, crediário e aniversariantes — senão lideraria tudo.
+  generico INTEGER NOT NULL DEFAULT 0,
   ativo INTEGER NOT NULL DEFAULT 1,
   criado_em TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
@@ -183,6 +187,11 @@ CREATE TABLE IF NOT EXISTS vendas (
   total REAL NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'concluida' CHECK (status IN ('concluida','cancelada','orcamento','condicional')),
   obs TEXT,
+  -- Desconto avulso: quem liberou e por quê. Preenchido pelo PDV quando o
+  -- operador lança desconto manual (v3.3.0). Campo livre de propósito: quem
+  -- autoriza nem sempre tem login (dono, gerente por telefone, sócio).
+  desconto_autorizado_por TEXT,
+  desconto_motivo TEXT,
   criado_em TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
 

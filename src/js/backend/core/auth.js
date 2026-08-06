@@ -93,4 +93,21 @@ async function verificarAdmin(db, usuario, senha) {
   return { ok: true };
 }
 
-export { login, listarUsuarios, salvarUsuario, trocarSenha, verificarAdmin };
+// Confere a senha do usuário que está operando o PDV agora.
+// Usado no desconto avulso (v3.3.0): o vendedor não precisa mais chamar o
+// administrador — ele assume o desconto com a própria senha e registra quem
+// autorizou e por quê. O controle deixou de ser trava e virou rastro.
+// `sessaoUsuario` vem do servidor, nunca do payload: assim ninguém digita o
+// login de outra pessoa para assinar no lugar dela.
+async function verificarOperador(db, sessaoUsuario, senha) {
+  if (!sessaoUsuario || !sessaoUsuario.id) return { ok: false, erro: 'Sessão expirada. Entre novamente.' };
+  const u = db.prepare(
+    'SELECT id, nome, usuario, senha_hash FROM usuarios WHERE id=? AND ativo=1'
+  ).get(sessaoUsuario.id);
+  if (!u) return { ok: false, erro: 'Usuário não encontrado ou desativado.' };
+  if (!(await verificarSenha(String(senha || ''), u.senha_hash)))
+    return { ok: false, erro: 'Senha incorreta.' };
+  return { ok: true, usuario: { id: u.id, nome: u.nome, usuario: u.usuario } };
+}
+
+export { login, listarUsuarios, salvarUsuario, trocarSenha, verificarAdmin, verificarOperador };

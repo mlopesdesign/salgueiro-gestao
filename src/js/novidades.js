@@ -3,6 +3,19 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.3.0', data: '2026-08-05',
+    titulo: 'Desconto sem chamar o administrador, e duplicar produto',
+    itens: [
+      'O desconto na venda não pede mais a senha do administrador. Quem está no caixa resolve na hora: informa quem autorizou, o motivo, confirma com a própria senha e pronto.',
+      'Isso fica gravado na venda. No Relatório de Evento existe agora a seção 🏷️ Descontos autorizados, com a venda, quem lançou, quem autorizou, o motivo e o valor. Antes o desconto era dado e não sobrava registro de nada.',
+      'O ⧉ Duplicar chegou na lista de produtos. Abre o cadastro já preenchido com os dados da peça escolhida — você troca o que precisa e salva. O estoque começa zerado e os códigos de barras são novos.',
+      'Na grade de cor e tamanho também tem o ⧉ em cada linha: duplica aquela variação, já com a cor e a foto, para você só trocar o tamanho.',
+      'A foto que você escolhe para uma variação agora é realmente salva. Antes ela aparecia na tela, você salvava e ela sumia.',
+      'Editar o nome de uma categoria de cliente não apaga mais o desconto dela. Quem tinha "VIP 10%" e mudava o nome pela tela de Clientes perdia os 10% sem aviso.',
+      'O Consumidor final virou cliente de verdade: aparece no cadastro e recebe as vendas de quem não se identifica. Ele não entra no ranking de melhores clientes nem nos aniversariantes, e não pode ser excluído.'
+    ]
+  },
+  {
     versao: '3.2.1', data: '2026-08-04',
     titulo: 'O desconto da compra acompanha a troca',
     itens: [

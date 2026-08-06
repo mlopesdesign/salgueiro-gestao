@@ -82,7 +82,7 @@ function aniversariantes(db) {
     SELECT id, nome, telefone, nascimento,
            CAST(strftime('%d', nascimento) AS INTEGER) AS dia
     FROM clientes
-    WHERE ativo = 1 AND nascimento IS NOT NULL
+    WHERE ativo = 1 AND COALESCE(generico,0) = 0 AND nascimento IS NOT NULL
       AND strftime('%m', nascimento) = strftime('%m', date('now','localtime'))
     ORDER BY dia
   `).all();
@@ -90,6 +90,12 @@ function aniversariantes(db) {
 }
 
 function excluirCliente(db, id, quem) {
+  // O "Consumidor final" é do sistema: as vendas sem identificação apontam para
+  // ele. Excluir deixaria venda órfã e quebraria o histórico.
+  const cl = db.prepare('SELECT generico FROM clientes WHERE id=?').get(id);
+  if (cl && cl.generico) {
+    return { ok: false, erro: 'O "Consumidor final" é um cliente do sistema e não pode ser excluído.' };
+  }
   const devendo = db.prepare(
     'SELECT COUNT(*) n FROM crediario_parcelas WHERE cliente_id=? AND pago_em IS NULL'
   ).get(id);

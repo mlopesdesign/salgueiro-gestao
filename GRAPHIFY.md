@@ -3,7 +3,7 @@
 > Mapa técnico gerado automaticamente por `tools/graphify.js`.
 > **Não edite à mão.** Regere com `node tools/graphify.js` a cada alteração estrutural.
 
-**Versão:** 3.2.1 · **Gerado em:** 2026-08-04
+**Versão:** 3.3.0 · **Gerado em:** 2026-08-06
 **Aplicação:** `br.com.mllopes.salgueirogestao` (Neutralino 6 + WebView2)
 **Cliente:** Boutique do Salgueiro · **Autor:** ML Lopes Design
 
@@ -69,12 +69,12 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 
 | Arquivo | Linhas | Funções | Exporta |
 |---|---|---|---|
-| `auth.js` | 96 | 5 | listarUsuarios, login, salvarUsuario, trocarSenha, verificarAdmin |
-| `clientes.js` | 192 | 7 | excluirCategoria, exportar, importar, listar, listarCategorias, salvar, salvarCategoria |
+| `auth.js` | 113 | 6 | listarUsuarios, login, salvarUsuario, trocarSenha, verificarAdmin, verificarOperador |
+| `clientes.js` | 193 | 7 | excluirCategoria, exportar, importar, listar, listarCategorias, salvar, salvarCategoria |
 | `compras.js` | 157 | 8 | cancelarCompra, criarCompra, excluirFornecedor, listarCompras, listarFornecedores, obterCompra, receberCompra, salvarFornecedor |
 | `config.js` | 60 | 2 | obter, salvar |
 | `consignacao.js` | 95 | 3 | acertar, listar, resumo |
-| `crediario.js` | 102 | 5 | aniversariantes, excluirCliente, obterCliente, parcelasAbertas, receberParcela |
+| `crediario.js` | 108 | 5 | aniversariantes, excluirCliente, obterCliente, parcelasAbertas, receberParcela |
 | `dashboard.js` | 214 | 2 | resumo |
 | `devolucoes.js` | 127 | 3 | itensVenda, listar, registrar |
 | `estoque.js` | 143 | 5 | buscarVariacoes, kardex, listarCompleto, movimentar, reposicao |
@@ -85,12 +85,12 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `lojas.js` | 91 | 5 | arred, desativar, excluir, listar, lojaPadrao, salvar |
 | `mensagens.js` | 382 | 20 | JANELA_POPUP_H, ONLINE_TTL_S, confirmarAviso, contatos, encerrarAviso, enviar, enviarAviso, historico, +4 |
 | `nuvem.js` | 353 | 14 | desconectar, fazerBackup, fazerBackupTodos, iniciarOAuth, obterStatus, precisaBackupDiario, registrarOAuthListener, salvarClientId |
-| `pdv.js` | 399 | 10 | abrirCaixa, caixaAtual, cancelarVenda, fecharCaixa, listarVendas, listarVendasGeral, movimentoCaixa, obterVenda, +2 |
+| `pdv.js` | 413 | 10 | abrirCaixa, caixaAtual, cancelarVenda, fecharCaixa, listarVendas, listarVendasGeral, movimentoCaixa, obterVenda, +2 |
 | `permissoes.js` | 94 | 3 | CATALOGO, DEFAULTS, TODAS, efetivas, normalizar, pode |
 | `pontos.js` | 110 | 9 | ajustar, calcularGanho, calcularResgate, creditar, debitar, getConfig, historico, saldo, +1 |
 | `produtos.js` | 212 | 7 | excluirCategoria, excluirProduto, listarCategorias, listarProdutos, obterProduto, salvarCategoria, salvarProduto |
 | `rede.js` | 150 | 3 | SOMENTE_LOCAL, imprimir, iniciar, listarImpressoras, parar, preparar, status |
-| `relatorios.js` | 708 | 18 | TAXAS_PADRAO, consignadosMensal, curvaAbc, eventosVenda, pecasParadas, ranking, rankingPeriodo, receitaPorLoja, +2 |
+| `relatorios.js` | 739 | 18 | TAXAS_PADRAO, consignadosMensal, curvaAbc, eventosVenda, pecasParadas, ranking, rankingPeriodo, receitaPorLoja, +2 |
 | `trocas.js` | 252 | 2 | DESTINOS, registrar |
 | `updater.js` | 50 | 1 | verificarAtualizacao |
 | `util.js` | 68 | 4 | auditar, codigoInterno, dvEan13, hashSenha, verificarSenha |
@@ -101,16 +101,16 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | Arquivo | Linhas | Funções |
 |---|---|---|
 | `ambiente.js` | 237 | 3 |
-| `db.js` | 474 | 5 |
+| `db.js` | 518 | 5 |
 | `servidor-rede-embutido.js` | 440 | 15 |
-| `servidor.js` | 1340 | 8 |
+| `servidor.js` | 1343 | 8 |
 
 ## 6. Telas (`src/js`)
 
 | Arquivo | Linhas | Exporta |
 |---|---|---|
-| `app.js` | 1532 | EM_REDE, api, aplicarTema, el, esc |
-| `clientes.js` | 468 | viewClientes |
+| `app.js` | 1583 | EM_REDE, api, aplicarTema, el, esc |
+| `clientes.js` | 490 | viewClientes |
 | `compras.js` | 227 | viewCompras |
 | `configuracoes.js` | 1333 | viewConfiguracoes |
 | `estoque.js` | 333 | abrirEtiquetas, ean13Svg, viewEstoque |
@@ -119,10 +119,10 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `financeiro.js` | 260 | viewFinanceiro |
 | `mensagens.js` | 558 | abrirBalao, encerrarTelaMensagens, iniciarMensagens, pararMensagens, viewMensagens |
 | `neutralino.js` | 2 | — |
-| `novidades.js` | 245 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
-| `pdv.js` | 1498 | calcResgateLocal, viewPdv |
+| `novidades.js` | 258 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
+| `pdv.js` | 1536 | calcResgateLocal, viewPdv |
 | `ranking.js` | 361 | viewRanking |
-| `relatorios.js` | 637 | viewRelatorios |
+| `relatorios.js` | 659 | viewRelatorios |
 
 ---
 
@@ -151,7 +151,7 @@ a rota exige apenas sessão válida.
 | `auth:listarUsuarios` | `usuarios.gerenciar` | `auth.listarUsuarios(db)` |
 | `auth:salvarUsuario` | `usuarios.gerenciar` | `auth.salvarUsuario(db, p, sessao.usuario)` |
 | `auth:trocarSenha` | — | `auth.trocarSenha(db, p, sessao.usuario)` |
-| `auth:autorizarDesconto` | — | `auth.verificarAdmin(db, p.usuario, p.senha)` |
+| `auth:autorizarDesconto` | — | `auth.verificarOperador(db, sessao.usuario, p.senha)` |
 
 ### `avisos:*`
 
@@ -442,11 +442,11 @@ a rota exige apenas sessão válida.
 | `estoque_saldos` | estoque_id, variacao_id, qtd |
 | `transferencias` | id, origem_id, destino_id, usuario_id, obs, criado_em |
 | `transferencia_itens` | id, transferencia_id, variacao_id, qtd |
-| `clientes` | id, nome, cpf, telefone, email, endereco, nascimento, limite_credito, obs, ativo, criado_em |
+| `clientes` | id, nome, cpf, telefone, email, endereco, nascimento, limite_credito, obs, generico, ativo, criado_em |
 | `lojas` | id, nome, estoque_id, ativo, criado_em |
 | `caixas` | id, loja_id, aberto_em, fechado_em, usuario_abertura, usuario_fechamento, valor_abertura, valor_fechamento_informado, valor_fechamento_calculado, obs |
 | `caixa_movimentos` | id, caixa_id, tipo, valor, motivo, usuario_id, criado_em |
-| `vendas` | id, caixa_id, loja_id, cliente_id, usuario_id, subtotal, desconto, total, status, obs, criado_em |
+| `vendas` | id, caixa_id, loja_id, cliente_id, usuario_id, subtotal, desconto, total, status, obs, desconto_autorizado_por, desconto_motivo, criado_em |
 | `venda_itens` | id, venda_id, variacao_id, qtd, preco_unit, desconto, total |
 | `venda_pagamentos` | id, venda_id, forma, valor, parcelas, troco, autorizado_por, beneficiario, cortesia_valor |
 | `crediario_parcelas` | id, venda_id, cliente_id, numero, valor, vencimento, pago_em, valor_pago |

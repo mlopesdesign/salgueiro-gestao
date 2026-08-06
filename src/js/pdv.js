@@ -290,7 +290,9 @@ function telaVenda(alvo, caixa) {
   $busca.addEventListener('keydown', e => {
     if (e.key === 'Enter') { clearTimeout(deb); pesquisar(); }
   });
-  tela.querySelector('#t-desc')?.addEventListener('input', () => { tela._descontoAutorizado = false; totais(); });
+  tela.querySelector('#t-desc')?.addEventListener('input', () => {
+    tela._descontoAutorizado = false; tela._descontoJustificativa = null; totais();
+  });
   tela.querySelector('#t-desc-modo')?.addEventListener('click', () => {
     const $m = tela.querySelector('#t-desc-modo');
     $m.textContent = $m.textContent === 'R$' ? '%' : 'R$';
@@ -310,6 +312,7 @@ function telaVenda(alvo, caixa) {
         if ($td) $td.value = '0';
         if ($tm) $tm.textContent = 'R$';
         tela._descontoAutorizado = false;
+        tela._descontoJustificativa = null;
         totais();
       }
       cliente = c;
@@ -364,11 +367,16 @@ function telaVenda(alvo, caixa) {
     if (!itens.length) { toast('A venda está vazia.', true); return; }
     const ts = totais();
     if (ts.desc > 0 && !tela._descontoAutorizado) {
-      const ok = await modalAutorizarDesconto(ts.desc);
-      if (!ok) return;
+      const just = await modalAutorizarDesconto(ts.desc);
+      if (!just) return;
       tela._descontoAutorizado = true;
+      tela._descontoJustificativa = just;   // { autorizado_por, motivo } → vai para a venda
     }
-    modalPagamento(ts.total, ts.desc, tela._pontosResgate || null, () => { alvo.innerHTML = ''; viewPdv(alvo); });
+    // Desconto de categoria do cliente e resgate de pontos entram autorizados
+    // por natureza (vêm da tabela, não da mão do operador) — sem justificativa.
+    modalPagamento(ts.total, ts.desc, tela._pontosResgate || null,
+      () => { alvo.innerHTML = ''; viewPdv(alvo); },
+      tela._descontoJustificativa || null);
   };
 
   // caixa
@@ -467,34 +475,60 @@ function escolherCliente(aoEscolher) {
 }
 
 // ---------- Autorização de desconto ----------
+// Desconto avulso (v3.3.0) — mudou de trava para rastro.
+// Antes exigia login e senha de ADMINISTRADOR, o que parava a fila no balcão e
+// mesmo assim não registrava nada: a venda gravava só o valor do desconto, sem
+// quem liberou nem por quê, e não havia como auditar depois.
+// Agora quem está no PDV assume o desconto com a PRÓPRIA senha e informa quem
+// autorizou e o motivo — os dois vão para `vendas.desconto_autorizado_por` e
+// `vendas.desconto_motivo` e saem no Relatório de Evento.
+// Devolve null se o operador desistir, ou { autorizado_por, motivo }.
 function modalAutorizarDesconto(desconto) {
   return new Promise(resolve => {
     let resolvido = false;
-    const m = modal('Autorização de desconto', `
-      <p style="margin-bottom:14px">Desconto de <b>${moeda(desconto)}</b> precisa ser autorizado por um administrador.</p>
+    const m = modal('Desconto — quem autorizou?', `
+      <p style="margin-bottom:6px">Desconto de <b style="color:var(--vinho);font-size:1.15em">${moeda(desconto)}</b> nesta venda.</p>
+      <p style="margin-bottom:14px;font-size:12px;color:var(--texto-suave)">
+        Registre quem liberou e por quê. Fica gravado na venda e aparece no relatório do evento.
+      </p>
       <div class="linha-2">
-        <div class="campo"><label>Usuário administrador</label><input id="auth-usuario" autocomplete="off" placeholder="login do admin"></div>
-        <div class="campo"><label>Senha</label><input id="auth-senha" type="password" placeholder="••••••"></div>
+        <div class="campo"><label>Autorizado por *</label>
+          <input id="ad-autor" autocomplete="off" placeholder="Nome de quem liberou"></div>
+        <div class="campo"><label>Motivo *</label>
+          <input id="ad-motivo" autocomplete="off" placeholder="Ex.: peça com defeito, cliente antiga…"></div>
       </div>
-      <div class="erro" id="auth-erro"></div>
+      <div class="campo">
+        <label>Sua senha *</label>
+        <input id="ad-senha" type="password" placeholder="••••••" autocomplete="current-password">
+        <small style="color:var(--texto-suave);font-size:11px">
+          A senha de quem está operando o caixa agora — confirma que o lançamento foi seu.
+        </small>
+      </div>
+      <div class="erro" id="ad-erro"></div>
     `, async (mm, fechar) => {
-      const usuario = mm.querySelector('#auth-usuario').value.trim();
-      const senha = mm.querySelector('#auth-senha').value;
-      if (!usuario || !senha) { mm.querySelector('#auth-erro').textContent = 'Informe usuário e senha do administrador.'; return; }
-      const r = await api('auth:autorizarDesconto', { usuario, senha });
-      if (!r.ok) { mm.querySelector('#auth-erro').textContent = r.erro; return; }
-      resolvido = true; fechar(); resolve(true);
-    }, 'Autorizar desconto');
-    // Detecta fechamento sem autorizar (clique em × ou fora do modal)
+      const $err = mm.querySelector('#ad-erro');
+      const autor = mm.querySelector('#ad-autor').value.trim();
+      const motivo = mm.querySelector('#ad-motivo').value.trim();
+      const senha = mm.querySelector('#ad-senha').value;
+      if (!autor)  { $err.textContent = 'Informe quem autorizou o desconto.'; return; }
+      if (!motivo) { $err.textContent = 'Informe o motivo do desconto.'; return; }
+      if (!senha)  { $err.textContent = 'Digite a sua senha para confirmar.'; return; }
+      const r = await api('auth:autorizarDesconto', { senha });
+      if (!r.ok) { $err.textContent = r.erro; return; }
+      resolvido = true; fechar();
+      resolve({ autorizado_por: autor, motivo });
+    }, 'Confirmar desconto');
+    setTimeout(() => { try { m.querySelector('#ad-autor').focus(); } catch {} }, 60);
+    // Detecta fechamento sem confirmar (clique em × ou fora do modal)
     const obs = new MutationObserver(() => {
-      if (!document.contains(m)) { obs.disconnect(); if (!resolvido) resolve(false); }
+      if (!document.contains(m)) { obs.disconnect(); if (!resolvido) resolve(null); }
     });
     obs.observe(document.body, { childList: true, subtree: true });
   });
 }
 
 // ---------- Pagamento ----------
-function modalPagamento(total, descontoGeral, pontosResgate, aoConcluir) {
+function modalPagamento(total, descontoGeral, pontosResgate, aoConcluir, descontoJustificativa) {
   // Configuração de desconto à vista (dinheiro/PIX)
   const cfg = getConfig();
   const ativoAvista   = cfg.desconto_avista_ativo === '1';
@@ -528,6 +562,10 @@ function modalPagamento(total, descontoGeral, pontosResgate, aoConcluir) {
     const r = await api('pdv:venda', {
       itens: itens.map(i => ({ variacao_id: i.variacao_id, qtd: i.qtd, preco_unit: i.preco_unit, desconto: i.desconto })),
       desconto: descontoGeral + descontoAvista,  // desconto manual + desconto à vista
+      // Justificativa do desconto avulso (v3.3.0). Só existe quando o operador
+      // digitou desconto na mão — categoria e pontos não pedem.
+      desconto_autorizado_por: descontoJustificativa ? descontoJustificativa.autorizado_por : null,
+      desconto_motivo: descontoJustificativa ? descontoJustificativa.motivo : null,
       cliente_id: cliente ? cliente.id : null,
       pontos_resgatar: pontosResgate ? pontosResgate.pontos : 0,
       pagamentos: pagamentos.map(pg => ({
