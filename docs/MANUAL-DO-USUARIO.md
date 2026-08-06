@@ -1,7 +1,7 @@
 # Manual do Usuário — Salgueiro Gestão
 
 **Sistema de gestão para loja de roupas**
-Versão 3.4.1 · ML Lopes Design
+Versão 3.5.0 · ML Lopes Design
 
 ---
 
@@ -521,16 +521,39 @@ Para criar os demais, use **+ Novo estoque**.
 
 ### Descer peças para a loja (transferência)
 
-1. Clique em **📥 Transferir peças**
-2. **De (origem)** — de onde as peças saem (normalmente o Almoxarifado Central)
-3. **Para (destino)** — para onde vão (a loja, uma pessoa, o WhatsApp)
-4. **Buscar peça** — digite o nome ou bipe o código de barras e clique no resultado
-5. Ajuste a **quantidade** de cada linha
-6. **Observação** — algo como "descida para a feijoada de domingo"
-7. **Transferir e gerar romaneio**
+Você escolhe o **produto** e todas as cores e tamanhos dele aparecem de uma vez, com o que há na origem. Digite quanto quer mandar de cada um e transfira.
 
-Se você pedir mais peças do que existem na origem, o sistema recusa e diz
-exatamente quantas há disponíveis. Nada é gravado pela metade.
+1. **🏢 Estoques** → **📥 Transferir peças**
+2. Confira **De** (origem) e **Para** (destino)
+3. No campo **Escolha o produto**, digite o nome, a referência ou bipe o código de barras
+4. Clique no produto — a grade abre com todas as variações:
+
+```
+VESTIDO LONGO  Ref. R1              [Levar tudo] [Limpar] [✕]
+  Cor      Tamanho   Na origem   Transferir
+  Preto    G                 0   (sem peças)
+  Preto    M                 7   [   7 ]
+  Vinho    M                 8   [   3 ]
+  Vinho    P                 5   [     ]
+```
+
+5. Digite a quantidade em cada linha que quiser mandar
+6. Repita a busca para acrescentar **outros produtos** ao mesmo romaneio
+7. Escreva a observação (ex.: "descida para a feijoada")
+8. **Transferir e gerar romaneio**
+
+| Botão | O que faz |
+|---|---|
+| **Levar tudo** | Preenche cada linha com o total que há na origem |
+| **Limpar** | Zera as quantidades daquele produto |
+| **✕** | Tira o produto do romaneio |
+
+> **Só entra no romaneio o que você digitou.** Linha em branco é ignorada.
+> Variação sem peças na origem aparece esmaecida e não aceita quantidade.
+> Se digitar mais do que existe, o sistema avisa e volta para o máximo disponível.
+
+No rodapé aparece o resumo: quantas peças de quantos produtos vão no romaneio.
+
 
 ### O romaneio
 
@@ -1097,4 +1120,4 @@ Esta confusão é comum e afeta os relatórios:
 **Suporte técnico**
 ML Lopes Design — mlopesdesign@gmail.com
 
-*Manual referente à versão 3.4.1*
+*Manual referente à versão 3.5.0*

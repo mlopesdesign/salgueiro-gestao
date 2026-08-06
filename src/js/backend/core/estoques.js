@@ -162,6 +162,35 @@ function conteudo(db, p) {
   return { ok: true, estoque: e, itens, totais: { pecas, custo, venda, itens: itens.length } };
 }
 
+// Variações de UM produto com o saldo no local escolhido (v3.5.0).
+// A transferência antes obrigava a achar peça por peça na busca: um produto com
+// 6 cores × 5 tamanhos exigia 30 buscas. Agora escolhe-se o PRODUTO e a grade
+// inteira aparece de uma vez, cada linha com o que há na origem.
+function variacoesNoLocal(db, p) {
+  const produtoId = Number(p && p.produto_id) || 0;
+  const estoqueId = Number(p && p.estoque_id) || 0;
+  if (!produtoId) return { ok: false, erro: 'Informe o produto.' };
+  const prod = db.prepare(
+    'SELECT id, nome, COALESCE(referencia,\'\') referencia, preco_venda FROM produtos WHERE id=?'
+  ).get(produtoId);
+  if (!prod) return { ok: false, erro: 'Produto não encontrado.' };
+
+  const variacoes = db.prepare(`
+    SELECT va.id, va.cor, va.tamanho, COALESCE(va.codigo_barras,'') codigo_barras,
+           va.estoque AS total_geral,
+           COALESCE((SELECT s.qtd FROM estoque_saldos s
+                      WHERE s.variacao_id = va.id AND s.estoque_id = ?), 0) AS disponivel
+    FROM variacoes va
+    WHERE va.produto_id = ? AND va.ativo = 1
+    ORDER BY va.cor, va.tamanho
+  `).all(estoqueId, produtoId);
+
+  return {
+    ok: true, produto: prod, variacoes,
+    total_local: arred(variacoes.reduce((s, v) => s + (Number(v.disponivel) || 0), 0))
+  };
+}
+
 // ── Transferência (romaneio) ────────────────────────────────────────────────
 function transferir(db, p, quem) {
   const origem = Number(p && p.origem_id) || 0;
@@ -252,6 +281,7 @@ function obterTransferencia(db, id) {
 }
 
 export {
+  variacoesNoLocal,
   listar, principal, daLoja, salvar, desativar, garantirDaLoja,
   saldo, aplicar, porVariacao, conteudo,
   transferir, listarTransferencias, obterTransferencia, arred

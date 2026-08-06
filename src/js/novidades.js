@@ -3,6 +3,20 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.5.0', data: '2026-08-06',
+    titulo: 'Transferir estoque escolhendo o produto',
+    itens: [
+      'A transferência mudou: agora você escolhe o PRODUTO e todas as cores e tamanhos dele aparecem de uma vez, com a quantidade que há na origem. Digite quanto quer mandar de cada um e transfira.',
+      'Antes era preciso buscar peça por peça. Um produto com 6 cores e 5 tamanhos exigia 30 buscas separadas.',
+      'Botão "Levar tudo" preenche cada linha com o que há na origem. "Limpar" zera tudo de uma vez.',
+      'Só entram no romaneio as linhas onde você digitou quantidade — o resto é ignorado.',
+      'Se digitar mais do que existe na origem, o sistema avisa e volta para o máximo disponível.',
+      'Pode juntar vários produtos no mesmo romaneio: basta buscar o próximo.',
+      'Bipando o código de barras, o sistema abre a grade inteira daquele produto.',
+      'Um resumo no rodapé mostra quantas peças de quantos produtos vão no romaneio.'
+    ]
+  },
+  {
     versao: '3.4.1', data: '2026-08-06',
     titulo: 'Relatório de estoque para conferir na mão',
     itens: [

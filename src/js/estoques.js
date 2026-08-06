@@ -36,7 +36,16 @@ function estilo() {
     .es-tab th { font-size:11px; text-transform:uppercase; opacity:.7; text-align:left }
     .es-itens-tr td { padding:4px 10px }
     .num { text-align:right }
-    .es-busca-res { border:1px solid var(--borda); border-radius:8px; max-height:200px; overflow-y:auto; margin-top:4px }
+    .tr-bloco{border:1px solid var(--borda);border-radius:8px;margin-bottom:10px;overflow:hidden}
+  .tr-bloco-cab{display:flex;justify-content:space-between;align-items:center;gap:10px;
+    background:var(--creme);padding:7px 11px;font-size:13px;flex-wrap:wrap}
+  .tr-bloco-acoes{display:flex;gap:6px}
+  .tr-bloco-acoes .btn{padding:3px 9px;font-size:11px}
+  .tr-grade{margin:0}
+  .tr-grade th{font-size:11px}
+  .tr-vazia td{opacity:.45}
+  .tr-resumo{background:var(--vinho);color:#fff;border-radius:8px;padding:8px 12px;margin-top:10px;font-size:13px}
+  .es-busca-res { border:1px solid var(--borda); border-radius:8px; max-height:200px; overflow-y:auto; margin-top:4px }
     .es-busca-res div { padding:7px 10px; cursor:pointer; font-size:13px; border-bottom:1px solid var(--borda) }
     .es-busca-res div:hover { background:rgba(0,0,0,.05) }
     @media print { .es-nao-imprime { display:none !important } }`;
@@ -209,8 +218,17 @@ function formLocal(local, aoSalvar) {
 }
 
 // ---------- Modal: transferir ----------
+// Transferência por PRODUTO (v3.5.0).
+// Antes a busca devolvia VARIAÇÃO e cada clique somava 1 peça: um produto com
+// 6 cores × 5 tamanhos exigia 30 buscas. Agora:
+//   1. busca e escolhe o PRODUTO
+//   2. a grade inteira de cor/tamanho aparece, com o que há na ORIGEM
+//   3. digita a quantidade de cada uma (ou usa "tudo")
+//   4. transfere
+// Só entram no romaneio as linhas com quantidade maior que zero.
 function formTransferir(origemId, aoConcluir) {
-  const itens = [];
+  // blocos[] = { produto, variacoes:[{ id, cor, tamanho, disponivel, qtd }] }
+  const blocos = [];
   const opts = (sel) => locais.map(l =>
     `<option value="${l.id}" ${l.id === sel ? 'selected' : ''}>${esc(l.nome)} (${l.pecas} peças)</option>`).join('');
   const destinoPadrao = locais.find(l => l.id !== origemId)?.id;
@@ -220,22 +238,41 @@ function formTransferir(origemId, aoConcluir) {
       <div class="campo"><label>De (origem)</label><select id="tr-origem">${opts(origemId)}</select></div>
       <div class="campo"><label>Para (destino)</label><select id="tr-destino">${opts(destinoPadrao)}</select></div>
     </div>
-    <div class="campo"><label>Buscar peça</label>
-      <input id="tr-busca" placeholder="digite o nome ou bipe o código de barras" autocomplete="off">
-      <div class="es-busca-res" id="tr-res" style="display:none"></div></div>
-    <table class="es-tab"><thead><tr><th>Peça</th><th class="num" style="width:90px">Qtd</th>
-      <th style="width:36px"></th></tr></thead><tbody id="tr-itens">
-      <tr><td colspan="3" class="vazio">Nenhuma peça adicionada.</td></tr></tbody></table>
+    <div class="campo"><label>Escolha o produto</label>
+      <input id="tr-busca" placeholder="digite o nome, a referência ou bipe o código de barras" autocomplete="off">
+      <div class="es-busca-res" id="tr-res" style="display:none"></div>
+      <small style="color:var(--texto-suave);font-size:11px">
+        Ao escolher, aparecem todas as cores e tamanhos com o que há na origem — você digita a quantidade de cada um.
+      </small>
+    </div>
+    <div id="tr-blocos"><div class="vazio">Nenhum produto escolhido ainda.</div></div>
+    <div class="tr-resumo" id="tr-resumo" style="display:none"></div>
     <div class="campo" style="margin-top:10px"><label>Observação (aparece no romaneio)</label>
       <input id="tr-obs" placeholder="Ex.: descida para a feijoada de domingo"></div>
     <div class="erro" id="tr-erro"></div>
   `, async (m, fechar) => {
-    if (!itens.length) { m.querySelector('#tr-erro').textContent = 'Adicione ao menos uma peça.'; return; }
+    const itens = [];
+    for (const b of blocos) for (const v of b.variacoes) {
+      const q = Number(v.qtd) || 0;
+      if (q > 0) itens.push({ variacao_id: v.id, qtd: q });
+    }
+    if (!itens.length) {
+      m.querySelector('#tr-erro').textContent = 'Informe a quantidade de pelo menos uma peça.'; return;
+    }
+    const estouro = [];
+    for (const b of blocos) for (const v of b.variacoes) {
+      if ((Number(v.qtd) || 0) > v.disponivel) estouro.push(`${b.produto.nome} ${v.cor}/${v.tamanho}`);
+    }
+    if (estouro.length) {
+      m.querySelector('#tr-erro').textContent =
+        `Quantidade acima do disponível na origem: ${estouro.slice(0, 3).join(', ')}${estouro.length > 3 ? '…' : ''}`;
+      return;
+    }
     const r = await api('estoques:transferir', {
       origem_id: Number(m.querySelector('#tr-origem').value),
       destino_id: Number(m.querySelector('#tr-destino').value),
       obs: m.querySelector('#tr-obs').value,
-      itens: itens.map(i => ({ variacao_id: i.variacao_id, qtd: i.qtd }))
+      itens
     });
     if (!r.ok) { m.querySelector('#tr-erro').textContent = r.erro; return; }
     fechar();
@@ -247,44 +284,172 @@ function formTransferir(origemId, aoConcluir) {
   const m = document.querySelector('.modal-caixa') || document;
   const $busca = m.querySelector('#tr-busca');
   const $res = m.querySelector('#tr-res');
-  const $itens = m.querySelector('#tr-itens');
+  const $blocos = m.querySelector('#tr-blocos');
+  const $resumo = m.querySelector('#tr-resumo');
+  const origemAtual = () => Number(m.querySelector('#tr-origem').value);
 
-  function desenhar() {
-    $itens.innerHTML = itens.length ? '' : '<tr><td colspan="3" class="vazio">Nenhuma peça adicionada.</td></tr>';
-    itens.forEach((i, idx) => {
-      const tr = el(`<tr><td>${esc(i.rotulo)}</td>
-        <td class="num"><input type="number" min="1" step="1" value="${i.qtd}" style="width:70px;text-align:right"></td>
-        <td><button class="btn btn-suave" style="padding:4px 8px;color:var(--vermelho)">✕</button></td></tr>`);
-      tr.querySelector('input').addEventListener('input', e => { i.qtd = Number(e.target.value) || 1; });
-      tr.querySelector('button').onclick = () => { itens.splice(idx, 1); desenhar(); };
-      $itens.appendChild(tr);
+  // trocar a origem recarrega os saldos de todos os produtos já escolhidos
+  m.querySelector('#tr-origem').addEventListener('change', async () => {
+    const ids = blocos.map(b => b.produto.id);
+    blocos.length = 0;
+    for (const id of ids) await carregarProduto(id, true);
+    desenhar();
+  });
+
+  async function carregarProduto(produtoId, silencioso) {
+    if (blocos.some(b => b.produto.id === produtoId)) {
+      if (!silencioso) toast('Esse produto já está na lista.', true);
+      return;
+    }
+    const r = await api('estoques:variacoesNoLocal', {
+      produto_id: produtoId, estoque_id: origemAtual()
+    });
+    if (!r.ok) { toast(r.erro, true); return; }
+    blocos.push({
+      produto: r.produto,
+      variacoes: r.variacoes.map(v => ({ ...v, qtd: '' }))
     });
   }
 
+  function totalGeral() {
+    let n = 0;
+    for (const b of blocos) for (const v of b.variacoes) n += Number(v.qtd) || 0;
+    return n;
+  }
+
+  function repintarResumo() {
+    const n = totalGeral();
+    const prods = blocos.filter(b => b.variacoes.some(v => (Number(v.qtd) || 0) > 0)).length;
+    $resumo.style.display = n ? '' : 'none';
+    $resumo.innerHTML = n
+      ? `<b>${n}</b> peça(s) de <b>${prods}</b> produto(s) neste romaneio`
+      : '';
+  }
+
+  function desenhar() {
+    if (!blocos.length) {
+      $blocos.innerHTML = '<div class="vazio">Nenhum produto escolhido ainda.</div>';
+      repintarResumo();
+      return;
+    }
+    $blocos.innerHTML = '';
+    blocos.forEach((b, bi) => {
+      const semSaldo = b.variacoes.every(v => v.disponivel <= 0);
+      const cx = el(`<div class="tr-bloco">
+        <div class="tr-bloco-cab">
+          <span><b>${esc(b.produto.nome)}</b>${b.produto.referencia
+            ? ` <small style="opacity:.7">Ref. ${esc(b.produto.referencia)}</small>` : ''}</span>
+          <span class="tr-bloco-acoes">
+            <button type="button" class="btn btn-suave tr-tudo" ${semSaldo ? 'disabled' : ''}
+              title="Preencher cada linha com tudo o que há na origem">Levar tudo</button>
+            <button type="button" class="btn btn-suave tr-zerar">Limpar</button>
+            <button type="button" class="btn btn-suave tr-fora" style="color:var(--vermelho)"
+              title="Tirar este produto do romaneio">✕</button>
+          </span>
+        </div>
+        ${semSaldo
+          ? '<div class="vazio" style="padding:10px !important">Este produto não tem peças na origem escolhida.</div>'
+          : `<table class="es-tab tr-grade">
+              <thead><tr><th>Cor</th><th>Tamanho</th>
+                <th class="num">Na origem</th><th class="num" style="width:110px">Transferir</th></tr></thead>
+              <tbody></tbody></table>`}
+      </div>`);
+
+      const tb = cx.querySelector('tbody');
+      if (tb) {
+        b.variacoes.forEach(v => {
+          const tr = el(`<tr${v.disponivel <= 0 ? ' class="tr-vazia"' : ''}>
+            <td>${esc(v.cor)}</td><td>${esc(v.tamanho)}</td>
+            <td class="num">${v.disponivel}</td>
+            <td class="num"><input type="number" min="0" max="${v.disponivel}" step="1"
+              value="${v.qtd}" placeholder="0" inputmode="numeric"
+              style="width:80px;text-align:right"
+              ${v.disponivel <= 0 ? 'disabled title="Sem peças na origem"' : ''}></td>
+          </tr>`);
+          const inp = tr.querySelector('input');
+          if (inp) {
+            inp.addEventListener('focus', () => { try { inp.select(); } catch {} });
+            // `input` a cada tecla, sem redesenhar a grade (isso mataria o cursor)
+            inp.addEventListener('input', () => {
+              const t = String(inp.value).trim();
+              v.qtd = t === '' ? '' : Math.max(0, Math.floor(Number(t) || 0));
+              repintarResumo();
+            });
+            inp.addEventListener('blur', () => {
+              let q = Number(inp.value) || 0;
+              if (q > v.disponivel) {
+                toast(`Só há ${v.disponivel} un. de ${b.produto.nome} ${v.cor}/${v.tamanho} na origem.`, true);
+                q = v.disponivel;
+              }
+              if (q < 0) q = 0;
+              v.qtd = q === 0 ? '' : q;
+              inp.value = v.qtd;
+              repintarResumo();
+            });
+            inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } });
+          }
+          tb.appendChild(tr);
+        });
+      }
+
+      cx.querySelector('.tr-tudo')?.addEventListener('click', () => {
+        for (const v of b.variacoes) v.qtd = v.disponivel > 0 ? v.disponivel : '';
+        desenhar();
+      });
+      cx.querySelector('.tr-zerar').onclick = () => {
+        for (const v of b.variacoes) v.qtd = '';
+        desenhar();
+      };
+      cx.querySelector('.tr-fora').onclick = () => { blocos.splice(bi, 1); desenhar(); };
+      $blocos.appendChild(cx);
+    });
+    repintarResumo();
+  }
+
+  // ── busca de PRODUTO (não mais de variação) ───────────────────────────────
   let deb;
   $busca.addEventListener('input', () => {
     clearTimeout(deb);
     deb = setTimeout(async () => {
       const termo = $busca.value.trim();
       if (termo.length < 2) { $res.style.display = 'none'; return; }
-      const r = await api('estoque:buscar', { termo });
-      const lista = r.ok ? r.variacoes : [];
-      if (!lista.length) { $res.style.display = 'none'; return; }
+
+      // Bipar o código de barras cai numa variação: resolvo o produto dela e
+      // abro a grade inteira, que é o que o operador quer ver.
+      const porCodigo = await api('estoque:buscar', { termo });
+      const exato = (porCodigo.ok ? porCodigo.variacoes : []).find(v => v.codigo_barras === termo);
+      if (exato && exato.produto_id) {
+        await carregarProduto(exato.produto_id);
+        $busca.value = ''; $res.style.display = 'none'; desenhar();
+        return;
+      }
+
+      const r = await api('produtos:listar', { busca: termo });
+      const lista = r.ok ? r.produtos : [];
+      if (!lista.length) {
+        $res.style.display = 'block';
+        $res.innerHTML = '<div style="opacity:.6">Nenhum produto encontrado.</div>';
+        return;
+      }
       $res.style.display = 'block';
       $res.innerHTML = '';
-      for (const v of lista.slice(0, 10)) {
-        const rot = `${v.produto}${v.cor !== 'Única' ? ` — ${v.cor}/${v.tamanho}` : ''}`;
-        const d = el(`<div><b>${esc(rot)}</b> <small style="opacity:.6">(total: ${v.estoque})</small></div>`);
-        d.onclick = () => {
-          const ja = itens.find(x => x.variacao_id === v.id);
-          if (ja) ja.qtd += 1; else itens.push({ variacao_id: v.id, rotulo: rot, qtd: 1 });
+      for (const pr of lista.slice(0, 10)) {
+        const d = el(`<div><b>${esc(pr.nome)}</b>
+          ${pr.referencia ? `<small style="opacity:.6"> Ref. ${esc(pr.referencia)}</small>` : ''}
+          <small style="opacity:.6"> — ${pr.qtd_variacoes} variação(ões), ${pr.estoque_total} no total</small></div>`);
+        d.onclick = async () => {
+          await carregarProduto(pr.id);
           $busca.value = ''; $res.style.display = 'none'; desenhar();
         };
         $res.appendChild(d);
       }
     }, 250);
   });
+
+  desenhar();
+  setTimeout(() => { try { $busca.focus(); } catch {} }, 60);
 }
+
 
 // ---------- Tela ----------
 export async function viewEstoques(alvo) {

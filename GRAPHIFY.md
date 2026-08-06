@@ -3,7 +3,7 @@
 > Mapa técnico gerado automaticamente por `tools/graphify.js`.
 > **Não edite à mão.** Regere com `node tools/graphify.js` a cada alteração estrutural.
 
-**Versão:** 3.4.1 · **Gerado em:** 2026-08-06
+**Versão:** 3.5.0 · **Gerado em:** 2026-08-06
 **Aplicação:** `br.com.mllopes.salgueirogestao` (Neutralino 6 + WebView2)
 **Cliente:** Boutique do Salgueiro · **Autor:** ML Lopes Design
 
@@ -78,7 +78,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `dashboard.js` | 214 | 2 | resumo |
 | `devolucoes.js` | 127 | 3 | itensVenda, listar, registrar |
 | `estoque.js` | 143 | 5 | buscarVariacoes, kardex, listarCompleto, movimentar, reposicao |
-| `estoques.js` | 259 | 13 | aplicar, arred, conteudo, daLoja, desativar, garantirDaLoja, listar, listarTransferencias, +6 |
+| `estoques.js` | 289 | 14 | aplicar, arred, conteudo, daLoja, desativar, garantirDaLoja, listar, listarTransferencias, +7 |
 | `financeiro.js` | 138 | 5 | baixar, excluir, fluxo, listar, salvar |
 | `licenca.js` | 288 | 25 | DEV_USUARIO, MODULOS, NOME_PLANO, PLANOS, SETORES, devAplicar, devEntrar, devRemover, +14 |
 | `logo-default.js` | 4 | 0 | LOGO_DEFAULT |
@@ -103,7 +103,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `ambiente.js` | 237 | 3 |
 | `db.js` | 518 | 5 |
 | `servidor-rede-embutido.js` | 440 | 15 |
-| `servidor.js` | 1346 | 8 |
+| `servidor.js` | 1348 | 8 |
 
 ## 6. Telas (`src/js`)
 
@@ -114,19 +114,19 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `compras.js` | 227 | viewCompras |
 | `configuracoes.js` | 1333 | viewConfiguracoes |
 | `estoque.js` | 333 | abrirEtiquetas, ean13Svg, viewEstoque |
-| `estoques.js` | 431 | viewEstoques |
+| `estoques.js` | 596 | viewEstoques |
 | `etiquetas.js` | 146 | abrirEtiquetasLote |
 | `financeiro.js` | 260 | viewFinanceiro |
 | `mensagens.js` | 558 | abrirBalao, encerrarTelaMensagens, iniciarMensagens, pararMensagens, viewMensagens |
 | `neutralino.js` | 2 | — |
-| `novidades.js` | 275 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
+| `novidades.js` | 289 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
 | `pdv.js` | 1536 | calcResgateLocal, viewPdv |
 | `ranking.js` | 361 | viewRanking |
 | `relatorios.js` | 1081 | viewRelatorios |
 
 ---
 
-## 7. Rotas da API (142)
+## 7. Rotas da API (143)
 
 Toda comunicação tela ↔ backend passa por `api('canal:acao', payload)`.
 A coluna **Permissão** vem de `PERMISSAO_ROTA` em `servidor.js` — sem entrada ali,
@@ -280,6 +280,7 @@ a rota exige apenas sessão válida.
 | `estoques:salvar` | `estoque.movimentar` | `estoques.salvar(db, p \|\| {}, sessao.usuario)` |
 | `estoques:desativar` | `estoque.movimentar` | `estoques.desativar(db, p.id, sessao.usuario)` |
 | `estoques:conteudo` | `estoque.ver` | `estoques.conteudo(db, p \|\| {})` |
+| `estoques:variacoesNoLocal` | `estoque.ver` | `estoques.variacoesNoLocal(db, p \|\| {})` |
 | `estoques:porVariacao` | `estoque.ver` | `({ ok: true, locais: estoques.porVariacao(db, p.variacao_id)…` |
 | `estoques:transferir` | `estoque.movimentar` | `estoques.transferir(db, p \|\| {}, sessao.usuario)` |
 | `estoques:transferencias` | `estoque.ver` | `estoques.listarTransferencias(db, p \|\| {})` |

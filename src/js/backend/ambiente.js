@@ -219,7 +219,7 @@ export async function garantirExtensaoRede() {
 
 // ── App ──────────────────────────────────────────────────────────────────────
 export function versaoApp() {
-  try { return NL_APPVERSION; } catch { return '3.4.1'; }
+  try { return NL_APPVERSION; } catch { return '3.5.0'; }
 }
 
 export async function reiniciarApp() {

@@ -226,22 +226,20 @@ O quadro **Fechamento** no alto fecha a conta. **✓ bate** = tudo certo.
 
 1. Menu **🏢 Estoques (locais)** → **📥 Transferir peças**
 2. **De:** Almoxarifado Central · **Para:** a loja
-3. Busque a peça (ou bipe o código) e clique nela
-4. Ajuste a **quantidade** de cada linha
-5. Escreva a **observação** (ex.: "descida para a feijoada")
-6. **Transferir e gerar romaneio**
+3. No campo **Escolha o produto**, digite o nome ou bipe o código
+4. Clique no produto — **todas as cores e tamanhos aparecem** com o que há na origem
+5. Digite a quantidade de cada um (ou use **Levar tudo**)
+6. Busque outro produto se quiser juntar no mesmo romaneio
+7. Escreva a observação e clique em **Transferir e gerar romaneio**
 
-Um aviso clicável aparece na tela — clique para abrir o romaneio. Na janela do romaneio:
-- **🖨️ Imprimir** — imprime em papel
-- **📄 Baixar PDF** — salva como PDF para mandar pelo **WhatsApp ou e-mail** (não precisa impressora)
+> Só vai o que você digitou. Linha em branco fica de fora.
+> Pediu mais do que tem? O sistema avisa e volta para o máximo.
+
+Um aviso clicável aparece na tela — clique para abrir o romaneio:
+- **🖨️ Imprimir** — em papel
+- **📄 Baixar PDF** — para mandar por **WhatsApp ou e-mail**
 
 > Transferir **não cria nem some peça** — só muda de lugar. O total continua o mesmo.
-> Para ver um romaneio antigo, clique em **📋 Ver** na lista de romaneios.
-> O botão **📊 Relatório PDF** gera um histórico de todas as transferências.
-
-**Onde vejo o que tem em cada lugar?** Clique no cartão do local. A tabela mostra o
-que tem ali e o total do Salgueiro ao lado, com botões de **imprimir** e **Excel**
-para o balanço.
 
 ---
 
@@ -325,4 +323,4 @@ lista todas as versões e o que cada uma trouxe. A sua aparece com o selo verde
 
 **Suporte:** ML Lopes Design — mlopesdesign@gmail.com
 
-*Guia referente à versão 3.4.1*
+*Guia referente à versão 3.5.0*
