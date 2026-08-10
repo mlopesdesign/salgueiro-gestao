@@ -65,7 +65,7 @@ e aperte **Enter**. Também funciona pelas setinhas ▲▼ ou bipando a peça de
 4. Escolha o reembolso: **Dinheiro**, **Estorno/cartão** ou **Vale-troca**
 5. Confirme
 
-> Se escolher **Vale-troca**, o sistema gera um código **VT-XXXXXX**. Anote e entregue ao cliente.
+> Se escolher **Vale-troca**, o sistema gera o código e **imprime o vale** na impressora de cupom. Entregue o papel à cliente.
 
 ---
 
@@ -145,6 +145,12 @@ O cadastro abre preenchido — ajuste nome e preço e salve.
 4. Digite o código **VT-XXXXXX**
 5. O sistema mostra o saldo e abate do total
 
+**O vale sai impresso.** Assim que é gerado, o sistema imprime na impressora de
+cupom, com código, valor e validade. É só entregar o papel à cliente.
+
+**Perdeu o papel?** Menu **🎫 Vales-Troca** → **🖨️ 2ª via** na linha do vale.
+A segunda via sai com o **saldo atual**, não com o valor original.
+
 > Para consultar vales em aberto: menu **🎫 Vales-Troca** — mostra saldo e **até quando vale**.
 
 > Todo vale tem **prazo** (padrão 90 dias). Vencido, o sistema recusa e avisa a data.
@@ -162,6 +168,9 @@ O cadastro abre preenchido — ajuste nome e preço e salve.
 
 > Os campos de quantidade começam vazios. Deixar em branco = zero.
 > O código de barras é gerado automaticamente se você não digitar um.
+
+**Peça sem cor nem tamanho?** Deixe os dois em branco e preencha só a
+quantidade — vira **Única / U** com o estoque que você digitou.
 
 ---
 
@@ -305,6 +314,8 @@ diferentes. Na tela ficam os 10 primeiros; a impressão e o Excel trazem a lista
 | Não fecha a cortesia | "Autorizado por" e "Para quem foi" são obrigatórios |
 | Pede senha de admin no desconto | Corrigido na 3.3.0 — agora é a sua senha + justificativa |
 | Quero cadastrar peça igual a outra | Botão **Duplicar** na linha do produto |
+| A cliente perdeu o vale | 🎫 Vales-Troca → **🖨️ 2ª via** (sai com o saldo atual) |
+| Escrevi no chat e ninguém viu | Corrigido na 3.6.0 — atualize o aplicativo |
 | Não dá para digitar a quantidade | Clique no campo **Qtd**, digite por cima e aperte **Enter** |
 | Não acho o botão de troca | Barra de cima do PDV: **🔄 Troca** — ou tecla **F6** |
 | "Nenhum caixa aberto" ao trocar | A troca gera uma venda: abra o caixa antes |
@@ -323,4 +334,4 @@ lista todas as versões e o que cada uma trouxe. A sua aparece com o selo verde
 
 **Suporte:** ML Lopes Design — mlopesdesign@gmail.com
 
-*Guia referente à versão 3.5.0*
+*Guia referente à versão 3.6.0*

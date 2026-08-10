@@ -221,14 +221,6 @@ cliente — o histórico de conversas reaparece quando o chat voltar.
   DEFAULTS. Não afeta quem usa perfil padrão.
 
 ### Documentação atrasada
-- **Manuais e PDFs estão na 3.5.0; o app está na 3.5.2.** Falta documentar a
-  correção da grade de transferência (3.5.1) e a do estoque inicial (3.5.2).
-- **Seção 18 (Backup) do manual está desatualizada desde a v3.0.1.** Ela ainda
-  descreve "Restaurar → escolha o arquivo .db". A tela de hoje
-  (`configuracoes.js:818-907`) tem lista clicável com data, ORIGEM (🛡️ antes de
-  atualizar / ✋ manual / 🗓️ automático), o CONTEÚDO de cada cópia (nº de vendas,
-  produtos e clientes) e botão ↩️ Restaurar por linha, com confirmação
-  comparando os números.
 
 
 ### Aguardando informação ou acesso do Marcio
@@ -246,6 +238,11 @@ cliente — o histórico de conversas reaparece quando o chat voltar.
   binário Neutralino não roda e falta `libXdamage.so.1` para o Chromium.
   Substituto em uso: teste de DOM com **jsdom**, que roda a tela com um `app.js`
   falso ao lado e dispara eventos reais.
+- **PDF do manual precisa ser gerado em DUAS PARTES.** O WeasyPrint leva mais
+  que o teto de tempo de uma chamada bash para o manual inteiro (~70 KB de HTML)
+  e o processo em background NÃO sobrevive entre chamadas. Receita: cortar o
+  HTML no `<h2>` do meio, gerar `MAN-A.pdf` e `MAN-B.pdf` separados e juntar com
+  `pypdf.PdfWriter`. O guia rápido sai inteiro numa chamada só.
 - **PDFs dos manuais**: `pandoc -f gfm -t html5 -s` → **WeasyPrint**, CSS em
   `/tmp/estilo.css`, removendo o `<header id="title-block-header">` do pandoc.
   Emoji: 11 subsets de `@fontsource/noto-emoji` mesclados com `fontTools.merge`

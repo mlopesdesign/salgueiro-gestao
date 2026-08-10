@@ -1,7 +1,7 @@
 # Manual do Usuário — Salgueiro Gestão
 
 **Sistema de gestão para loja de roupas**
-Versão 3.5.0 · ML Lopes Design
+Versão 3.6.0 · ML Lopes Design
 
 ---
 
@@ -348,6 +348,27 @@ Um vale é um crédito com código **VT-XXXXXX**.
 
 **Como surge:** de uma devolução com reembolso em vale, ou da diferença a favor da cliente numa troca.
 
+#### O vale sai impresso
+
+Assim que o vale é gerado, o sistema **imprime sozinho** na impressora de cupom — a mesma do comprovante de venda. O papel traz:
+
+- o **código** em destaque
+- o **valor**
+- até quando é **válido**
+- a venda de origem e o nome da cliente
+- a explicação de como usar
+
+Entregue o papel à cliente. Se a impressão falhar ou você quiser outra via na hora, o botão **🖨️ Imprimir o vale** fica no próprio aviso.
+
+> Não é preciso mais anotar o código nem pedir para a cliente tirar foto.
+> Em terminal na rede, abre a janela de impressão do navegador.
+
+#### Segunda via
+
+A cliente perdeu o papel? Menu **🎫 Vales-Troca** → botão **🖨️ 2ª via** na linha do vale.
+
+> A segunda via sai com o **saldo atual**, não com o valor original. Se o vale era de R$ 150 e ela já usou R$ 50, a 2ª via mostra R$ 100 — o que ela realmente tem para gastar.
+
 **Como usar:** no PDV, ao finalizar a venda, escolha **Vale-troca** como forma de pagamento e digite o código. O sistema mostra o saldo disponível e abate do total. Se sobrar saldo, o vale continua válido.
 
 **Validade:** todo vale nasce com prazo. O padrão é **90 dias** e você muda em **Configurações → PDV**. Depois do vencimento o sistema recusa o código e explica em que dia venceu. Colocando **0** dias, os vales passam a ser emitidos sem vencimento.
@@ -390,6 +411,10 @@ Cada linha é uma variação (uma combinação de cor e tamanho). Informe:
 Use **+ Variação** para adicionar mais linhas e o **✕** para remover.
 
 > Os campos de quantidade começam vazios, com um "0" cinza como dica. Deixar em branco significa zero.
+
+**Peça sem variação de cor ou tamanho:** deixe **Cor** e **Tamanho** em branco e preencha só a quantidade. O sistema cria a variação como **Única / U** com o estoque que você digitou, já lançado no Almoxarifado Central.
+
+> Até a versão 3.5.1 esse caso perdia a quantidade: o produto nascia zerado e era preciso dar entrada pelo módulo Estoque. Corrigido na 3.5.2.
 
 **Ampliar fotos:** passe o mouse sobre qualquer miniatura para ver uma pré-visualização. Clique para abrir em tela cheia. Para trocar a foto de uma variação, clique na miniatura dela — o seletor de arquivos abre. O **✕** que aparece no canto remove a foto.
 
@@ -548,8 +573,13 @@ VESTIDO LONGO  Ref. R1              [Levar tudo] [Limpar] [✕]
 | **Limpar** | Zera as quantidades daquele produto |
 | **✕** | Tira o produto do romaneio |
 
+A coluna **Total na loja**, ao lado de "Na origem", mostra o total daquela cor e tamanho somando **todos os locais**. Se a peça aparece com 0 na origem mas 5 no total, ela existe — está em outro estoque.
+
+O cabeçalho do produto conta quantas variações ele tem e quantas têm peça na origem escolhida. Serve para conferir de bate-pronto se está faltando alguma.
+
 > **Só entra no romaneio o que você digitou.** Linha em branco é ignorada.
-> Variação sem peças na origem aparece esmaecida e não aceita quantidade.
+> Variação sem peças na origem aparece esmaecida e não aceita quantidade, mas
+> continua na lista — você vê que ela existe.
 > Se digitar mais do que existe, o sistema avisa e volta para o máximo disponível.
 
 No rodapé aparece o resumo: quantas peças de quantos produtos vão no romaneio.
@@ -1018,9 +1048,28 @@ Configurações → **☁️ Nuvem** — conecta com Google Drive ou OneDrive pa
 
 ### Restaurando
 
-Configurações → Backup → **Restaurar**. Escolha o arquivo `.db`.
+Configurações → **💾 Backup**. A tela lista todas as cópias disponíveis, e cada linha mostra:
 
-> A restauração **substitui todos os dados atuais**. Faça um backup do estado atual antes.
+| Coluna | O que é |
+|---|---|
+| **Data e hora** | Quando a cópia foi feita |
+| **Origem** | 🛡️ antes de atualizar · ✋ manual · 🗓️ automático do dia |
+| **Conteúdo** | Quantas vendas, produtos e clientes existem naquela cópia |
+| **Tamanho** | O tamanho do arquivo |
+
+Clique em **↩️ Restaurar** na linha desejada. Antes de trocar qualquer coisa, o sistema mostra os números lado a lado — o que você tem hoje contra o que a cópia tem — e **avisa quando o backup tem menos dados que o atual**. Confirmando, o sistema restaura e **reinicia sozinho**.
+
+> **Backup danificado não ganha botão de restaurar.** O sistema abre cada cópia e confere se as tabelas essenciais estão lá antes de oferecê-la.
+
+Para restaurar um arquivo `.db` que você guardou em pendrive ou nuvem, use **↩️ Restaurar de um arquivo…**.
+
+> A restauração **substitui todos os dados atuais**. O sistema faz uma cópia de segurança do estado atual antes de trocar.
+
+### Proteções automáticas
+
+- **Antes de qualquer atualização** o sistema faz um backup sozinho. Se o backup falhar, a atualização é **cancelada** — nunca começa sem ponto de retorno.
+- Antes de reiniciar para aplicar a atualização, tudo que estava em aberto é gravado.
+- **No boot**, se o banco vier vazio ou sem alguma tabela essencial, o sistema procura a cópia boa mais recente, restaura sozinho, guarda o arquivo com problema à parte e avisa você na tela.
 
 ---
 
@@ -1098,6 +1147,10 @@ Use isso depois de atualizar, para saber o que apareceu de novo no sistema.
 | **O relatório acusa diferença** | Costuma ser estoque anterior ao período. Limpe "Vendas de/até" e gere de novo |
 | **Aviso de peça sem lugar definido** | A peça existe no total mas não foi distribuída. Vá em 🏢 Estoques e faça a distribuição |
 | **Preciso cadastrar peça igual a outra** | Botão **Duplicar** na linha do produto |
+| **A cliente perdeu o vale-troca** | 🎫 Vales-Troca → botão **🖨️ 2ª via** na linha (sai com o saldo atual) |
+| **O vale não imprimiu** | Clique em **🖨️ Imprimir o vale** no próprio aviso. Sem impressora configurada, abre a janela de impressão |
+| **Cadastrei peça e o estoque ficou zerado** | Corrigido na 3.5.2. Atualize e confira em Relatórios → 📦 Estoque, filtro "Cadastrados de/até" |
+| **Escrevi no chat e ninguém viu** | Corrigido na 3.6.0 — o canal geral não avisava a equipe |
 | **Não consigo excluir o Consumidor final** | É cliente do sistema: recebe as vendas sem identificação |
 | **Não consigo digitar a quantidade** | Corrigido na versão 3.2.0. Clique no campo Qtd (o valor já vem selecionado), digite por cima e aperte Enter |
 | **A troca não conclui** | Corrigido na versão 3.2.0 — o sistema travava ao confirmar. Atualize o aplicativo |
@@ -1120,4 +1173,4 @@ Esta confusão é comum e afeta os relatórios:
 **Suporte técnico**
 ML Lopes Design — mlopesdesign@gmail.com
 
-*Manual referente à versão 3.5.0*
+*Manual referente à versão 3.6.0*
