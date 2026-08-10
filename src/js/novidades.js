@@ -3,6 +3,18 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.7.0', data: '2026-08-10',
+    titulo: 'Aviso de mensagem nova e sistema no celular',
+    itens: [
+      'Chegou mensagem? Agora aparece uma ETIQUETA AMARELA ao lado do balão, com quantas mensagens não lidas você tem. Ela fica na tela até você ler — não depende de som, porque nem toda máquina da loja tem caixa de som.',
+      'Além dela, um aviso rápido mostra quem mandou e o começo do texto. Clique nele para abrir a conversa direto. Ele some sozinho depois de alguns segundos.',
+      'O SISTEMA AGORA ABRE NO CELULAR E NO TABLET pela rede da loja. Basta abrir o navegador do aparelho no endereço do terminal.',
+      'No celular, o menu vira uma gaveta: toque no ☰ no canto para abrir e escolher a tela.',
+      'Botões e campos ficaram maiores no toque, o PDV empilha carrinho e totais um embaixo do outro, e as tabelas largas rolam de lado em vez de espremer tudo.',
+      'O botão de finalizar a venda fica fixo na base da tela, sempre à mão.'
+    ]
+  },
+  {
     versao: '3.6.0', data: '2026-08-06',
     titulo: 'Vale-troca impresso e chat avisando de verdade',
     itens: [

@@ -70,6 +70,8 @@ export function iniciarMensagens(usuario) {
 }
 
 export function pararMensagens() {
+  document.getElementById('msg-etiqueta')?.remove();
+  document.getElementById('msg-toast')?.remove();
   if (_timer) { clearInterval(_timer); _timer = null; }
   if (_balao) { _balao.remove(); _balao = null; }
   if (_painel) { _painel.remove(); _painel = null; }
@@ -99,8 +101,14 @@ async function tick() {
     b.style.display = r.naoLidas ? 'flex' : 'none';
     _balao.classList.toggle('tem-nova', r.naoLidas > 0);
   }
-  if (r.naoLidas > _anterior) bip();
+  // Aviso VISUAL de mensagem nova. Muitas máquinas da loja não têm som, então o
+  // bip sozinho não serve: quem está no PDV precisa ver sem olhar para o canto.
+  if (r.naoLidas > _anterior) {
+    bip();
+    avisarNova(r, r.naoLidas - _anterior);
+  }
   _anterior = r.naoLidas;
+  atualizarEtiqueta(r.naoLidas);
 
   if (Array.isArray(r.avisos) && r.avisos.length && !_avisoNaTela) mostrarAviso(r.avisos[0]);
 
@@ -287,6 +295,8 @@ function tickBadgeZero(alvo) {
   _resumo.naoLidas = Math.max(0, _resumo.naoLidas - conv.nao_lidas);
   conv.nao_lidas = 0;
   _anterior = _resumo.naoLidas;
+  atualizarEtiqueta(_resumo.naoLidas);
+  document.getElementById('msg-toast')?.remove();
   if (_balao) {
     const b = _balao.querySelector('.badge');
     b.textContent = String(_resumo.naoLidas);
@@ -335,6 +345,51 @@ function campoEnvio(obterAlvo, thread) {
 }
 
 // ── popup de aviso ───────────────────────────────────────────────────────────
+// Etiqueta amarela colada no balão: fica enquanto houver mensagem não lida.
+// É o aviso permanente — o toast some, esta não.
+function atualizarEtiqueta(n) {
+  if (!_balao) return;
+  let et = document.getElementById('msg-etiqueta');
+  if (!n) { if (et) et.remove(); return; }
+  if (!et) {
+    et = el(`<button id="msg-etiqueta" class="msg-etiqueta" title="Abrir mensagens"></button>`);
+    et.onclick = () => { _balao.click(); };
+    document.body.appendChild(et);
+  }
+  et.innerHTML = `<b>${n}</b> ${n === 1 ? 'nova mensagem' : 'novas mensagens'}`;
+}
+
+// Toast de mensagem nova: aparece por alguns segundos com quem mandou e o começo
+// do texto. Clicar abre a conversa direto.
+function avisarNova(resumo, quantasNovas) {
+  const comNaoLidas = (resumo.conversas || [])
+    .filter(c => c.nao_lidas > 0)
+    .sort((a, b) => String(b.ultima_em || '').localeCompare(String(a.ultima_em || '')));
+  const c = comNaoLidas[0];
+  if (!c) return;
+
+  document.getElementById('msg-toast')?.remove();
+  const t = el(`
+    <div id="msg-toast" class="msg-toast" role="status">
+      <div class="mt-icone">💬</div>
+      <div class="mt-corpo">
+        <div class="mt-de">${esc(c.nome || 'Nova mensagem')}${
+          comNaoLidas.length > 1 ? ` <span class="mt-mais">+${comNaoLidas.length - 1} conversa(s)</span>` : ''}</div>
+        <div class="mt-txt">${esc(String(c.ultima || '').slice(0, 90))}</div>
+      </div>
+      <button class="mt-fechar" title="Dispensar">✕</button>
+    </div>`);
+  t.querySelector('.mt-fechar').onclick = (ev) => { ev.stopPropagation(); t.remove(); };
+  t.onclick = () => {
+    t.remove();
+    if (!_painel || !_painel.classList.contains('aberto')) _balao.click();
+    const alvo = c.tipo === 'geral' ? 'geral' : c.outro_id;
+    setTimeout(() => { try { abrirConversa(alvo, c.nome); } catch {} }, 120);
+  };
+  document.body.appendChild(t);
+  setTimeout(() => { t.classList.add('saindo'); setTimeout(() => t.remove(), 400); }, 7000);
+}
+
 function mostrarAviso(a) {
   _avisoNaTela = true;
   const fundo = el(`

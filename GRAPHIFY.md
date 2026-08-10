@@ -3,7 +3,7 @@
 > Mapa técnico gerado automaticamente por `tools/graphify.js`.
 > **Não edite à mão.** Regere com `node tools/graphify.js` a cada alteração estrutural.
 
-**Versão:** 3.6.0 · **Gerado em:** 2026-08-10
+**Versão:** 3.7.0 · **Gerado em:** 2026-08-10
 **Aplicação:** `br.com.mllopes.salgueirogestao` (Neutralino 6 + WebView2)
 **Cliente:** Boutique do Salgueiro · **Autor:** ML Lopes Design
 
@@ -109,7 +109,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 
 | Arquivo | Linhas | Exporta |
 |---|---|---|
-| `app.js` | 1610 | EM_REDE, api, aplicarTema, el, esc |
+| `app.js` | 1631 | EM_REDE, api, aplicarTema, el, esc |
 | `clientes.js` | 490 | viewClientes |
 | `compras.js` | 227 | viewCompras |
 | `configuracoes.js` | 1333 | viewConfiguracoes |
@@ -117,9 +117,9 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `estoques.js` | 606 | viewEstoques |
 | `etiquetas.js` | 146 | abrirEtiquetasLote |
 | `financeiro.js` | 260 | viewFinanceiro |
-| `mensagens.js` | 558 | abrirBalao, encerrarTelaMensagens, iniciarMensagens, pararMensagens, viewMensagens |
+| `mensagens.js` | 613 | abrirBalao, encerrarTelaMensagens, iniciarMensagens, pararMensagens, viewMensagens |
 | `neutralino.js` | 2 | — |
-| `novidades.js` | 319 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
+| `novidades.js` | 331 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
 | `pdv.js` | 1621 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
 | `ranking.js` | 361 | viewRanking |
 | `relatorios.js` | 1081 | viewRelatorios |

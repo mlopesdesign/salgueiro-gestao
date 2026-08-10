@@ -350,6 +350,43 @@ table.grade .cod { font-family: Consolas, monospace; font-size: 12px; color: var
   display: none; align-items: center; justify-content: center; border: 2px solid #fff;
 }
 .msg-balao.tem-nova { animation: msg-pulso 1.6s ease-in-out infinite; }
+
+/* Etiqueta amarela ao lado do balão — aviso permanente de mensagem não lida.
+   Existe porque muitas máquinas da loja não têm som: o operador precisa VER. */
+.msg-etiqueta {
+  position: fixed; right: 88px; bottom: 34px; z-index: 8000;
+  background: var(--dourado); color: #4A3400; border: none; cursor: pointer;
+  padding: 8px 14px; border-radius: 20px; font-size: 13px; font-weight: 600;
+  box-shadow: 0 4px 14px rgba(0,0,0,.22); white-space: nowrap;
+  animation: msg-etq-entra .25s ease-out, msg-etq-piscar 2.2s ease-in-out 1s infinite;
+}
+.msg-etiqueta b { font-size: 15px; font-weight: 800; }
+.msg-etiqueta:hover { filter: brightness(1.06); }
+@keyframes msg-etq-entra { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+@keyframes msg-etq-piscar { 0%,100% { box-shadow: 0 4px 14px rgba(0,0,0,.22); }
+                            50% { box-shadow: 0 4px 14px rgba(0,0,0,.22), 0 0 0 6px rgba(242,193,78,.35); } }
+
+/* Toast de mensagem nova — mostra quem mandou e o começo do texto.
+   Clicar abre a conversa. Some sozinho em 7 s. */
+.msg-toast {
+  position: fixed; right: 22px; bottom: 92px; z-index: 8600; width: 330px; max-width: calc(100vw - 44px);
+  background: var(--superficie, #fff); border-left: 5px solid var(--dourado);
+  border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.24);
+  display: flex; gap: 10px; align-items: flex-start; padding: 12px 12px 12px 13px;
+  cursor: pointer; animation: msg-toast-entra .28s ease-out;
+}
+.msg-toast:hover { box-shadow: 0 12px 34px rgba(0,0,0,.3); }
+.msg-toast.saindo { animation: msg-toast-sai .4s ease-in forwards; }
+.msg-toast .mt-icone { font-size: 20px; line-height: 1.1; }
+.msg-toast .mt-corpo { flex: 1; min-width: 0; }
+.msg-toast .mt-de { font-weight: 700; font-size: 13px; color: var(--vinho); margin-bottom: 2px; }
+.msg-toast .mt-mais { font-weight: 600; font-size: 10.5px; color: var(--texto-suave); }
+.msg-toast .mt-txt { font-size: 12.5px; color: var(--texto); line-height: 1.35;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.msg-toast .mt-fechar { background: none; border: none; cursor: pointer; color: var(--texto-suave);
+  font-size: 14px; line-height: 1; padding: 2px 4px; }
+@keyframes msg-toast-entra { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes msg-toast-sai { to { opacity: 0; transform: translateY(10px); } }
 @keyframes msg-pulso { 0%,100% { box-shadow: 0 6px 20px rgba(0,0,0,.28); } 50% { box-shadow: 0 6px 20px rgba(0,0,0,.28), 0 0 0 10px rgba(176,30,35,.16); } }
 
 .msg-painel {
@@ -453,3 +490,95 @@ table.grade .cod { font-family: Consolas, monospace; font-size: 12px; color: var
 .leitura-chip { font-size: 11.5px; border-radius: 20px; padding: 2px 9px; border: 1px solid var(--borda); background: var(--creme); color: var(--texto-suave); }
 .leitura-chip.leu { background: #E8F5EC; border-color: #BCE0C8; color: #1E6B39; }
 @media (max-width: 900px) { .msg-tela { grid-template-columns: 1fr; height: auto; } }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RESPONSIVO — celular e tablet pela rede (v3.7.0)
+   O terminal em rede abre no navegador (http://IP:8750). Até aqui o layout era
+   fixo em desktop: menu de 220px sempre visível e painéis lado a lado. Num
+   celular isso vira uma página minúscula que exige pinçar para ler.
+   Estratégia: nada de tela separada — o mesmo HTML se reorganiza.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Tablet e telas médias (até 1024px) ─────────────────────────────────── */
+@media (max-width: 1024px) {
+  .pdv-grid { grid-template-columns: 1fr; }        /* carrinho em cima, totais embaixo */
+  .dash-grid { grid-template-columns: 1fr; }
+  .linha-3 { grid-template-columns: 1fr 1fr; }
+  .conteudo { padding: 18px 16px; }
+  .sidebar { width: 190px; }
+}
+
+/* ── Celular (até 720px) ────────────────────────────────────────────────── */
+@media (max-width: 720px) {
+  /* menu vira gaveta: sai da frente e volta pelo botão ☰ */
+  .layout { position: relative; }
+  .sidebar {
+    position: fixed; left: 0; top: 0; bottom: 0; width: 250px; z-index: 9000;
+    transform: translateX(-100%); transition: transform .22s ease-out;
+    box-shadow: 4px 0 24px rgba(0,0,0,.3);
+  }
+  .sidebar.aberta { transform: none; }
+  .conteudo { padding: 14px 12px 80px; width: 100%; }
+
+  /* botão da gaveta e fundo escuro */
+  .menu-toggle { display: flex !important; }
+  .menu-fundo { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 8900; }
+  .menu-fundo.visivel { display: block; }
+
+  /* topo das páginas empilha */
+  .pagina-topo { flex-direction: column; align-items: stretch; gap: 10px; }
+  .pagina-topo h1 { font-size: 20px; padding-left: 46px; }   /* espaço do ☰ */
+  .pagina-topo > div { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  /* barras de ação e formulários numa coluna */
+  .barra { flex-wrap: wrap; gap: 8px; }
+  .barra input[type=text], .barra input:not([type]) { max-width: none; width: 100%; }
+  .linha-2, .linha-3 { grid-template-columns: 1fr; }
+  .cards { grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  /* tabela larga rola de lado em vez de espremer */
+  .painel > table, .es-tab, .est-tabela, .grade { display: block; overflow-x: auto; white-space: nowrap; }
+  .painel > table th, .painel > table td { white-space: nowrap; }
+
+  /* modal ocupa a tela toda */
+  .modal-caixa { width: 100% !important; max-width: 100% !important; height: 100%;
+    max-height: 100%; border-radius: 0; display: flex; flex-direction: column; }
+  .modal-corpo { flex: 1; overflow-y: auto; }
+
+  /* alvo de toque: mínimo 44px (recomendação de acessibilidade) */
+  .btn, .acoes-linha button, .abas button { min-height: 44px; padding: 10px 14px; font-size: 14px; }
+  input, select, textarea { min-height: 44px; font-size: 16px; }  /* 16px evita o zoom do iOS */
+  .acoes-linha { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  /* chat ocupa a tela */
+  .msg-painel { right: 0; left: 0; bottom: 0; width: 100%; height: 78vh; border-radius: 14px 14px 0 0; }
+  .msg-balao { right: 14px; bottom: 14px; }
+  .msg-etiqueta { right: 78px; bottom: 26px; font-size: 12px; padding: 7px 11px; }
+  .msg-toast { right: 10px; left: 10px; width: auto; bottom: 82px; }
+
+  /* PDV: o que importa no balcão */
+  #pdv-busca { font-size: 17px; min-height: 50px; }
+  .tot-total { font-size: 18px; }
+  #pdv-finalizar { position: sticky; bottom: 0; z-index: 50; }
+}
+
+/* ── Celular pequeno (até 420px) ────────────────────────────────────────── */
+@media (max-width: 420px) {
+  .cards { grid-template-columns: 1fr; }
+  .pagina-topo h1 { font-size: 18px; }
+  .conteudo { padding: 12px 9px 80px; }
+}
+
+/* botão ☰ — só aparece no celular (a regra acima liga) */
+.menu-toggle {
+  display: none; position: fixed; left: 10px; top: 10px; z-index: 9100;
+  width: 40px; height: 40px; border-radius: 9px; border: none; cursor: pointer;
+  background: var(--vinho); color: #fff; font-size: 19px; line-height: 1;
+  align-items: center; justify-content: center; box-shadow: 0 3px 10px rgba(0,0,0,.25);
+}
+
+/* Aparelho com toque: o hover não existe, então a pré-visualização da foto
+   ao passar o mouse é desligada — no celular ela ficaria presa na tela. */
+@media (hover: none) {
+  #img-hov { display: none !important; }
+}

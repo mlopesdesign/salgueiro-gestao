@@ -221,6 +221,30 @@ O quadro **Fechamento** no alto fecha a conta. **✓ bate** = tudo certo.
 
 ---
 
+## Usar no celular ou tablet
+
+1. No computador principal: **Configurações → 🌐 Rede** → ativar
+2. Anote o endereço que aparece (ex.: `http://192.168.0.10:8750`)
+3. No celular, abra o navegador e digite esse endereço
+4. Faça login com o seu usuário
+
+No celular o menu fica na gaveta — toque no **☰** no canto para abrir.
+
+> O computador principal precisa estar ligado e com o sistema aberto.
+> Dica: use "Adicionar à tela de início" e ele abre como um aplicativo.
+
+---
+
+## Chegou mensagem no chat
+
+Você vê de três formas, mesmo sem som:
+
+- **Etiqueta amarela** ao lado do balão 💬 com o número de não lidas — fica até você ler
+- **Aviso rápido** com quem mandou e o começo do texto — clique para abrir
+- Número no balão e bip, se a máquina tiver som
+
+---
+
 ## Fechando o dia
 
 1. No PDV, clique em **Fechar caixa**
@@ -334,4 +358,4 @@ lista todas as versões e o que cada uma trouxe. A sua aparece com o selo verde
 
 **Suporte:** ML Lopes Design — mlopesdesign@gmail.com
 
-*Guia referente à versão 3.6.0*
+*Guia referente à versão 3.7.0*

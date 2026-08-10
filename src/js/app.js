@@ -14,7 +14,7 @@ import { viewMensagens, iniciarMensagens, pararMensagens, encerrarTelaMensagens 
 const $app = document.getElementById('app');
 let usuario = null;
 let categoriasCache = [];
-let APP_VERSION = '3.6.0'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
+let APP_VERSION = '3.7.0'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
 
 // API dupla: no aplicativo usa IPC (preload); num terminal em rede (navegador),
 // conversa com o servidor do computador principal via HTTP com token de sessão.
@@ -297,6 +297,8 @@ function telaPrincipal() {
   $app.innerHTML = '';
   const shell = el(`
     <div class="layout">
+      <button class="menu-toggle" id="btn-menu" title="Menu" aria-label="Abrir o menu">☰</button>
+      <div class="menu-fundo" id="menu-fundo"></div>
       <aside class="sidebar">
         <div class="logo"><img class="logo-dinamica" style="display:none">
           <div><h2 class="nome-loja" style="font-size:15px">Minha Loja</h2><span class="sub-loja"></span></div></div>
@@ -332,6 +334,25 @@ function telaPrincipal() {
   }
   shell.querySelector('#sair').onclick = async () => { await api('auth:logout'); telaLogin(); };
   $app.appendChild(shell);
+
+  // ── Gaveta do menu (celular/tablet pela rede) ────────────────────────────
+  // Em tela pequena o menu de 220px sai da frente e volta pelo ☰. No desktop
+  // o CSS esconde o botão e a barra fica fixa, como sempre foi.
+  const _sidebar = shell.querySelector('.sidebar');
+  const _fundo = shell.querySelector('#menu-fundo');
+  const fecharMenu = () => {
+    _sidebar.classList.remove('aberta');
+    _fundo.classList.remove('visivel');
+  };
+  shell.querySelector('#btn-menu').onclick = () => {
+    const abrindo = !_sidebar.classList.contains('aberta');
+    _sidebar.classList.toggle('aberta', abrindo);
+    _fundo.classList.toggle('visivel', abrindo);
+  };
+  _fundo.onclick = fecharMenu;
+  // escolher uma tela fecha a gaveta — senão ela tapa o conteúdo no celular
+  _sidebar.addEventListener('click', (e) => { if (e.target.closest('a')) fecharMenu(); });
+  window.addEventListener('keydown', (e) => { if (e.key === 'Escape') fecharMenu(); });
   aplicarTema(); // depois de anexar: nome/logo da loja aparecem na barra lateral
   navegar('dashboard');
 

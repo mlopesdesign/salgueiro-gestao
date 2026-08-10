@@ -1,7 +1,7 @@
 # Manual do Usuário — Salgueiro Gestão
 
 **Sistema de gestão para loja de roupas**
-Versão 3.6.0 · ML Lopes Design
+Versão 3.7.0 · ML Lopes Design
 
 ---
 
@@ -1073,31 +1073,46 @@ Para restaurar um arquivo `.db` que você guardou em pendrive ou nuvem, use **�
 
 ---
 
-## 19. Terminal em rede
+### Quando chega mensagem
 
-Permite que outro computador da loja acesse o sistema pelo navegador, usando o mesmo banco de dados.
+Três avisos ao mesmo tempo, porque nem toda máquina da loja tem som:
 
-### No computador principal
+- Uma **etiqueta amarela** ao lado do balão, com quantas mensagens não lidas você tem. Ela **fica na tela até você ler**
+- Um **aviso rápido** mostrando quem mandou e o começo do texto — clique nele para abrir a conversa. Some sozinho em alguns segundos
+- O número no **balão** e um bip, se o computador tiver caixa de som
 
-1. Configurações → **🌐 Rede**
-2. Ative a rede
-3. Anote o endereço mostrado (ex.: `http://192.168.0.10:8750`)
-
-O computador principal precisa ficar **ligado com o sistema aberto**.
-
-### No terminal
-
-Abra o navegador e digite o endereço. Faça login normalmente.
-
-> **Painel independente:** cada terminal mostra o painel do usuário que fez login naquele computador. O painel do Administrador exibe todos os valores financeiros; o painel de operador não exibe valores — apenas quantidades. Os dois podem estar abertos ao mesmo tempo sem interferir um no outro.
-
-### Se não conectar
-
-- Confirme que os dois computadores estão na mesma rede
-- Verifique se o firewall do Windows está liberando a porta **8750** (o instalador cria essa regra automaticamente)
-- Confirme que o sistema está aberto no computador principal
+> Dispensar o aviso rápido no ✕ **não** apaga a etiqueta. Ela só sai quando você abre e lê.
 
 ---
+
+## 19. Terminal em rede
+
+Permite que outro computador, **celular ou tablet** da loja acesse o sistema pelo navegador, usando o mesmo banco de dados.
+
+### Ligando
+
+1. No computador principal: **Configurações → 🌐 Rede** → ativar
+2. O sistema mostra o endereço, algo como `http://192.168.0.10:8750`
+3. No outro aparelho, abra o navegador e digite esse endereço
+4. Faça login normalmente, com o usuário de cada pessoa
+
+> O computador principal precisa ficar **ligado e com o sistema aberto** — é ele que guarda os dados.
+> Todos precisam estar na **mesma rede** (mesmo Wi‑Fi ou cabo).
+
+### No celular e no tablet
+
+O sistema se adapta à tela do aparelho:
+
+- O menu vira uma **gaveta**: toque no **☰** no canto superior esquerdo para abrir, escolha a tela e ele fecha sozinho
+- Botões e campos ficam **maiores**, próprios para o dedo
+- No PDV, o carrinho fica em cima e os totais embaixo
+- O botão **Finalizar venda** fica fixo na base da tela
+- Tabelas largas (estoque, relatórios) **rolam para o lado** em vez de espremer tudo
+
+> **Dica:** no navegador do celular, use "Adicionar à tela de início". O sistema abre como se fosse um aplicativo, sem a barra de endereço.
+
+**O que muda no aparelho pela rede:** a impressão sai pela janela de impressão do próprio aparelho, não pela impressora térmica do balcão. Cupom e vale continuam sendo impressos silenciosamente **só no computador principal**.
+
 
 ## 20. Atualizações
 
@@ -1173,4 +1188,4 @@ Esta confusão é comum e afeta os relatórios:
 **Suporte técnico**
 ML Lopes Design — mlopesdesign@gmail.com
 
-*Manual referente à versão 3.6.0*
+*Manual referente à versão 3.7.0*
