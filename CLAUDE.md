@@ -209,44 +209,66 @@ com o checklist completo. O `core-mensagens.js` guardado **já tem a correção*
 cliente — o histórico de conversas reaparece quando o chat voltar.
 
 ## Backlog (próximas versões)
-- **Entregar o vale-troca de verdade, não mandar o cliente anotar** (pedido do
-  Marcio em 04/08/2026, olhando o modal "Vale-troca gerado"). Hoje o texto diz
-  *"Anote o código ou tire uma foto"* — solução tupiniquim. O modal fica em
-  `pdv.js`, no bloco `if (r.vale)` de `modalTroca` (e no equivalente de
-  `modalDevolucao`). Trocar por botões de envio:
-  · **WhatsApp** — `https://wa.me/55<DDD><numero>?text=<urlencode>`, aberto com
-    `Neutralino.os.open()`. O telefone já existe em `clientes.telefone`; a troca
-    conhece o cliente por `venda.cliente_id`. Precisa normalizar o número
-    (tirar máscara, prefixar 55) e ter um caminho para venda sem cliente:
-    pedir o telefone na hora.
-  · **E-mail** — `clientes.email` existe. Sem servidor SMTP no app; o caminho
-    barato é `mailto:` via `os.open()`. Se quiser envio de verdade, precisa
-    decidir o provedor com o Marcio — **não escolher sozinho**.
-  · **Imprimir o vale** na térmica de 80mm reusando `api('config:imprimir')`,
-    no mesmo molde do cupom (`cssCupom` em `servidor.js`). Provavelmente é o
-    mais útil no balcão, e funciona sem internet.
-  Guardar em `config` o que a loja prefere por padrão. Rever também a cópia do
-  modal — o "anote ou tire foto" só deve sobrar como último recurso.
-- **Teste visual E2E está bloqueado no sandbox atual** (proxy só libera npm/PyPI/CDN
-  do playwright; `apt` e `archive.ubuntu.com` dão 502/403). Sem GTK+WebKit o binário
-  Neutralino não roda, e o Chromium do playwright falta `libXdamage.so.1`. Enquanto
-  isso, o substituto é o teste de DOM com **jsdom** (`npm i jsdom`), que roda `pdv.js`
-  com um `app.js` falso ao lado e dispara eventos reais — foi ele que achou a
-  armadilha do blur na v3.2.0. **Pedir ao Marcio uma validação visual no Windows**
-  antes de considerar a entrega fechada.
-- PDFs dos manuais: pipeline novo é `pandoc -f gfm -t html5 -s` → **WeasyPrint**
-  (`pip install --break-system-packages weasyprint`), CSS em `/tmp/estilo.css`,
-  removendo o `<header id="title-block-header">` que o pandoc injeta. Emoji: os 11
-  subsets de `@fontsource/noto-emoji` mesclados com `fontTools.merge` em
-  `~/.fonts/NotoEmoji.ttf` (um subset sozinho não cobre os ícones do sistema).
-- Religar o chat interno a partir de `_chat-v3.0.0/` (ver `COMO-RELIGAR.md`).
-- Manuais e PDFs (`docs/`) atualizados para 3.2.0 na v3.2.0 — **falta ainda a seção
-  nova de Backup** (a tela foi refeita na v3.0.1 e nunca entrou no manual).
-- Impressoras: falha relatada pelo Marcio em 31/07. **Não diagnosticada.**
-  Investigar lendo o código (rotas `config:imprimir`, `_imprimirDireto()`,
-  `core/rede.js`, PS1 da extensão) e o `%APPDATA%\SalgueiroGestao\impressao.log`.
-  Não escrever hipótese sem confirmar em arquivo e linha.
-- PDV: ao abrir (F2 ou navegação), focar automaticamente o campo de busca/venda — hoje o usuário precisa clicar com o mouse antes de digitar. Fix: `input.focus()` no final de `viewPdv()`.
+
+> Conferido item a item no código em 06/08/2026. Item resolvido sai daqui.
+
+### Bugs conhecidos, com diagnóstico pronto
+- **Conversa direta do chat não funciona.** Canal geral e avisos funcionam.
+  `mensagens.contatos()` devolve lista VAZIA e `mensagens.enviar()` com alvo
+  `u:<id>` responde "Escolha para quem quer enviar" (`conversaDoAlvo` retorna
+  nulo). Nenhuma direta sai nem chega, nos dois sentidos. Reproduzido em
+  `/tmp/tt/teste-chat.mjs` (15 passaram, 7 falharam). Investigar
+  `conversaDoAlvo` e `contatos` em `core/mensagens.js`.
+- **Migração `migr_mensagens_v310` NÃO existe no `db.js`.** Este arquivo diz que
+  ela foi feita na v3.1.0, mas não está no código. Quem tem permissões
+  PERSONALIZADAS (JSON em `usuarios.permissoes`) fica sem `mensagens.usar` e o
+  chat não abre para ele — `permissoes.js:70-79` usa o JSON e ignora os
+  DEFAULTS. Não afeta quem usa perfil padrão.
+
+### Documentação atrasada
+- **Manuais e PDFs estão na 3.5.0; o app está na 3.5.2.** Falta documentar a
+  correção da grade de transferência (3.5.1) e a do estoque inicial (3.5.2).
+- **Seção 18 (Backup) do manual está desatualizada desde a v3.0.1.** Ela ainda
+  descreve "Restaurar → escolha o arquivo .db". A tela de hoje
+  (`configuracoes.js:818-907`) tem lista clicável com data, ORIGEM (🛡️ antes de
+  atualizar / ✋ manual / 🗓️ automático), o CONTEÚDO de cada cópia (nº de vendas,
+  produtos e clientes) e botão ↩️ Restaurar por linha, com confirmação
+  comparando os números.
+
+### Melhoria pedida pelo Marcio
+- **Entregar o vale-troca de verdade, não mandar o cliente anotar** (04/08/2026).
+  O modal diz *"Anote o código ou tire uma foto"*. Fica em `pdv.js`, no bloco
+  `if (r.vale)` de `modalTroca` (e no equivalente de `modalDevolucao`). Caminhos:
+  · **WhatsApp** — `https://wa.me/55<DDD><numero>?text=<urlencode>` via
+    `Neutralino.os.open()`. `clientes.telefone` já existe e a troca conhece o
+    cliente por `venda.cliente_id`. Normalizar o número e ter um caminho para
+    venda sem cliente.
+  · **E-mail** — `clientes.email` existe. Sem SMTP no app: `mailto:` via
+    `os.open()`. Envio de verdade exige decidir o provedor com o Marcio.
+  · **Imprimir na térmica de 80mm** reusando `api('config:imprimir')`, no molde
+    do `cssCupom` em `servidor.js`. Provavelmente o mais útil no balcão, e
+    funciona sem internet.
+  Guardar em `config` a preferência da loja.
+
+### Aguardando informação ou acesso do Marcio
+- **Impressoras: falha relatada em 31/07. NÃO diagnosticada.** Falta o
+  `%APPDATA%\SalgueiroGestao\impressao.log` e o nome exato da impressora.
+  Investigar lendo `config:imprimir`, `_imprimirDireto()`, `core/rede.js` e o PS1.
+- **Impressão silenciosa do cupom** — aguardando o nome da impressora no cliente.
+- **Rede multiterminal no cliente** — testar após liberar a porta 8750 TCP.
+- **Validação visual no Windows das versões 3.2.0 → 3.5.2.** Nenhuma foi aberta
+  de verdade: o teste E2E está bloqueado (ver abaixo).
+
+### Limitações do ambiente (não é trabalho pendente)
+- **Teste visual E2E bloqueado no sandbox**: o proxy só libera npm, PyPI e o CDN
+  do playwright; `apt` e `archive.ubuntu.com` dão 502/403. Sem GTK/WebKit o
+  binário Neutralino não roda e falta `libXdamage.so.1` para o Chromium.
+  Substituto em uso: teste de DOM com **jsdom**, que roda a tela com um `app.js`
+  falso ao lado e dispara eventos reais.
+- **PDFs dos manuais**: `pandoc -f gfm -t html5 -s` → **WeasyPrint**, CSS em
+  `/tmp/estilo.css`, removendo o `<header id="title-block-header">` do pandoc.
+  Emoji: 11 subsets de `@fontsource/noto-emoji` mesclados com `fontTools.merge`
+  em `~/.fonts/NotoEmoji.ttf`. O glifo `⧉` NÃO existe na DejaVu — usar `⎘`.
 
 ## Status
 - [x] Backend portado completo; testes Node: 23/23 (outputs/teste-backend.mjs)
