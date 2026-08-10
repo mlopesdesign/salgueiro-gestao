@@ -3,7 +3,7 @@
 > Mapa técnico gerado automaticamente por `tools/graphify.js`.
 > **Não edite à mão.** Regere com `node tools/graphify.js` a cada alteração estrutural.
 
-**Versão:** 3.5.2 · **Gerado em:** 2026-08-06
+**Versão:** 3.6.0 · **Gerado em:** 2026-08-10
 **Aplicação:** `br.com.mllopes.salgueirogestao` (Neutralino 6 + WebView2)
 **Cliente:** Boutique do Salgueiro · **Autor:** ML Lopes Design
 
@@ -83,7 +83,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `licenca.js` | 288 | 25 | DEV_USUARIO, MODULOS, NOME_PLANO, PLANOS, SETORES, devAplicar, devEntrar, devRemover, +14 |
 | `logo-default.js` | 4 | 0 | LOGO_DEFAULT |
 | `lojas.js` | 91 | 5 | arred, desativar, excluir, listar, lojaPadrao, salvar |
-| `mensagens.js` | 382 | 20 | JANELA_POPUP_H, ONLINE_TTL_S, confirmarAviso, contatos, encerrarAviso, enviar, enviarAviso, historico, +4 |
+| `mensagens.js` | 402 | 21 | JANELA_POPUP_H, ONLINE_TTL_S, confirmarAviso, contatos, encerrarAviso, enviar, enviarAviso, historico, +4 |
 | `nuvem.js` | 353 | 14 | desconectar, fazerBackup, fazerBackupTodos, iniciarOAuth, obterStatus, precisaBackupDiario, registrarOAuthListener, salvarClientId |
 | `pdv.js` | 413 | 10 | abrirCaixa, caixaAtual, cancelarVenda, fecharCaixa, listarVendas, listarVendasGeral, movimentoCaixa, obterVenda, +2 |
 | `permissoes.js` | 94 | 3 | CATALOGO, DEFAULTS, TODAS, efetivas, normalizar, pode |
@@ -109,7 +109,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 
 | Arquivo | Linhas | Exporta |
 |---|---|---|
-| `app.js` | 1592 | EM_REDE, api, aplicarTema, el, esc |
+| `app.js` | 1610 | EM_REDE, api, aplicarTema, el, esc |
 | `clientes.js` | 490 | viewClientes |
 | `compras.js` | 227 | viewCompras |
 | `configuracoes.js` | 1333 | viewConfiguracoes |
@@ -119,8 +119,8 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `financeiro.js` | 260 | viewFinanceiro |
 | `mensagens.js` | 558 | abrirBalao, encerrarTelaMensagens, iniciarMensagens, pararMensagens, viewMensagens |
 | `neutralino.js` | 2 | — |
-| `novidades.js` | 308 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
-| `pdv.js` | 1536 | calcResgateLocal, viewPdv |
+| `novidades.js` | 319 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
+| `pdv.js` | 1621 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
 | `ranking.js` | 361 | viewRanking |
 | `relatorios.js` | 1081 | viewRelatorios |
 

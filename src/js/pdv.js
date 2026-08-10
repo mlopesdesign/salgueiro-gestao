@@ -774,6 +774,105 @@ async function imprimirCupom(d) {
   if (!r.ok) window.print();
 }
 
+
+// ── Vale-troca impresso na térmica de 80mm (v3.6.0) ─────────────────────────
+// Pedido do Marcio: parar de mandar a cliente anotar o código.
+// Usa EXATAMENTE o caminho do cupom de venda — monta o HTML em #area-impressao
+// e chama api('config:imprimir', {tipo:'cupom'}), que já resolve impressora,
+// CSS de 80mm e impressão silenciosa. Nada da configuração de impressora é
+// tocado: se o cupom imprime, o vale imprime.
+async function imprimirVale(vale, extra) {
+  let area = document.getElementById('area-impressao');
+  if (!area) { area = document.createElement('div'); area.id = 'area-impressao'; document.body.appendChild(area); }
+  const cfg = getConfig();
+  const infoLoja = [cfg.loja_cnpj && `CNPJ ${cfg.loja_cnpj}`, cfg.loja_telefone, cfg.loja_endereco]
+    .filter(Boolean).map(esc).join('<br>');
+  const val = vale.validade
+    ? (() => { const [a, m, d] = String(vale.validade).split('-'); return `${d}/${m}/${a}`; })()
+    : null;
+  const e = extra || {};
+
+  area.innerHTML = `
+    <div class="cupom">
+      <div class="c-centro">
+        ${(cfg.logo_cupom || cfg.logo) ? `<img src="${cfg.logo_cupom || cfg.logo}" style="width:26mm;max-height:20mm;object-fit:contain"><br>` : ''}
+        <b>${esc((cfg.cupom_nome || cfg.loja_nome || 'MINHA LOJA').toUpperCase())}</b>
+        ${infoLoja ? `<br><span style="font-size:9px">${infoLoja}</span>` : ''}
+      </div>
+      <div class="c-sep"></div>
+      <div class="c-centro"><b>VALE-TROCA</b><br>
+        <span style="font-size:9px">Crédito para usar em uma próxima compra</span></div>
+      <div class="c-sep"></div>
+      <div class="c-centro" style="font-size:22px;font-weight:700;letter-spacing:2px;margin:4px 0">
+        ${esc(vale.codigo)}</div>
+      <div class="c-centro" style="font-size:15px;font-weight:700;margin-bottom:3px">
+        ${moeda(vale.valor_total)}</div>
+      ${val ? `<div class="c-centro">Válido até <b>${val}</b></div>` : ''}
+      <div class="c-sep"></div>
+      ${e.cliente ? `Cliente: ${esc(e.cliente)}<br>` : ''}
+      ${e.venda_id ? `Origem: venda #${e.venda_id}<br>` : ''}
+      Emitido em ${new Date().toLocaleString('pt-BR')}<br>
+      ${e.operador ? `Atendente: ${esc(e.operador)}<br>` : ''}
+      <div class="c-sep"></div>
+      <div style="font-size:9px">
+        Como usar: apresente este comprovante na loja. No pagamento, escolha
+        <b>Vale-troca</b> e informe o código acima. Pode ser usado em partes —
+        o saldo restante continua valendo${val ? ' até a data indicada' : ''}.
+      </div>
+      <div class="c-sep"></div>
+      <div class="c-centro" style="font-size:9px">Documento não fiscal · guarde este comprovante</div>
+    </div>`;
+
+  if (EM_REDE) { window.print(); return { ok: true }; }
+  const r = await api('config:imprimir', { tipo: 'cupom' });
+  if (!r.ok) window.print();   // sem impressora configurada: cai no diálogo
+  return r;
+}
+
+// Modal do vale emitido — com o botão de imprimir em vez de "anote o código".
+// Usado pela troca e pela devolução com reembolso em vale.
+function modalValeEmitido(vale, titulo, extra) {
+  const val = vale.validade
+    ? (() => { const [a, m, d] = String(vale.validade).split('-'); return `${d}/${m}/${a}`; })()
+    : null;
+  const m = modal(titulo || 'Vale-troca gerado 🎫', `
+    <div style="text-align:center;padding:14px 10px">
+      <p style="color:var(--texto-suave);margin-bottom:10px">Crédito para a cliente usar depois</p>
+      <div style="font-size:30px;font-weight:900;letter-spacing:4px;color:var(--vinho);margin-bottom:6px">
+        ${esc(vale.codigo)}</div>
+      <p style="font-size:17px;margin:0">Valor: <b>${moeda(vale.valor_total)}</b></p>
+      ${val ? `<p style="margin-top:4px">Válido até <b>${val}</b></p>` : ''}
+      <div style="margin-top:16px">
+        <button class="btn btn-primario" id="vl-imprimir" style="padding:11px 22px;font-size:15px">
+          🖨️ Imprimir o vale</button>
+      </div>
+      <p style="font-size:11px;color:var(--texto-suave);margin-top:10px">
+        Sai na impressora de cupom, com o código e a validade. Entregue à cliente.
+      </p>
+      <div class="erro" id="vl-erro" style="margin-top:6px"></div>
+    </div>
+  `, (_, fechar) => fechar(), 'Fechar');
+
+  const btn = m.querySelector('#vl-imprimir');
+  btn.onclick = async () => {
+    btn.disabled = true;
+    const antes = btn.textContent;
+    btn.textContent = 'Imprimindo…';
+    const r = await imprimirVale(vale, extra);
+    btn.disabled = false;
+    btn.textContent = antes;
+    if (r && r.ok === false) {
+      m.querySelector('#vl-erro').textContent =
+        r.erro + ' — abrimos a janela de impressão do sistema.';
+    } else {
+      toast('Vale enviado para a impressora.');
+    }
+  };
+  // imprime sozinho ao abrir: o caso normal é entregar o papel na hora
+  setTimeout(() => { try { btn.click(); } catch {} }, 250);
+  return m;
+}
+
 // ---------- Caixa: sangria/suprimento, fechamento, vendas ----------
 function modalMovCaixa(tipo) {
   modal(tipo === 'sangria' ? 'Sangria (retirada de dinheiro)' : 'Suprimento (entrada de troco)', `
@@ -935,13 +1034,9 @@ async function modalDevolucao(venda_id, aoFinalizar) {
     fechar();
     toast('Devolução registrada.');
     if (r.vale) {
-      modal('Vale-troca emitido 🎫', `
-        <div style="text-align:center;padding:12px">
-          <p style="font-size:13px;color:var(--texto-suave);margin:0 0 8px">Guarde o código abaixo</p>
-          <div style="font-size:28px;font-weight:700;letter-spacing:4px;color:var(--vinho)">${esc(r.vale.codigo)}</div>
-          <p style="margin:8px 0 0">Valor: <b>${moeda(r.vale.valor_total)}</b></p>
-        </div>
-      `, (_, f) => f(), 'Fechar');
+      modalValeEmitido(r.vale, 'Vale-troca emitido 🎫', {
+        venda_id, cliente: info.venda?.cliente || null
+      });
     }
     if (aoFinalizar) aoFinalizar();
     else await modalVendas();
@@ -1220,20 +1315,10 @@ async function modalTroca(venda_id, aoFinalizar) {
     fechar();
     const sufixoVenda = r.venda_nova_id ? ` Nova venda #${r.venda_nova_id}.` : '';
     if (r.vale) {
-      const val = r.vale.validade
-        ? (() => { const [a, mo, d] = String(r.vale.validade).split('-'); return `${d}/${mo}/${a}`; })()
-        : null;
-      modal('Vale-troca gerado 🎫', `
-        <div style="text-align:center;padding:16px">
-          <p style="color:var(--texto-suave);margin-bottom:12px">Excedente convertido em vale-troca</p>
-          <div style="font-size:30px;font-weight:900;letter-spacing:4px;color:var(--vinho);margin-bottom:8px">${esc(r.vale.codigo)}</div>
-          <p>Valor: <b>${moeda(r.vale.valor_total)}</b></p>
-          ${val ? `<p style="margin-top:4px">Válido até <b>${val}</b></p>` : ''}
-          <p style="font-size:11px;color:var(--texto-suave);margin-top:8px">
-            Anote o código ou tire uma foto. Para usar: PDV → Pagamento → Vale-troca → digitar o código.
-          </p>
-        </div>
-      `, (_, f) => f(), 'Fechar');
+      // imprime o vale na térmica em vez de mandar a cliente anotar (v3.6.0)
+      modalValeEmitido(r.vale, 'Vale-troca gerado 🎫', {
+        venda_id, cliente: info.venda?.cliente || null
+      });
     } else if (r.destino_excedente === 'dinheiro') {
       toast(`Troca registrada. Devolva ${moeda(r.excedente)} em dinheiro à cliente (saiu do caixa).${sufixoVenda}`);
     } else if (r.destino_excedente === 'estorno') {
@@ -1533,4 +1618,4 @@ async function modalHistoricoVendas() {
   });
 }
 
-export { viewPdv };
+export { viewPdv, imprimirVale, modalValeEmitido };

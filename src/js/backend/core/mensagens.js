@@ -55,6 +55,17 @@ function garantirMembro(db, conversaId, usuarioId) {
   return marco;
 }
 
+// Põe todos os usuários ativos como membros do canal geral, cada um com
+// `lido_ate` no último id JÁ existente — assim o histórico antigo não vira uma
+// pilha de não lidas, mas tudo que vier depois é notificado.
+function matricularTodosNoGeral(db, geralId) {
+  db.prepare(`
+    INSERT OR IGNORE INTO conversa_membros (conversa_id, usuario_id, lido_ate)
+    SELECT ?, u.id, COALESCE((SELECT MAX(m.id) FROM mensagens m WHERE m.conversa_id = ?), 0)
+    FROM usuarios u WHERE u.ativo = 1
+  `).run(geralId, geralId);
+}
+
 // Resolve o alvo vindo do frontend: 'geral' ou o id de outro usuário.
 function conversaDoAlvo(db, quem, alvo) {
   if (alvo === 'geral' || alvo === 0 || alvo == null) {
@@ -238,6 +249,15 @@ function enviar(db, quem, p) {
 
   garantirMembro(db, alvo.id, quem.id);
   if (alvo.outro) garantirMembro(db, alvo.id, alvo.outro);
+
+  // CANAL GERAL: matricula TODO MUNDO antes de gravar a mensagem.
+  // Sem isto, quem ainda não era membro só virava membro ao abrir o sistema —
+  // e `garantirMembro` marca o histórico do geral como lido nesse momento
+  // (marco = último id). Resultado: a mensagem chegava ao banco mas o balão
+  // NUNCA acusava não lida, e o recado passava despercebido por todos.
+  // Matriculando aqui, o `lido_ate` de cada um fica no id ANTERIOR e a
+  // mensagem nova conta como não lida para toda a equipe.
+  if (alvo.tipo === 'geral') matricularTodosNoGeral(db, alvo.id);
 
   const r = db.prepare('INSERT INTO mensagens (conversa_id, autor_id, texto) VALUES (?,?,?)')
     .run(alvo.id, quem.id, texto);

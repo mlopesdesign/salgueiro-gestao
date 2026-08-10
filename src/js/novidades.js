@@ -3,6 +3,17 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.6.0', data: '2026-08-06',
+    titulo: 'Vale-troca impresso e chat avisando de verdade',
+    itens: [
+      'O VALE-TROCA AGORA SAI IMPRESSO na impressora de cupom, com o código, o valor e a validade. Acabou o "anote o código ou tire uma foto" — a cliente sai da loja com o papel na mão.',
+      'A impressão é automática assim que o vale é gerado, na troca e na devolução. Se precisar imprimir de novo, o botão está no mesmo aviso.',
+      'Na tela 🎫 Vales-Troca, cada vale em aberto ganhou o botão 🖨️ 2ª via — para quando a cliente perde o papel. A segunda via sai com o SALDO atual, não com o valor original.',
+      'CORREÇÃO DO CHAT: mensagem no canal geral não avisava ninguém. O contador do balão ficava zerado e o recado passava despercebido — parecia que a mensagem não tinha chegado.',
+      'Agora toda a equipe é notificada quando alguém escreve no canal geral. Quem é cadastrado depois não recebe o histórico antigo como uma pilha de não lidas.'
+    ]
+  },
+  {
     versao: '3.5.2', data: '2026-08-06',
     titulo: 'Correção: o estoque inicial do produto novo não era gravado',
     itens: [

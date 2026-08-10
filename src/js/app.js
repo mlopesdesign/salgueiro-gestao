@@ -1,7 +1,7 @@
 // Salgueiro Gestão — interface (SPA sem dependências)
 import { viewEstoque, abrirEtiquetas } from './estoque.js';
 import { abrirEtiquetasLote } from './etiquetas.js';
-import { viewPdv } from './pdv.js';
+import { viewPdv, imprimirVale } from './pdv.js';
 import { viewClientes } from './clientes.js';
 import { viewFinanceiro } from './financeiro.js';
 import { viewCompras } from './compras.js';
@@ -14,7 +14,7 @@ import { viewMensagens, iniciarMensagens, pararMensagens, encerrarTelaMensagens 
 const $app = document.getElementById('app');
 let usuario = null;
 let categoriasCache = [];
-let APP_VERSION = '3.5.2'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
+let APP_VERSION = '3.6.0'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
 
 // API dupla: no aplicativo usa IPC (preload); num terminal em rede (navegador),
 // conversa com o servidor do computador principal via HTTP com token de sessão.
@@ -1479,6 +1479,7 @@ async function viewValesTroca(alvo) {
             <th>Status</th>
             <th>Emitido em</th>
             <th>Válido até</th>
+            <th style="width:120px"></th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -1486,7 +1487,7 @@ async function viewValesTroca(alvo) {
     </div>`);
   const tbody = tela.querySelector('tbody');
   if (!vales.length) {
-    tbody.appendChild(el(`<tr><td colspan="7" class="vazio">Nenhum vale-troca emitido ainda.</td></tr>`));
+    tbody.appendChild(el(`<tr><td colspan="8" class="vazio">Nenhum vale-troca emitido ainda.</td></tr>`));
   }
   const brData = s => { if (!s) return null; const [a, m, d] = String(s).slice(0, 10).split('-'); return `${d}/${m}/${a}`; };
   for (const v of vales) {
@@ -1504,8 +1505,25 @@ async function viewValesTroca(alvo) {
       <td><span class="badge ${cls}">${esc(rotulo)}</span></td>
       <td>${(v.criado_em || '').slice(0, 10)}</td>
       <td>${v.validade ? esc(brData(v.validade)) : '<span style="color:var(--texto-suave)">sem vencimento</span>'}</td>
+      <td class="acoes-linha">${saldo > 0 && !v.vencido
+        ? '<button data-a="reimp">🖨️ 2ª via</button>' : ''}</td>
     </tr>`));
   }
+  // 2ª via do vale — para quando a cliente perde o papel
+  tbody.querySelectorAll('[data-a=reimp]').forEach((b, i) => {
+    const vale = vales[i] || vales.find(x => x.codigo === b.closest('tr').querySelector('b').textContent);
+    b.onclick = async () => {
+      b.disabled = true;
+      const r = await imprimirVale({
+        codigo: vale.codigo,
+        valor_total: vale.valor_total - vale.valor_usado,   // 2ª via sai com o SALDO
+        validade: vale.validade
+      }, { cliente: vale.cliente_nome || null });
+      b.disabled = false;
+      if (r && r.ok === false) toast(r.erro, true);
+      else toast('2ª via enviada para a impressora.');
+    };
+  });
   alvo.appendChild(tela);
 }
 
