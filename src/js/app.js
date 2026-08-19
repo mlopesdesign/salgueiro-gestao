@@ -15,7 +15,7 @@ import { viewCatalogo } from './catalogo.js';
 const $app = document.getElementById('app');
 let usuario = null;
 let categoriasCache = [];
-let APP_VERSION = '3.25.9'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
+let APP_VERSION = '3.25.12'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
 
 // API dupla: no aplicativo usa IPC (preload); num terminal em rede (navegador),
 // conversa com o servidor do computador principal via HTTP com token de sessão.
@@ -1652,17 +1652,11 @@ function iniciarLightbox() {
   await recarregarLicenca();
   aplicarTema();
   iniciarLightbox();
-  // Extrair PS1 da extensão para disco (garante que auto-update atualiza o PS1 também)
   if (NO_APP) {
     api('app:garantirExtensao').catch(() => {});
-    // Garante que o app sempre abre maximizado e em primeiro plano,
-    // independente do estado salvo pelo Windows na sessão anterior.
-    try {
-      await Neutralino.window.show();
-      await Neutralino.window.maximize();
-      await Neutralino.window.setAlwaysOnTop(true);
-      await Neutralino.window.setAlwaysOnTop(false);
-    } catch {}
+    // Abertura maximizada garantida por "maximized":true no neutralino.config.json.
+    // Foco no startup via AppActivate no PS1 da extensão (~2s após iniciar).
+    // Nenhuma chamada JS de janela aqui — evita corromper WINDOWPLACEMENT do Windows.
   }
   telaLogin();
 })();

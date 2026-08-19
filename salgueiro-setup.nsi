@@ -1,4 +1,4 @@
-; Salgueiro Gestao v3.25.9
+; Salgueiro Gestao v3.25.12
 ; Build: /tmp/rel  — gerado pelo pipeline de build (ver CLAUDE.md)
 Unicode True
 !include "LogicLib.nsh"
@@ -20,6 +20,15 @@ UninstPage uninstConfirm
 UninstPage instfiles
 
 Function .onInit
+  ; Detectar versão anterior e pedir confirmação antes de prosseguir
+  ReadRegStr $R0 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "UninstallString"
+  ReadRegStr $R1 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "DisplayVersion"
+  StrCmp $R0 "" sem_instalacao_anterior
+  MessageBox MB_YESNO|MB_ICONQUESTION "Salgueiro Gestão $R1 já está instalado.$\n$\nDeseja atualizar para a versão 3.25.12?" IDYES prosseguir
+  Abort
+  prosseguir:
+  sem_instalacao_anterior:
+
   ; Fechar processo se estiver rodando
   ExecWait 'taskkill /F /IM "Salgueiro Gestao.exe" /T'
   ExecWait 'taskkill /F /IM "salgueiro-gestao.exe" /T'
@@ -32,8 +41,7 @@ Function .onInit
   RMDir  "$SMPROGRAMS\Salgueiro Gestao"
   Delete "$SMPROGRAMS\Salgueiro*.lnk"
 
-  ; Desinstalar versão anterior silenciosamente se encontrada (HKCU)
-  ReadRegStr $R0 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "UninstallString"
+  ; Desinstalar versão anterior silenciosamente (HKCU)
   ${If} $R0 != ""
     ExecWait '"$R0" /S'
     Sleep 1500
@@ -78,7 +86,7 @@ Section "Principal"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "DisplayName" "Salgueiro Gestao"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "UninstallString" "$INSTDIR\uninstall.exe"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "InstallLocation" "$INSTDIR"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "DisplayVersion" "3.25.9"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "DisplayVersion" "3.25.12"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "Publisher" "ML Lopes Design"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "DisplayIcon" "$INSTDIR\icon.ico"
 

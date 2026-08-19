@@ -3,10 +3,11 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
-    versao: '3.25.9', data: '2026-08-19',
-    titulo: 'Correção: app sempre abre maximizado',
+    versao: '3.25.12', data: '2026-08-19',
+    titulo: 'Correção: botões da janela funcionando corretamente',
     itens: [
-      'Fix: o aplicativo agora sempre abre em tela cheia ao ser iniciado, ignorando o estado salvo pelo Windows — ideal para uso como PDV.'
+      'Fix: X fecha, _ minimiza, ◻ restaura/maximiza — todos funcionando como no Windows padrão.',
+      'Instalador detecta a versão instalada e pergunta antes de atualizar.'
     ]
   },
   {
