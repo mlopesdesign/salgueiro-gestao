@@ -3,6 +3,322 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.25.9', data: '2026-08-19',
+    titulo: 'Correção: app sempre abre maximizado',
+    itens: [
+      'Fix: o aplicativo agora sempre abre em tela cheia ao ser iniciado, ignorando o estado salvo pelo Windows — ideal para uso como PDV.'
+    ]
+  },
+  {
+    versao: '3.25.8', data: '2026-08-19',
+    titulo: 'Comportamento padrão do Windows: X fecha, _ minimiza',
+    itens: [
+      'O botão X agora fecha o aplicativo completamente, como qualquer programa Windows. Para minimizar à barra de tarefas, use o botão _ (como sempre funcionou). Reabra pelo atalho da área de trabalho ou menu iniciar.'
+    ]
+  },
+  {
+    versao: '3.25.4', data: '2026-08-19',
+    titulo: 'Correção: janela voltava ao foco ao iniciar e ao fechar',
+    itens: [
+      'Fix: ao iniciar, o aplicativo agora se coloca automaticamente à frente de qualquer outra janela aberta — sem precisar clicar na barra de tarefas para trazê-lo ao foco.'
+    ]
+  },
+  {
+    versao: '3.25.2', data: '2026-08-19',
+    titulo: 'Correção: janela voltava para segundo plano ao ser restaurada',
+    itens: [
+      'Fix: ao clicar no X, o sistema agora minimiza em vez de fechar a janela — o ícone na barra de tarefas volta a funcionar corretamente, sem travar em segundo plano.',
+      'Configurações → 📊 Relatórios: nova opção para ocultar a linha de detalhe nos cards de resumo (quantidade de peças e valor de tabela). Quando desligado, os cards mostram só o valor principal.'
+    ]
+  },
+  {
+    versao: '3.24.0', data: '2026-08-19',
+    titulo: 'Correções na comissão de consignados',
+    itens: [
+      'Recibo "Este evento": corrigido o filtro de período — o recibo agora mostra apenas as vendas dentro da janela de data e hora definida no relatório, sem incluir registros de outros dias.',
+      'Fatia do lucro: eliminado erro de arredondamento acumulado por item que podia deslocar o valor exibido em alguns centavos a mais.'
+    ]
+  },
+  {
+    versao: '3.23.0', data: '2026-08-19',
+    titulo: 'Menu suspenso de navegação no relatório de evento',
+    itens: [
+      'O relatório de evento ganhou um menu suspenso fixo no topo da tela. Escolha a seção que quer ver — Fechamento, Vendas, Pagamentos, Consignados etc. — e o relatório rola direto até lá.',
+      'Antes era necessário descer a página inteira para chegar à seção desejada. Agora basta um clique no menu.',
+      'O menu não aparece na impressão — o PDF continua com todas as seções na ordem normal.'
+    ]
+  },
+  {
+    versao: '3.22.0', data: '2026-08-19',
+    titulo: 'Recibo de consignado: escolha as vendas da lista',
+    itens: [
+      'No recibo "Por venda", o sistema agora exibe todas as vendas do fornecedor para você escolher — sem precisar procurar o número.',
+      'Selecione uma ou mais vendas com checkboxes; o recibo inclui tudo que foi marcado.',
+      'Botão "Selecionar todas" para marcar o conjunto completo de uma vez.'
+    ]
+  },
+  {
+    versao: '3.21.2', data: '2026-08-19',
+    titulo: 'Documentação e manutenção',
+    itens: [
+      'Atualização interna de documentação para as versões 3.21.0 e 3.21.1 (sem mudança de funcionalidade).'
+    ]
+  },
+  {
+    versao: '3.21.1', data: '2026-08-18',
+    titulo: 'Correção dos cálculos de consignados',
+    itens: [
+      'O card "Vendas de consignados" agora mostra o total correto (soma do valor recebido por fornecedor), igual ao somatório da tabela de comissões.',
+      'A "Fatia do lucro" e o "Repasse" passaram a ser calculados sobre o valor recebido (o que entrou de fato), e não sobre o valor de tabela.',
+      'A linha "Líquido a receber" no fechamento do evento também foi ajustada para refletir o repasse correto.',
+      'Em eventos com vendas antigas (antes da v3.14.0), o repasse agora é recalculado na hora do relatório para usar a mesma regra das vendas novas.'
+    ]
+  },
+  {
+    versao: '3.21.0', data: '2026-08-18',
+    titulo: 'Recibo de consignado por venda, evento ou mês',
+    itens: [
+      'O botão de imprimir recibo do consignado agora abre um painel com três opções: "Este evento" (período atual do relatório), "Por mês" (escolha o mês e o ano) e "Por venda" (informe o número de uma venda específica).',
+      'Antes só era possível gerar o recibo pelo período do evento aberto na tela.',
+      'O card de vendas de consignados agora avisa quando há produtos marcados como consignados mas sem fornecedor ou percentual definidos — o que explicava pequenas diferenças entre o card e a tabela de comissões.',
+      'Os produtos sem repasse são listados no relatório com o motivo, para facilitar o acerto no cadastro.'
+    ]
+  },
+  {
+    versao: '3.20.0', data: '2026-08-14',
+    titulo: 'Taxa do cartão somada na venda a preço de custo',
+    itens: [
+      'Na venda a preço de custo, quando o cliente paga no cartão a taxa da maquininha passa a ser somada ao valor da compra. Antes a loja vendia sem margem E ainda pagava a taxa, saindo no prejuízo.',
+      'Em dinheiro, PIX na chave, crediário e vale não há acréscimo nenhum.',
+      'A conta garante que a loja receba o custo inteiro: com R$ 100 de custo no crédito à vista, cobra R$ 103,15 e recebe os R$ 100,00 certinhos.',
+      'No crédito parcelado a taxa é cobrada uma vez sobre o total, não por parcela.',
+      'A tela de pagamento mostra o custo, a taxa somada e o valor final antes de confirmar. As taxas continuam ajustáveis em Configurações → PDV.'
+    ]
+  },
+  {
+    versao: '3.19.3', data: '2026-08-14',
+    titulo: 'Correção: tela de erro ao ligar a venda a preço de custo',
+    itens: [
+      'Ao ligar a venda a preço de custo, o sistema abria a tela vermelha de erro e travava. O aviso que aparece no rodapé do PDV procurava a linha do TOTAL pelo nome errado.',
+      'Corrigido. Se por algum motivo o rodapé não estiver na tela, o aviso simplesmente não aparece — o PDV continua funcionando.'
+    ]
+  },
+  {
+    versao: '3.19.2', data: '2026-08-14',
+    titulo: 'Correção: dizia que a peça não tinha preço de custo',
+    itens: [
+      'Ao ligar a venda a preço de custo, o sistema acusava que as peças não tinham custo cadastrado — mesmo tendo. O preço de custo não estava sendo levado da busca para o carrinho.',
+      'A mensagem também saía pela metade, sem dizer o nome da peça. Agora mostra o nome e orienta onde cadastrar.'
+    ]
+  },
+  {
+    versao: '3.19.1', data: '2026-08-14',
+    titulo: 'Atalho da venda a preço de custo no pagamento',
+    itens: [
+      'O botão de vender a preço de custo agora aparece também dentro da tela de pagamento, além da barra de cima do PDV.',
+      'Quando a venda já está a preço de custo, a tela de pagamento avisa em destaque, para ninguém fechar sem perceber.'
+    ]
+  },
+  {
+    versao: '3.19.0', data: '2026-08-14',
+    titulo: 'Venda a preço de custo',
+    itens: [
+      'Novo botão 🏷️ Preço de custo no PDV (ou tecla F8): a venda inteira passa a sair pelo preço de custo das peças, para funcionária, permuta ou queima de estoque.',
+      'O preço vem do que está cadastrado em cada produto. Peça sem custo cadastrado não entra — o sistema avisa quais são.',
+      'Nesta venda não há desconto de espécie nenhuma, nem o automático do dinheiro: o custo já é o piso.',
+      'Só sai com senha de administrador e com o motivo escrito, igual ao desconto na mão.',
+      'No relatório de evento tem seção própria, mostrando quem autorizou, o motivo e quanto a loja abriu mão em cada venda. Também vira uma aba no Excel.'
+    ]
+  },
+  {
+    versao: '3.18.2', data: '2026-08-14',
+    titulo: 'Índice do catálogo sempre em uma folha',
+    itens: [
+      'Com muitas categorias o índice do catálogo passava para uma segunda e terceira folha. Agora ele sempre cabe em uma só: até 18 categorias sai em coluna única com letra grande, e acima disso passa para duas colunas, apertando o suficiente para caber mesmo com 50 categorias.'
+    ]
+  },
+  {
+    versao: '3.18.1', data: '2026-08-14',
+    titulo: 'Ajuste: QR code com respiro nas bordas',
+    itens: [
+      'No catálogo, o QR code de cada peça estava colado na borda do cartão. Agora sobra a mesma folga na lateral e embaixo, e o cartão ficou um pouco mais alto para acomodar.'
+    ]
+  },
+  {
+    versao: '3.18.0', data: '2026-08-14',
+    titulo: 'Catálogo com diagramação de gráfica',
+    itens: [
+      'O catálogo não desperdiça mais folha: as peças correm de página em página em fluxo contínuo, sempre 4 por página. Antes, uma categoria com uma peça só ocupava uma página inteira.',
+      'As peças continuam agrupadas por categoria, na ordem — o nome da categoria aparece no alto da página e numa etiqueta em cada peça.',
+      'O índice agora informa em que página cada categoria começa.',
+      'Os cartões ficaram 20% menores e ganharam margem em volta, deixando a página mais leve e equilibrada. A foto continua quadrada, com espaço respirando nas bordas.'
+    ]
+  },
+  {
+    versao: '3.17.2', data: '2026-08-14',
+    titulo: 'Correção: catálogo com layout premium e recibo de consignado',
+    itens: [
+      'O catálogo de produtos foi completamente redesenhado: fotos agora são quadradas (mesma largura e altura), cartões com tipografia profissional, separadores de categoria com faixa lateral colorida, índice elegante e capa/contra-capa no padrão da loja.',
+      'Corrigido erro "no such column: vi.produto_id" que impedia gerar o recibo de consignado ao clicar em 🖨️ no relatório de evento — o recibo volta a funcionar normalmente.'
+    ]
+  },
+  {
+    versao: '3.17.0', data: '2026-08-14',
+    titulo: 'Catálogo de produtos em PDF',
+    itens: [
+      'Menu novo 📔 Catálogo: gera um PDF profissional estilo revista com todos os produtos da loja.',
+      'Escolha o título, coleção/temporada, quais categorias incluir e se mostra preço, referência e QR code.',
+      'Capa com a cor e o logo da loja, índice por categoria, grade de 4 produtos por página (foto, cores, tamanhos, preço) e contra-capa com os dados de contato.',
+      'Cada produto agrupa todas as suas variações em um único card — sem repetir a mesma peça para cada cor.'
+    ]
+  },
+  {
+    versao: '3.16.0', data: '2026-08-14',
+    titulo: 'Recibo de prestação de contas para consignados',
+    itens: [
+      'No Relatório de Evento, a seção de consignados ganhou um botão 🖨️ ao lado de cada fornecedor.',
+      'Ao clicar, o sistema gera um PDF profissional em A4 com todos os itens vendidos, valores, percentuais de repasse, total a repassar e campo de assinatura — pronto para imprimir ou enviar.',
+      'O recibo mostra: produto, variação (cor/tamanho), quantidade, valor de tabela, custo, percentual e valor do repasse, com totais gerais e situação de pagamento (pendente ou acertado).'
+    ]
+  },
+  {
+    versao: '3.15.2', data: '2026-08-14',
+    titulo: 'Correção: datas em formato brasileiro em todas as telas',
+    itens: [
+      'Em várias telas as datas apareciam no formato americano (2026-08-14) em vez de brasileiro (14/08/2026). Corrigido em Clientes, Compras, Estoque, Vendas e Vales-Troca.',
+      'O modelo de importação de clientes e a planilha de funcionários do Barracão passaram a usar DD/MM/AAAA nas datas de nascimento.',
+      'A importação de clientes agora aceita as duas formas — DD/MM/AAAA e AAAA-MM-DD — e converte automaticamente para o formato interno.'
+    ]
+  },
+  {
+    versao: '3.15.1', data: '2026-08-13',
+    titulo: 'Correção: o modelo Excel de clientes não abria',
+    itens: [
+      'O botão "Modelo Excel", na tela de importação de clientes, gerava na verdade um arquivo de texto e só trocava o nome para .xlsx. O Excel recusava — o modelo não abria em computador nenhum.',
+      'Agora sai um arquivo Excel de verdade, com a aba Clientes, as colunas na largura certa e três linhas de exemplo.',
+      'O modelo CSV continua funcionando como antes, para quem prefere.',
+      'As outras exportações do sistema (clientes, estoque, relatórios, ranking) nunca tiveram esse problema.'
+    ]
+  },
+  {
+    versao: '3.15.0', data: '2026-08-13',
+    titulo: 'Função no cadastro do cliente',
+    itens: [
+      'O cadastro de cliente ganhou o campo FUNÇÃO / CARGO — almoxarifado, porteiro, financeiro, serviços gerais. Serve para funcionários, sócios e parceiros.',
+      'O campo sugere as funções já usadas enquanto você digita, para não virar "PORTEIRO", "Porteiro " e "porteiro" como se fossem três coisas.',
+      'A função aparece como coluna na lista de clientes, entra na importação (colunas aceitas: funcao, função ou cargo) e sai na exportação.',
+      'Lembrando: o SEGMENTO da pessoa continua sendo a CATEGORIA — cada cliente pertence a uma. A função é a ocupação dela dentro daquele segmento.',
+      'CORREÇÃO: a importação gravava o CPF do jeito que viesse na planilha, com pontos e traço, enquanto o cadastro à mão grava só os números. O mesmo CPF virava duas pessoas diferentes. Agora os dois gravam igual.'
+    ]
+  },
+  {
+    versao: '3.14.0', data: '2026-08-13',
+    titulo: 'O desconto agora aparece peça por peça',
+    itens: [
+      'ANTES: quando o desconto era dado no total da venda, ele não aparecia em item nenhum — todas as linhas mostravam "—" e a soma delas não batia com o que a cliente pagou. E quando o desconto era lançado numa peça só, parecia que aquela peça tinha levado tudo.',
+      'AGORA cada linha mostra QUANTO FOI DESCONTADO DAQUELA PEÇA e QUANTO A CLIENTE PAGOU por ela. O desconto do fechamento é dividido entre as peças, proporcional ao valor de cada uma.',
+      'Quando o abatimento veio dos dois lados, aparece a origem embaixo do valor: "R$ 5,00 no item + R$ 3,00 da venda".',
+      'Cada venda termina com uma linha de total: valor de tabela, desconto e quanto foi pago. A soma das peças fecha com o valor cobrado.',
+      'A lista de produtos vendidos ganhou as colunas Valor de tabela, Desconto e Recebido — e a coluna Recebido soma exatamente o faturamento bruto.',
+      'No fechamento, quando não houve devolução, o sistema agora explica por que o faturamento líquido é igual ao bruto, em vez de mostrar dois valores iguais sem dizer nada.',
+      'O Excel acompanhou: a aba de itens separa desconto no item, desconto da venda e total, e mostra quanto foi pago por peça.',
+      'CONSIGNADOS — o desconto passou a ser dividido. Antes, numa venda com desconto, a loja recebia menos pela peça mas repassava ao fornecedor como se tivesse vendido pelo preço cheio: o abatimento saía todo do lado da loja.',
+      'Agora a conta é: valor da venda JÁ COM O DESCONTO, menos o custo da peça, e o que sobra é dividido no percentual combinado. Cada lado absorve a sua parte.',
+      'O relatório de consignados ganhou as colunas Valor de tabela, Desconto e Recebido, para você conferir peça a peça.',
+      'A CORTESIA não mudou: quem dá o brinde é a loja, então o fornecedor continua recebendo o acerto cheio.',
+      'Vendas feitas antes desta versão ficam como foram gravadas — era o combinado na época. O relatório avisa quando isso aparece no período.'
+    ]
+  },
+  {
+    versao: '3.13.0', data: '2026-08-13',
+    titulo: 'O balão do chat saiu da frente dos relatórios',
+    itens: [
+      'O BALÃO AGORA PODE SER ARRASTADO. Segure o botão do mouse em cima dele e leve para onde quiser — canto de cima, lado esquerdo, onde não atrapalhar. Ele fica onde você largou, mesmo depois de fechar o sistema.',
+      'Dois cliques no balão devolvem ele ao canto de baixo à direita.',
+      'A posição é de cada computador: o do caixa pode ficar num canto e o da sala noutro.',
+      'CORREÇÃO IMPORTANTE: o balão estava sendo IMPRESSO junto com os relatórios. Ele aparecia no papel e no PDF que vai para o cliente. Agora some na impressão, junto com a etiqueta amarela e o aviso de mensagem.',
+      'Na tela, o fim das páginas ganhou uma folga para a última linha do relatório não ficar escondida atrás do balão.',
+      'A etiqueta de mensagem não lida e o aviso rápido acompanham o balão para onde ele for.'
+    ]
+  },
+  {
+    versao: '3.12.0', data: '2026-08-13',
+    titulo: 'As taxas da maquininha agora são suas para editar',
+    itens: [
+      'Até aqui os percentuais que a operadora cobra estavam fixos dentro do sistema. Se a Mercado Pago reajustasse, ou se você trocasse de maquininha, era preciso uma versão nova do aplicativo.',
+      'Agora ficam em Configurações → PDV, no fim da página: Pix na chave, Pix na maquininha, Débito, Crédito à vista e Crédito parcelado.',
+      'Os valores já vêm preenchidos com as taxas de hoje da Mercado Pago Smart 2 — quem não mexer não sente diferença nenhuma.',
+      'Tem um botão "Restaurar padrão" para voltar aos valores originais se você se perder.',
+      'Campo em branco NÃO zera a taxa: o sistema volta ao valor padrão. Zerar a taxa por engano faria o líquido a receber parecer maior do que é.',
+      'A mudança vale para todo relatório gerado a partir dali, inclusive de eventos passados — o sistema recalcula na hora, ele não guarda a taxa junto da venda.'
+    ]
+  },
+  {
+    versao: '3.11.1', data: '2026-08-13',
+    titulo: 'Correção: os destaques de Salgueiro e consignados agora somam o faturamento',
+    itens: [
+      'Na versão anterior os dois cartões novos somavam o PREÇO DE TABELA das peças. Resultado: "Vendas do Salgueiro" aparecia MAIOR que o faturamento bruto — dois números conflitantes no mesmo topo.',
+      'Agora os dois mostram o que a loja REALMENTE recebeu, com o desconto do fechamento dividido entre as peças e a cortesia valendo zero.',
+      'Somando os dois cartões você chega no mesmo faturamento bruto do cartão ao lado.',
+      'O preço de tabela não sumiu: aparece embaixo de cada cartão, para conferir com a lista de produtos no fim do relatório.'
+    ]
+  },
+  {
+    versao: '3.11.0', data: '2026-08-13',
+    titulo: 'Quanto vendeu de peça sua e quanto vendeu de consignado',
+    itens: [
+      'DOIS DESTAQUES NOVOS no topo dos relatórios: VENDAS DO SALGUEIRO (as suas peças) e VENDAS DE CONSIGNADOS (as peças de fornecedor).',
+      'Aparecem tanto na aba Vendas quanto no relatório de Evento, com o valor e a quantidade de peças de cada lado.',
+      'Os dois somados dão o faturamento bruto do período (ajustado na 3.11.1).',
+      'Na lista de produtos vendidos, cada peça de fornecedor agora mostra DE QUEM ELA É e o PERCENTUAL COMBINADO, embaixo do nome. Facilita conferir o acerto sem abrir outra tela.',
+      'O Excel acompanhou: a aba de produtos ganhou as colunas Origem, Fornecedor e % do fornecedor, e o resumo traz os dois totais.'
+    ]
+  },
+  {
+    versao: '3.10.0', data: '2026-08-13',
+    titulo: 'Desconto manual só com senha de administrador e acompanhamento de compras',
+    itens: [
+      'DESCONTO NA MÃO AGORA SÓ SAI COM SENHA DE ADMINISTRADOR. Quem está no caixa digita o desconto normalmente, mas para fechar a venda um administrador precisa autorizar.',
+      'Se quem está operando JÁ É administrador, basta confirmar com a própria senha. Se não for, chama quem pode liberar, que digita o login e a senha dele ali mesmo.',
+      'O nome de quem autorizou é gravado a partir do cadastro — ninguém assina no lugar de outra pessoa.',
+      'O QUE NÃO MUDOU: desconto de categoria do cliente e desconto automático à vista continuam sendo aplicados sozinhos, sem pedir nada a ninguém.',
+      'ACOMPANHAMENTO DE COMPRAS — novidade para quem dá desconto a funcionário. Em Configurações → Categorias de clientes, cada categoria agora tem a opção 👁️ Acompanhar as compras desta categoria.',
+      'Marque nas categorias que você quer vigiar (Funcionários, sócios) e as compras dessas pessoas passam a aparecer em Relatórios → 👁️ Compras acompanhadas.',
+      'O relatório mostra, por pessoa: quantas compras, quantas peças, o desconto que recebeu e quanto pagou. Clicando no nome, abre o que ela levou — tipo de peça, quantidade e valor.',
+      'Tem também o campo "a partir de N peças" para ver só quem comprou em quantidade, e a lista das peças mais levadas no período. É assim que se percebe quem está comprando para revender.',
+      'Quem compra bem acima da média do grupo fica com o nome destacado — não é acusação, é só onde vale a pena olhar.',
+      'Tudo exportável para Excel, com uma aba por pessoa e outra com as peças no total.'
+    ]
+  },
+  {
+    versao: '3.9.0', data: '2026-08-13',
+    titulo: 'O relatório de evento agora fecha: o total das peças chega no mesmo faturamento do topo',
+    itens: [
+      'ANTES: o topo do relatório mostrava um valor (o faturamento) e a lista de produtos no final mostrava outro, maior. Os dois estavam certos, mas ninguém tinha como saber disso — parecia erro de conta.',
+      'AGORA a lista de produtos termina com o fechamento: valor de tabela das peças, menos as cortesias, menos os descontos, IGUAL ao faturamento bruto do topo. O mesmo número, no centavo.',
+      'Dois cartões novos no topo: TOTAL EM DESCONTOS e TOTAL EM CORTESIAS. São exatamente os dois valores que separam um total do outro, agora à vista desde o começo.',
+      'A seção de descontos passou a listar TODOS os descontos dados no fechamento da venda, não só os que alguém autorizou na mão. Desconto de categoria de cliente e desconto automático à vista também aparecem, marcados como "Automático / tabela".',
+      'Cada desconto mostra a venda, o cliente, quem lançou, quem autorizou, o motivo, o valor de tabela, quanto foi abatido e o percentual.',
+      'O Excel ganhou uma aba de Descontos e a conciliação completa na aba Resumo.',
+      'Se algum dia a conta não fechar, o relatório avisa em vermelho quanto sobrou sem explicação — em vez de mostrar dois números diferentes calado.'
+    ]
+  },
+  {
+    versao: '3.8.0', data: '2026-08-13',
+    titulo: 'Estoque só na mão do dono, filtro de consignados e conta do consignado explicada',
+    itens: [
+      'MEXER NO ESTOQUE AGORA É SÓ DO ADMINISTRADOR. Entrada de mercadoria, saída manual, ajuste de inventário, transferência entre estoques e criação de local passaram a exigir login de administrador.',
+      'Quem não é administrador continua CONSULTANDO o estoque normalmente: bipa o código, vê o saldo, imprime o balanço. Só não altera a quantidade.',
+      'Isso NÃO afeta a venda: o PDV continua baixando o estoque a cada venda, e devolução, troca e recebimento de compra continuam funcionando como sempre.',
+      'A tela "Quem está online agora" também virou exclusiva do administrador.',
+      'PRODUTOS: filtro novo ao lado do de categorias. Escolha "🤝 Somente consignados" e a lista mostra só as peças de fornecedor — para editar uma a uma sem procurar no meio das suas. "🏪 Somente da loja" faz o contrário.',
+      'Na lista, a peça consignada agora mostra de quem ela é e qual a fatia combinada, embaixo do nome.',
+      'RELATÓRIO DE EVENTO — a conta do consignado ficou clara. Antes aparecia "(65% = R$ 63,55)", e ninguém conseguia fechar essa conta: 65% de R$ 80 dá R$ 52.',
+      'O motivo é que o fornecedor recebe o CUSTO da peça de volta MAIS a fatia combinada do LUCRO — não uma porcentagem do preço de venda. Agora o relatório mostra a conta inteira: custo + fatia do lucro = repasse.',
+      'A lista "Produtos vendidos no evento" ganhou uma explicação no rodapé quando o total dela não bate com o faturamento. A diferença é sempre cortesia (a peça saiu mas a venda vale zero) e desconto dado no fechamento — nunca erro de soma.'
+    ]
+  },
+  {
     versao: '3.7.0', data: '2026-08-10',
     titulo: 'Aviso de mensagem nova e sistema no celular',
     itens: [

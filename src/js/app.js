@@ -10,11 +10,12 @@ import { viewRanking } from './ranking.js';
 import { viewEstoques } from './estoques.js';
 import { viewConfiguracoes } from './configuracoes.js';
 import { viewMensagens, iniciarMensagens, pararMensagens, encerrarTelaMensagens } from './mensagens.js';
+import { viewCatalogo } from './catalogo.js';
 
 const $app = document.getElementById('app');
 let usuario = null;
 let categoriasCache = [];
-let APP_VERSION = '3.7.0'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
+let APP_VERSION = '3.25.9'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
 
 // API dupla: no aplicativo usa IPC (preload); num terminal em rede (navegador),
 // conversa com o servidor do computador principal via HTTP com token de sessão.
@@ -47,7 +48,7 @@ const api = NO_APP
     })
   : criarApiRede();
 const EM_REDE = !NO_APP; // true quando rodando num terminal via navegador
-export { api, el, esc, moeda, toast, modal, getConfig, aplicarTema, recarregarConfig, pode, podeVerTela, getLicenca, setorAtivo, EM_REDE };
+export { api, el, esc, moeda, toast, modal, getConfig, aplicarTema, recarregarConfig, pode, ehAdmin, podeVerTela, getLicenca, setorAtivo, EM_REDE };
 
 async function recarregarVersao() {
   try {
@@ -190,6 +191,14 @@ function pode(chave) {
   return Array.isArray(usuario.permissoes) && usuario.permissoes.includes(chave);
 }
 
+// Ações que são do DONO da loja, não de quem tem a permissão: mexer no número
+// do estoque e ver quem está conectado. O backend recusa de qualquer forma
+// (ROTAS_SO_ADMIN em servidor.js) — aqui só evitamos mostrar botão que não
+// funciona.
+function ehAdmin() {
+  return !!usuario && usuario.perfil === 'admin';
+}
+
 const PERM_TELA = {
   dashboard: 'dashboard.ver',
   pdv: 'pdv.ver',
@@ -203,6 +212,7 @@ const PERM_TELA = {
   relatorios: 'relatorios.ver',
   ranking: 'relatorios.ver',
   vales: 'vales.ver',
+  catalogo: 'produtos.ver',
   mensagens: 'mensagens.usar',
   config: 'config.gerenciar'
 };
@@ -289,6 +299,7 @@ const MENU = [
   { id: 'relatorios', rotulo: '📈 Relatórios' },
   { id: 'ranking', rotulo: '🏆 Ranking' },
   { id: 'vales', rotulo: '🎫 Vales-Troca' },
+  { id: 'catalogo', rotulo: '📔 Catálogo' },
   { id: 'mensagens', rotulo: '💬 Mensagens' },
   { id: 'config', rotulo: '⚙️ Configurações' }
 ];
@@ -596,7 +607,8 @@ function navegar(id) {
      estoque: viewEstoque, pdv: viewPdv, clientes: viewClientes,
      financeiro: viewFinanceiro, compras: viewCompras, relatorios: viewRelatorios,
      ranking: viewRanking, estoques: viewEstoques,
-     vales: viewValesTroca, mensagens: viewMensagens, config: viewConfiguracoes }[id])(alvo);
+     vales: viewValesTroca, catalogo: (a) => viewCatalogo(a, api),
+     mensagens: viewMensagens, config: viewConfiguracoes }[id])(alvo);
 }
 
 // ---------- Painel ----------
@@ -1095,6 +1107,11 @@ async function viewProdutos(alvo) {
           <select id="f-cat"><option value="">Todas as categorias</option>
             ${categoriasCache.map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join('')}
           </select>
+          <select id="f-cons" title="Mostrar só peças em consignação ou só peças da loja">
+            <option value="">Consignados e próprios</option>
+            <option value="sim">🤝 Somente consignados</option>
+            <option value="nao">🏪 Somente da loja</option>
+          </select>
         </div>
         <table>
           <thead><tr>
@@ -1108,21 +1125,31 @@ async function viewProdutos(alvo) {
 
   const tbody = tela.querySelector('tbody');
   async function carregar() {
+    const consignado = tela.querySelector('#f-cons').value;
     const r = await api('produtos:listar', {
       busca: tela.querySelector('#busca').value,
-      categoria_id: Number(tela.querySelector('#f-cat').value) || null
+      categoria_id: Number(tela.querySelector('#f-cat').value) || null,
+      consignado
     });
     tbody.innerHTML = '';
     const lista = r.ok ? r.produtos : [];
     if (!lista.length) {
-      tbody.appendChild(el(`<tr><td colspan="8" class="vazio">Nenhum produto encontrado.</td></tr>`));
+      tbody.appendChild(el(`<tr><td colspan="8" class="vazio">${
+        consignado === 'sim' ? 'Nenhum produto consignado encontrado.'
+        : consignado === 'nao' ? 'Nenhum produto próprio da loja encontrado.'
+        : 'Nenhum produto encontrado.'}</td></tr>`));
       return;
     }
     for (const p of lista) {
       const baixo = (p.variacoes_abaixo || 0) > 0;
       const tr = el(`<tr>
         <td class="col-chk"><input type="checkbox" class="chk-prod" data-id="${p.id}"></td>
-        <td><div class="prod-cel">${p.foto ? `<img class="thumb" src="${p.foto}">` : '<span class="thumb thumb-vazio">👗</span>'}<div><b>${esc(p.nome)}</b>${p.referencia ? `<br><small style="color:var(--texto-suave)">Ref. ${esc(p.referencia)}</small>` : ''}</div></div></td>
+        <td><div class="prod-cel">${p.foto ? `<img class="thumb" src="${p.foto}">` : '<span class="thumb thumb-vazio">👗</span>'}<div><b>${esc(p.nome)}</b>${p.referencia ? `<br><small style="color:var(--texto-suave)">Ref. ${esc(p.referencia)}</small>` : ''}${
+          // Peça consignada: mostra de quem é e qual a fatia do fornecedor no
+          // lucro — sem isso, o filtro acha a peça mas não dá para conferir o
+          // acerto sem abrir o cadastro uma a uma.
+          p.consignado ? `<br><small style="color:var(--dourado)">🤝 Consignado${p.fornecedor ? ' · ' + esc(p.fornecedor) : ''}${p.pct_fornecedor ? ' · ' + p.pct_fornecedor + '% do lucro' : ''}</small>` : ''
+        }</div></div></td>
         <td>${esc(p.categoria || '—')}</td>
         ${pode('produtos.custo') ? `<td class="num">${moeda(p.preco_custo)}</td>` : ''}
         <td class="num">${moeda(p.preco_venda)}</td>
@@ -1180,6 +1207,7 @@ async function viewProdutos(alvo) {
     clearTimeout(debounce); debounce = setTimeout(async () => { await carregar(); atualizarBotao(); }, 250);
   });
   tela.querySelector('#f-cat').addEventListener('change', async () => { await carregar(); atualizarBotao(); });
+  tela.querySelector('#f-cons').addEventListener('change', async () => { await carregar(); atualizarBotao(); });
   // ----- lista de produtos (modal de opções) -----
   tela.querySelector('#lista-exportar').onclick = () => modalExportarLista();
 
@@ -1524,7 +1552,7 @@ async function viewValesTroca(alvo) {
       <td class="num">${moeda(v.valor_usado)}</td>
       <td class="num">${moeda(saldo)}</td>
       <td><span class="badge ${cls}">${esc(rotulo)}</span></td>
-      <td>${(v.criado_em || '').slice(0, 10)}</td>
+      <td>${brData(v.criado_em) || '—'}</td>
       <td>${v.validade ? esc(brData(v.validade)) : '<span style="color:var(--texto-suave)">sem vencimento</span>'}</td>
       <td class="acoes-linha">${saldo > 0 && !v.vencido
         ? '<button data-a="reimp">🖨️ 2ª via</button>' : ''}</td>
@@ -1625,6 +1653,16 @@ function iniciarLightbox() {
   aplicarTema();
   iniciarLightbox();
   // Extrair PS1 da extensão para disco (garante que auto-update atualiza o PS1 também)
-  if (NO_APP) api('app:garantirExtensao').catch(() => {});
+  if (NO_APP) {
+    api('app:garantirExtensao').catch(() => {});
+    // Garante que o app sempre abre maximizado e em primeiro plano,
+    // independente do estado salvo pelo Windows na sessão anterior.
+    try {
+      await Neutralino.window.show();
+      await Neutralino.window.maximize();
+      await Neutralino.window.setAlwaysOnTop(true);
+      await Neutralino.window.setAlwaysOnTop(false);
+    } catch {}
+  }
   telaLogin();
 })();
