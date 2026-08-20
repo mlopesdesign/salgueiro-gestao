@@ -1,7 +1,7 @@
 // Estoques — almoxarifado central, loja(s), pessoa que pegou peças, venda online.
 // O total do Salgueiro continua sendo o estoque geral; aqui você vê onde cada
 // peça está e move entre os locais por romaneio (imprimível e em PDF).
-import { api, el, esc, moeda, toast, modal, getConfig, pode } from './app.js';
+import { api, el, esc, moeda, toast, modal, getConfig, ehAdmin } from './app.js';
 
 const TIPOS = [
   ['almoxarifado', '🏢 Almoxarifado'],
@@ -470,9 +470,10 @@ export async function viewEstoques(alvo) {
       <div class="painel es-nao-imprime" style="margin-bottom:16px"><div class="barra">
         <b>Onde estão as peças</b>
         <span style="font-size:12px;opacity:.65">O total do Salgueiro é a soma de todos os locais.</span>
-        ${pode('estoque.movimentar') ? `
+        ${ehAdmin() ? `
           <button class="btn" id="es-transferir" style="margin-left:auto">📥 Transferir peças</button>
-          <button class="btn btn-suave" id="es-novo">+ Novo estoque</button>` : ''}
+          <button class="btn btn-suave" id="es-novo">+ Novo estoque</button>`
+        : `<span style="margin-left:auto;font-size:12px;color:var(--texto-suave)">🔒 Só o administrador transfere peças e cria estoques.</span>`}
       </div>
       <div style="padding:0 12px 12px"><div class="es-locais" id="es-cards"></div></div></div>
       <div id="es-detalhe"></div>
@@ -502,7 +503,7 @@ export async function viewEstoques(alvo) {
         <div class="es-sub">peça(s) · ${l.itens} tipo(s)${l.responsavel ? ' · ' + esc(l.responsavel) : ''}</div>
       </div>`);
       c.onclick = () => { selecionado = l.id; carregarLocais(); };
-      if (pode('estoque.movimentar')) {
+      if (ehAdmin()) {
         c.oncontextmenu = (e) => { e.preventDefault(); formLocal(l, carregarLocais); };
         c.title = 'Clique para ver o conteúdo · clique com o botão direito para editar';
       }
@@ -578,7 +579,7 @@ export async function viewEstoques(alvo) {
     });
   }
 
-  if (pode('estoque.movimentar')) {
+  if (ehAdmin()) {
     tela.querySelector('#es-transferir').onclick = () =>
       formTransferir(selecionado, async () => { await carregarLocais(); await carregarRomaneios(); });
     tela.querySelector('#es-novo').onclick = () => formLocal(null, carregarLocais);

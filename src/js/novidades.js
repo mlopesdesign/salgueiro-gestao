@@ -3,6 +3,65 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.25.19', data: '2026-08-20',
+    titulo: 'Botão do meio removido e janela travada em tela cheia',
+    itens: [
+      'O botão maximizar/restaurar (◻) foi removido da barra de título. Só ficam _ e X.',
+      'O tamanho da janela agora fica travado na área de trabalho do monitor, seja qual for a resolução.',
+      'Corrigido: minimizar e voltar pela barra de tarefas não faz mais a tela piscar nem sumir.'
+    ]
+  },
+  {
+    versao: '3.25.18', data: '2026-08-20',
+    titulo: 'Botão do meio removido da barra de título',
+    itens: [
+      'O botão maximizar/restaurar (◻) foi removido. Só sobraram _ (minimizar) e X (fechar).',
+      'Sem risco de a funcionária clicar sem querer e bagunçar a tela do caixa.',
+      'O programa continua abrindo sempre em tela cheia.'
+    ]
+  },
+  {
+    versao: '3.25.17', data: '2026-08-20',
+    titulo: 'Correção da causa raiz: programa abre em tela cheia',
+    itens: [
+      'Resolvido o problema que fazia o programa abrir minimizado na barra de tarefas desde a 3.25.13.',
+      'O Windows guardava o estado quebrado da janela em um arquivo que nem reinstalar apagava — agora o instalador limpa esse arquivo.',
+      'Não aparecem mais janelas pretas de terminal durante a instalação e ao abrir o programa.'
+    ]
+  },
+  {
+    versao: '3.25.16', data: '2026-08-20',
+    titulo: 'Botão ◻ removido da barra de título',
+    itens: [
+      'O botão maximizar/restaurar (◻) foi removido via Windows API — sem afetar o funcionamento da janela.',
+      'Programa abre sempre em tela cheia. Só _ e X permanecem na barra de título.'
+    ]
+  },
+  {
+    versao: '3.25.15', data: '2026-08-19',
+    titulo: 'Estabilização: programa abre normalmente',
+    itens: [
+      'Correção definitiva: programa volta a abrir em tela cheia sem travar na barra de tarefas.',
+      'Removido código experimental que causava falha na inicialização nas versões 3.25.13 e 3.25.14.'
+    ]
+  },
+  {
+    versao: '3.25.14', data: '2026-08-19',
+    titulo: 'Botão do meio inativo — janela sempre cheia',
+    itens: [
+      'O botão ◻ do meio agora não faz nada: o programa sempre fica em tela cheia.',
+      'Correção de bug: na v3.25.13 o programa iniciava travado na barra de tarefas — resolvido.'
+    ]
+  },
+  {
+    versao: '3.25.13', data: '2026-08-19',
+    titulo: 'Botão do meio removido — só _ e X',
+    itens: [
+      'O botão maximizar/restaurar (◻) foi removido da barra de título. O programa já abre em tela cheia e não precisa dele.',
+      'Só _ (minimizar) e X (fechar) permanecem — menos confusão, sem risco de o programa desaparecer da tela.'
+    ]
+  },
+  {
     versao: '3.25.12', data: '2026-08-19',
     titulo: 'Correção: botões da janela funcionando corretamente',
     itens: [

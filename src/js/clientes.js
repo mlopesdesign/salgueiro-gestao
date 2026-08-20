@@ -1,6 +1,8 @@
 // Clientes + Crediário + Categorias + Importação/Exportação
 import { api, el, esc, moeda, toast, modal, setorAtivo } from './app.js';
 
+const dataBr  = (s) => s ? String(s).slice(0, 10).split('-').reverse().join('/') : '—';
+const dataBrH  = (s) => s ? `${String(s).slice(0, 10).split('-').reverse().join('/')} ${String(s).slice(11, 16)}` : '—';
 const fone = (t) => String(t || '').replace(/\D/g, '');
 const linkZap = (tel, msg) => `https://wa.me/55${fone(tel)}?text=${encodeURIComponent(msg)}`;
 
@@ -44,7 +46,7 @@ async function abaLista(corpo) {
         <input type="text" id="cl-busca" placeholder="Buscar por nome, CPF ou telefone…" style="flex:1">
         <select id="cl-cat" style="width:180px">${optsCat}</select>
       </div>
-      <table><thead><tr><th>Nome</th><th>Categoria</th><th>Telefone</th><th>CPF</th>
+      <table><thead><tr><th>Nome</th><th>Categoria</th><th>Função</th><th>Telefone</th><th>CPF</th>
         <th class="num">Deve (crediário)</th><th class="num">🎁 Pontos</th><th style="width:200px"></th></tr></thead>
         <tbody></tbody></table>
     </div>`);
@@ -57,13 +59,16 @@ async function abaLista(corpo) {
     });
     tbody.innerHTML = '';
     const lista = r.ok ? r.clientes : [];
-    if (!lista.length) { tbody.appendChild(el(`<tr><td colspan="7" class="vazio">Nenhum cliente.</td></tr>`)); return; }
+    if (!lista.length) { tbody.appendChild(el(`<tr><td colspan="8" class="vazio">Nenhum cliente.</td></tr>`)); return; }
+    // guarda as funções já usadas para o formulário sugerir
+    _funcoesConhecidas = [...new Set(lista.map(x => x.funcao).filter(Boolean))].sort();
     for (const c of lista) {
       const tr = el(`<tr>
         <td><b>${esc(c.nome)}</b>${c.generico
           ? ' <span class="pill" style="background:var(--creme);font-size:10px;color:var(--texto-suave)" title="Cliente do sistema: recebe as vendas sem identificação">do sistema</span>'
           : ''}</td>
         <td><span class="pill" style="background:var(--creme)">${esc(c.categoria || '—')}</span></td>
+        <td>${c.funcao ? esc(c.funcao) : '<span style="color:var(--texto-suave)">—</span>'}</td>
         <td>${esc(c.telefone || '—')}</td>
         <td>${esc(c.cpf || '—')}</td>
         <td class="num">${c.saldo_devedor > 0 ? `<b style="color:var(--vermelho)">${moeda(c.saldo_devedor)}</b>` : '—'}</td>
@@ -93,6 +98,10 @@ async function abaLista(corpo) {
   carregar();
 }
 
+// Funções já cadastradas, para o campo sugerir em vez de o operador digitar
+// "PORTEIRO", "Porteiro " e "porteiro" e virarem três coisas diferentes.
+let _funcoesConhecidas = [];
+
 // ---------- Formulário de cliente ----------
 async function formCliente(c, aoConcluir) {
   const catR = await api('clientes:listarCategorias');
@@ -113,9 +122,13 @@ async function formCliente(c, aoConcluir) {
     <div class="campo"><label>Endereço</label><input id="c-end" value="${esc(c?.endereco || '')}"></div>
     <div class="linha-2">
       <div class="campo"><label>Nascimento</label><input id="c-nasc" type="date" value="${esc(c?.nascimento || '')}"></div>
-      <div class="campo"><label>Limite de crédito (R$)</label>
-        <input id="c-lim" type="number" min="0" step="0.01" value="${c?.limite_credito ?? 0}"></div>
+      <div class="campo"><label>Função / cargo</label>
+        <input id="c-funcao" list="lista-funcoes" value="${esc(c?.funcao || '')}"
+          placeholder="ex.: Almoxarifado, Porteiro, Financeiro"></div>
     </div>
+    <div class="campo"><label>Limite de crédito (R$)</label>
+      <input id="c-lim" type="number" min="0" step="0.01" value="${c?.limite_credito ?? 0}" style="max-width:200px"></div>
+    <datalist id="lista-funcoes">${(_funcoesConhecidas || []).map(f => `<option value="${esc(f)}">`).join('')}</datalist>
     <div class="campo"><label>Observações</label><input id="c-obs" value="${esc(c?.obs || '')}"></div>
     <div class="erro" id="c-erro"></div>
   `, async (m, fechar) => {
@@ -127,6 +140,7 @@ async function formCliente(c, aoConcluir) {
       email: m.querySelector('#c-email').value,
       endereco: m.querySelector('#c-end').value,
       nascimento: m.querySelector('#c-nasc').value || null,
+      funcao: m.querySelector('#c-funcao').value,
       limite_credito: Number(m.querySelector('#c-lim').value) || 0,
       obs: m.querySelector('#c-obs').value,
       categoria_id: m.querySelector('#c-cat').value ? Number(m.querySelector('#c-cat').value) : null
@@ -141,11 +155,11 @@ async function modalHistorico(id) {
   const d = await api('clientes:obter', { id });
   if (!d.ok) { toast(d.erro, true); return; }
   const compras = d.compras.map(v => `
-    <tr><td>#${v.id}</td><td>${esc(v.criado_em)}</td><td>${v.itens} item(ns)</td>
+    <tr><td>#${v.id}</td><td>${esc(dataBrH(v.criado_em))}</td><td>${v.itens} item(ns)</td>
       <td class="num">${moeda(v.total)}</td>
       <td>${v.status === 'cancelada' ? '<span class="pill pill-baixo">cancelada</span>' : ''}</td></tr>`).join('');
   const parcelas = d.parcelas.map(p => `
-    <tr><td>Venda #${p.venda_id} — parc. ${p.numero}</td><td>${p.vencimento}</td>
+    <tr><td>Venda #${p.venda_id} — parc. ${p.numero}</td><td>${dataBr(p.vencimento)}</td>
       <td class="num">${moeda(p.valor)}</td>
       <td>${p.pago_em ? '<span class="pill pill-ok">paga</span>'
           : `<span class="pill pill-baixo">aberta${p.valor_pago ? ` (${moeda(p.valor_pago)} pago)` : ''}</span>`}</td></tr>`).join('');
@@ -154,7 +168,7 @@ async function modalHistorico(id) {
   const saldoPts = d.cliente.pontos || 0;
   const ptsRows = (histPontos.ok && histPontos.historico.length)
     ? histPontos.historico.map(h => `<tr>
-        <td>${h.criado_em.split(' ')[0]}</td>
+        <td>${dataBr(h.criado_em)}</td>
         <td>${h.tipo === 'credito' ? '▲ <b style="color:var(--verde-escuro,#1a6e3a)">+' + h.pontos + '</b>'
             : '▼ <span style="color:var(--vermelho)">−' + h.pontos + '</span>'} pts</td>
         <td style="color:var(--texto-suave);font-size:0.85em">${esc(h.obs || h.origem || '')}</td>
@@ -254,7 +268,7 @@ async function abaImportExport(corpo) {
         <div style="border:1px solid var(--borda,#ddd);border-radius:8px;padding:20px">
           <h4 style="margin:0 0 8px">📥 Importar clientes</h4>
           <p style="color:var(--texto-suave);font-size:0.9em;margin-bottom:12px">
-            Aceita Excel (.xlsx) ou CSV (;). Colunas: <b>nome</b>, cpf, telefone, email, endereco, nascimento (AAAA-MM-DD), categoria, limite_credito, obs.
+            Aceita Excel (.xlsx) ou CSV (;). Colunas: <b>nome</b>, cpf, telefone, email, endereco, nascimento (AAAA-MM-DD), categoria, <b>funcao</b>, limite_credito, obs.
             Clientes com mesmo CPF ou nome exato são <em>atualizados</em>, não duplicados.
           </p>
           <div style="margin-bottom:12px">
@@ -284,25 +298,49 @@ async function abaImportExport(corpo) {
     </div>`);
 
   // --- Modelo Excel ---
+  //
+  // ATENÇÃO: até a v3.15.0 este botão gerava um CSV e apenas TROCAVA a extensão
+  // para .xlsx. O Excel recusa o arquivo — ele espera um pacote ZIP (começa com
+  // "PK"), não texto. O modelo não abria em computador nenhum.
+  //
+  // Agora o arquivo é montado com a SheetJS, a mesma biblioteca que o backend
+  // usa nas outras exportações (`js/vendor/xlsx.full.min.js`, carregada no
+  // index.html como global).
   painel.querySelector('#baixar-modelo-xlsx').onclick = () => {
-    // Cria blob com CSV formatado como xlsx-like — na verdade enviamos como CSV renomeado
-    // Gera CSV com cabeçalho e 3 linhas de exemplo
-    const linhas = [
-      'nome;cpf;telefone;email;endereco;nascimento;categoria;limite_credito;obs',
-      'Maria da Silva;123.456.789-00;87 99999-0000;maria@email.com;Rua das Flores 1;1985-03-15;Componente;0;',
-      'João Santos;987.654.321-00;87 98888-1111;;;1990-07-20;Associado;500;VIP',
-      'Ana Lima;;;;Rua B 200;;Visitante;0;'
-    ].join('\r\n');
-    const blob = new Blob(['﻿' + linhas], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'modelo-clientes.xlsx'; a.click();
+    const dados = [
+      ['nome','cpf','telefone','email','endereco','nascimento','categoria','funcao','limite_credito','obs'],
+      ['Maria da Silva','123.456.789-00','87 99999-0000','maria@email.com','Rua das Flores 1','1985-03-15','Componente','',0,''],
+      ['João Santos','987.654.321-00','87 98888-1111','','','1990-07-20','Funcionários','Porteiro',500,''],
+      ['Ana Lima','','','','Rua B 200','','Visitante','',0,'']
+    ];
+    const XL = window.XLSX;
+    if (!XL) {
+      // Sem a biblioteca, entrega um CSV DE VERDADE em vez de um .xlsx quebrado.
+      const csv = dados.map(l => l.join(';')).join('\r\n');
+      const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = 'modelo-clientes.csv'; a.click();
+      toast('O modelo saiu em CSV — abre no Excel do mesmo jeito.');
+      return;
+    }
+    const ws = XL.utils.aoa_to_sheet(dados);
+    ws['!cols'] = [{ wch: 26 }, { wch: 17 }, { wch: 15 }, { wch: 24 }, { wch: 22 },
+                   { wch: 13 }, { wch: 16 }, { wch: 18 }, { wch: 15 }, { wch: 20 }];
+    const wb = XL.utils.book_new();
+    XL.utils.book_append_sheet(wb, ws, 'Clientes');
+    const bin = XL.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([bin], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'modelo-clientes.xlsx'; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   };
 
   // --- Modelo CSV ---
   painel.querySelector('#baixar-modelo-csv').onclick = () => {
     const linhas = [
-      'nome;cpf;telefone;email;endereco;nascimento;categoria;limite_credito;obs',
-      'Maria da Silva;123.456.789-00;87 99999-0000;maria@email.com;Rua das Flores 1;1985-03-15;Componente;0;',
-      'João Santos;987.654.321-00;87 98888-1111;;;1990-07-20;Associado;500;VIP'
+      'nome;cpf;telefone;email;endereco;nascimento;categoria;funcao;limite_credito;obs',
+      'Maria da Silva;123.456.789-00;87 99999-0000;maria@email.com;Rua das Flores 1;1985-03-15;Componente;;0;',
+      'João Santos;987.654.321-00;87 98888-1111;;;1990-07-20;Funcionários;Porteiro;500;'
     ].join('\r\n');
     const blob = new Blob(['﻿' + linhas], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'modelo-clientes.csv'; a.click();
@@ -378,7 +416,7 @@ async function abaImportExport(corpo) {
     res.textContent = 'Gerando…';
     const r = await api('clientes:exportarDados');
     if (!r.ok) { res.textContent = r.erro; return; }
-    const cols = ['nome','cpf','telefone','email','endereco','nascimento','categoria','limite_credito','obs','pontos'];
+    const cols = ['nome','cpf','telefone','email','endereco','nascimento','categoria','funcao','limite_credito','obs','pontos'];
     const linhas = [cols.join(';'), ...r.clientes.map(cl =>
       cols.map(k => String(cl[k] ?? '').replace(/;/g,',')).join(';')
     )];

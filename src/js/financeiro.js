@@ -1,7 +1,8 @@
 // Financeiro — contas a pagar/receber e fluxo de caixa
 import { api, el, esc, moeda, toast, modal } from './app.js';
 
-const dataBr = (d) => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '—';
+const dataBr  = (d) => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '—';
+const dataBrH = (s) => s ? `${String(s).slice(0, 10).split('-').reverse().join('/')} ${String(s).slice(11, 16)}` : '—';
 const mesAtual = () => new Date().toISOString().slice(0, 7);
 
 export async function viewFinanceiro(alvo) {
@@ -232,7 +233,7 @@ async function abaConsignados(corpo) {
       const r2 = await api('consignacao:listar', { fornecedor_id: Number(tr.dataset.id) });
       if (!r2.ok) { toast(r2.erro, true); return; }
       const linhas = r2.movimentos.map(mv => `
-        <tr><td>#${mv.venda_id}</td><td>${esc(String(mv.data_venda || '').slice(0, 16))}</td>
+        <tr><td>#${mv.venda_id}</td><td>${esc(dataBrH(mv.data_venda))}</td>
           <td>${esc(mv.produto)}</td><td class="num">${mv.qtd}</td>
           <td class="num">${moeda(mv.valor_venda)}</td>
           <td class="num" style="color:var(--texto-suave)">${moeda(mv.valor_custo)}</td>

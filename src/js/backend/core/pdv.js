@@ -127,6 +127,51 @@ function fecharCaixa(db, p, quem) {
            diferenca: arred(informado - resumo.esperado_dinheiro) };
 }
 
+// ---------- Taxa da maquininha por forma de pagamento ----------
+// Mesmas chaves de Configurações → PDV (v3.12.0). Repetidas aqui porque o core
+// do PDV não importa o de relatórios; se um dia divergirem, a fonte de verdade
+// é `config`, lida abaixo em `taxasDoBanco`.
+const TAXAS_PDV_PADRAO = {
+  pix_chave: 0, pix_maquina: 0.49, debito: 0.99,
+  credito_vista: 3.05, credito_parcelado: 3.25
+};
+
+function taxasDoBanco(db) {
+  const t = { ...TAXAS_PDV_PADRAO };
+  let linhas = [];
+  try { linhas = db.prepare("SELECT chave, valor FROM config WHERE chave LIKE 'taxa_%'").all(); }
+  catch { return t; }
+  const num = (v, padrao) => {
+    // `Number('')` é 0, não NaN: campo em branco tem de cair no padrão, senão
+    // a taxa vira zero e a loja absorve o custo sem perceber.
+    const txt = String(v == null ? '' : v).replace(',', '.').trim();
+    if (txt === '') return padrao;
+    const n = Number(txt);
+    return Number.isFinite(n) && n >= 0 && n < 100 ? n : padrao;
+  };
+  const map = {};
+  for (const l of linhas) map[l.chave] = l.valor;
+  t.pix_chave        = num(map.taxa_pix_chave,        t.pix_chave);
+  t.pix_maquina      = num(map.taxa_pix_maquina,      t.pix_maquina);
+  t.debito           = num(map.taxa_debito,           t.debito);
+  t.credito_vista    = num(map.taxa_credito_vista,    t.credito_vista);
+  t.credito_parcelado = num(map.taxa_credito_parcelado, t.credito_parcelado);
+  return t;
+}
+
+// Percentual cobrado pela maquininha naquela forma.
+// PIX usa a taxa da CHAVE (0% por padrão): na loja o pix é lido no celular,
+// não na maquininha. Quem cobra pix na maquininha ajusta em Configurações.
+function taxaDaForma(forma, parcelas, taxas) {
+  const n = Number(parcelas) || 1;
+  switch (forma) {
+    case 'debito':  return taxas.debito;
+    case 'credito': return n > 1 ? taxas.credito_parcelado : taxas.credito_vista;
+    case 'pix':     return taxas.pix_chave;
+    default:        return 0;   // dinheiro, crediário, vale, cortesia, troca
+  }
+}
+
 // ---------- Venda ----------
 function registrarVenda(db, p, quem) {
   const cx = caixaAtual(db).caixa;
@@ -135,6 +180,36 @@ function registrarVenda(db, p, quem) {
   const pagamentos = Array.isArray(p.pagamentos) ? p.pagamentos : [];
   if (!itens.length) return { ok: false, erro: 'A venda não tem itens.' };
   if (!pagamentos.length) return { ok: false, erro: 'Informe a forma de pagamento.' };
+
+  // ── Venda a preço de custo (v3.19.0) ──────────────────────────────────────
+  // A peça sai pelo `produtos.preco_custo` LIDO DO BANCO, nunca pelo preço que
+  // a tela mandou: aceitar o valor do payload deixaria qualquer terminal em
+  // rede montar a própria tabela de preço.
+  //
+  // Não aceita desconto de espécie nenhuma — custo já é o piso; abater de novo
+  // faria a loja vender abaixo do que pagou.
+  //
+  // Peça sem custo cadastrado é RECUSADA, com o nome na mensagem. Se passasse,
+  // `preco_custo` nulo viraria zero e a peça sairia de graça sem ninguém notar.
+  const aCusto = String(p.tipo_venda || '') === 'custo';
+  if (aCusto) {
+    const semCusto = [];
+    const buscaCusto = db.prepare(`SELECT p.nome, p.preco_custo
+                                     FROM variacoes v JOIN produtos p ON p.id = v.produto_id
+                                    WHERE v.id = ?`);
+    for (const i of itens) {
+      const pr = buscaCusto.get(i.variacao_id);
+      if (!pr) return { ok: false, erro: 'Peça não encontrada no estoque.' };
+      const custo = Number(pr.preco_custo);
+      if (!Number.isFinite(custo) || custo <= 0) { semCusto.push(pr.nome); continue; }
+      i.preco_unit = arred(custo);
+      i.desconto = 0;                       // custo é o piso: não abate mais nada
+    }
+    if (semCusto.length) {
+      return { ok: false, erro: 'Sem preço de custo cadastrado: ' +
+        [...new Set(semCusto)].join(', ') + '. Cadastre o custo em Produtos antes.' };
+    }
+  }
 
   // totais
   let subtotal = 0;
@@ -147,7 +222,36 @@ function registrarVenda(db, p, quem) {
     if (i.total < 0) return { ok: false, erro: 'Desconto maior que o valor do item.' };
     subtotal = arred(subtotal + i.total);
   }
-  const descontoGeral = arred(Number(p.desconto) || 0);
+  // Na venda a custo o desconto geral é ignorado, não recusado: a tela já não
+  // oferece desconto nesse modo, e recusar quebraria o desconto automático de
+  // categoria que o servidor aplica sozinho.
+  const descontoGeral = aCusto ? 0 : arred(Number(p.desconto) || 0);
+
+  // ── Acréscimo da taxa da maquininha na venda a custo (v3.20.0) ────────────
+  // Vender a custo já é vender sem margem; se a loja ainda pagasse a taxa do
+  // cartão, sairia no PREJUÍZO. Então a taxa é somada ao que o cliente paga.
+  //
+  // A conta é 1/(1−taxa), não (1+taxa): a maquininha cobra o percentual sobre
+  // o valor COBRADO, não sobre o custo. Com R$ 100 de custo e 3,05%, somar
+  // 3,05% cobraria 103,05 e a loja receberia 99,91 — ainda faltariam 9
+  // centavos. Dividindo, cobra 103,15 e a loja recebe os 100,00 exatos.
+  //
+  // Dinheiro, PIX na chave, crediário e vale têm taxa zero: nada muda.
+  let acrescimo = 0;
+  if (aCusto) {
+    const taxas = taxasDoBanco(db);
+    const pagos = pagamentos.filter(pg => Number(pg.valor) > 0);
+    const somaInformada = pagos.reduce((s, pg) => s + (Number(pg.valor) || 0), 0);
+    if (somaInformada > 0) {
+      for (const pg of pagos) {
+        const tx = taxaDaForma(pg.forma, pg.parcelas, taxas) / 100;
+        if (tx <= 0) continue;
+        // parte do custo que está sendo paga nesta forma
+        const fatia = arred(subtotal * (Number(pg.valor) / somaInformada));
+        acrescimo = arred(acrescimo + arred(fatia / (1 - tx) - fatia));
+      }
+    }
+  }
 
   // Cortesia: o valor não é recebido — vira desconto, então a venda entra com
   // total 0 (nada de faturamento nem de caixa), mas o estoque baixa normalmente.
@@ -165,7 +269,9 @@ function registrarVenda(db, p, quem) {
   }
   // Consignado também pode sair como cortesia: a loja não recebe nada, mas a
   // consignação é gerada normalmente — o fornecedor continua a receber a parte dele.
-  const total = arred(subtotal - descontoGeral - cortesiaTotal);
+  // O acréscimo da taxa entra no que o cliente paga, mas NÃO no preço da peça:
+  // a soma dos itens continua sendo o custo, e o total fica subtotal+acréscimo.
+  const total = arred(subtotal - descontoGeral - cortesiaTotal + acrescimo);
   if (total < 0) return { ok: false, erro: 'Desconto geral maior que o subtotal.' };
 
   // pagamentos (a cortesia não entra na conta do que foi recebido)
@@ -216,12 +322,17 @@ function registrarVenda(db, p, quem) {
     const descAutor = descontoGeral > 0 ? String(p.desconto_autorizado_por || '').trim() || null : null;
     const descMotivo = descontoGeral > 0 ? String(p.desconto_motivo || '').trim() || null : null;
 
+    // Na venda a custo, quem autorizou e o motivo são obrigatórios e vêm do
+    // mesmo par de colunas do desconto avulso — é a mesma natureza de registro.
+    const autorFinal  = aCusto ? (String(p.desconto_autorizado_por || '').trim() || null) : descAutor;
+    const motivoFinal = aCusto ? (String(p.desconto_motivo || '').trim() || null) : descMotivo;
+
     const rv = db.prepare(`INSERT INTO vendas (caixa_id, loja_id, cliente_id, usuario_id, subtotal, desconto, total, obs,
-                                               desconto_autorizado_por, desconto_motivo)
-                           VALUES (?,?,?,?,?,?,?,?,?,?)`)
+                                               desconto_autorizado_por, desconto_motivo, tipo_venda, acrescimo)
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`)
       .run(cx.id, cx.loja_id || null, clienteId, quem.id, subtotal,
            arred(descontoGeral + cortesiaTotal), total, p.obs || null,
-           descAutor, descMotivo);
+           autorFinal, motivoFinal, aCusto ? 'custo' : 'normal', acrescimo);
     const vendaId = Number(rv.lastInsertRowid);
 
     const insItem = db.prepare(`INSERT INTO venda_itens (venda_id, variacao_id, qtd, preco_unit, desconto, total)
@@ -258,11 +369,35 @@ function registrarVenda(db, p, quem) {
       }
       const pr = infoConsig.get(i.variacao_id);
       if (pr && pr.consignado && pr.fornecedor_id && pr.pct_fornecedor > 0) {
+        // O desconto do FECHAMENTO entra na base do repasse (v3.14.0).
+        //
+        // Até aqui a consignação era gravada com `i.total`, que já é líquido do
+        // desconto lançado NA LINHA mas não do desconto dado no total da venda.
+        // Resultado: numa venda com 10% de desconto, a loja recebia 10% a menos
+        // pela peça e continuava repassando como se tivesse vendido pelo preço
+        // cheio — o desconto saía inteiro do lado da loja.
+        //
+        // Decisão do Marcio (13/08/2026): "ambos, cada qual com seu percentual".
+        // Aplicando o mesmo fator da venda ao valor do item, o desconto passa a
+        // ser dividido na proporção já combinada com o fornecedor.
+        //
+        // A CORTESIA fica de fora do fator: nela `total` é zero e o fornecedor
+        // continua recebendo o acerto cheio (regra da v2.2.0) — quem dá o
+        // brinde é a loja, não ele.
+        const baseVenda = arred(subtotal - descontoGeral);
+        const fatorDesc = subtotal > 0 ? baseVenda / subtotal : 1;
+        const valorConsig = arred(i.total * fatorDesc);
         const custoTotal = arred((Number(pr.preco_custo) || 0) * i.qtd);
-        const lucro = arred(i.total - custoTotal);
+        // VENDA A PREÇO DE CUSTO em peça consignada: a venda é exatamente o
+        // custo, então o lucro é zero e a conta devolve `custoTotal` ao
+        // fornecedor com R$ 0,00 para a loja. É o resultado correto e
+        // intencional — vender a custo significa abrir mão da margem, e a
+        // margem da peça consignada é justamente a parte da loja. O fornecedor
+        // não perde nada: recebe de volta o que a peça vale para ele.
+        const lucro = arred(valorConsig - custoTotal);
         const valorForn = arred(custoTotal + lucro * pr.pct_fornecedor / 100);
-        insConsig.run(vendaId, pr.id, pr.fornecedor_id, i.qtd, i.total, custoTotal,
-                      pr.pct_fornecedor, valorForn, arred(i.total - valorForn));
+        insConsig.run(vendaId, pr.id, pr.fornecedor_id, i.qtd, valorConsig, custoTotal,
+                      pr.pct_fornecedor, valorForn, arred(valorConsig - valorForn));
       }
     }
 

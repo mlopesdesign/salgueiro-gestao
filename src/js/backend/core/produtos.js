@@ -49,11 +49,24 @@ function excluirCategoria(db, id, quem) {
 function listarProdutos(db, filtro) {
   const termo = `%${String(filtro.busca || '').trim()}%`;
   const catSql = filtro.categoria_id ? 'AND p.categoria_id = ?' : '';
+
+  // Filtro de consignação (v3.8.0): 'sim' mostra só peça de fornecedor em
+  // consignação, 'nao' só peça própria da loja, vazio mostra tudo.
+  // `p.consignado` entrou por migração e é 0/1; bancos antigos podem ter NULL,
+  // daí o COALESCE — sem ele a peça própria com NULL sumiria dos dois filtros.
+  const cons = String(filtro.consignado || '').toLowerCase();
+  const consSql = cons === 'sim' ? 'AND COALESCE(p.consignado,0) = 1'
+                : cons === 'nao' ? 'AND COALESCE(p.consignado,0) = 0'
+                : '';
+
   const params = [termo, termo, termo];
   if (filtro.categoria_id) params.push(filtro.categoria_id);
 
   const linhas = db.prepare(`
     SELECT p.id, p.referencia, p.nome, p.preco_custo, p.preco_venda, p.estoque_minimo, p.foto,
+           COALESCE(p.consignado,0) AS consignado,
+           COALESCE(p.pct_fornecedor,0) AS pct_fornecedor,
+           COALESCE(fo.nome,'') AS fornecedor,
            c.nome AS categoria,
            COALESCE((SELECT SUM(v.estoque) FROM variacoes v WHERE v.produto_id = p.id AND v.ativo = 1), 0) AS estoque_total,
            (SELECT COUNT(*) FROM variacoes v WHERE v.produto_id = p.id AND v.ativo = 1) AS qtd_variacoes,
@@ -63,10 +76,12 @@ function listarProdutos(db, filtro) {
            ) AS variacoes_abaixo
     FROM produtos p
     LEFT JOIN categorias c ON c.id = p.categoria_id
+    LEFT JOIN fornecedores fo ON fo.id = p.fornecedor_id
     WHERE p.ativo = 1
       AND (p.nome LIKE ? OR p.referencia LIKE ? OR EXISTS
            (SELECT 1 FROM variacoes v WHERE v.produto_id = p.id AND v.codigo_barras LIKE ?))
       ${catSql}
+      ${consSql}
     ORDER BY p.nome
     LIMIT 500
   `).all(...params);

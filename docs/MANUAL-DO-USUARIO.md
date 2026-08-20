@@ -1,7 +1,7 @@
 # Manual do Usuário — Salgueiro Gestão
 
 **Sistema de gestão para loja de roupas**
-Versão 3.7.0 · ML Lopes Design
+Versão 3.19.0 · ML Lopes Design
 
 ---
 
@@ -22,12 +22,13 @@ Versão 3.7.0 · ML Lopes Design
 13. [Financeiro](#13-financeiro)
 14. [Relatórios](#14-relatórios)
 15. [Ranking](#15-ranking)
-16. [Configurações](#16-configurações)
-17. [Usuários e permissões](#17-usuários-e-permissões)
-18. [Backup e segurança](#18-backup-e-segurança)
-19. [Terminal em rede](#19-terminal-em-rede)
-20. [Atualizações](#20-atualizações)
-21. [Solução de problemas](#21-solução-de-problemas)
+16. [Catálogo de produtos](#16-catálogo-de-produtos)
+17. [Configurações](#17-configurações)
+18. [Usuários e permissões](#18-usuários-e-permissões)
+19. [Backup e segurança](#19-backup-e-segurança)
+20. [Terminal em rede](#20-terminal-em-rede)
+21. [Atualizações](#21-atualizações)
+22. [Solução de problemas](#22-solução-de-problemas)
 
 ---
 
@@ -79,6 +80,7 @@ A tela é dividida em duas partes:
 | 💰 | Financeiro | Contas a pagar e receber |
 | 📈 | Relatórios | Análises de venda e fechamento de evento |
 | 🏆 | Ranking | Produtos mais vendidos |
+| 📔 | Catálogo | Gera o catálogo da loja em PDF |
 | 🎫 | Vales-Troca | Créditos emitidos |
 | ⚙️ | Configurações | Ajustes do sistema |
 
@@ -157,25 +159,31 @@ Se o cliente pertence a uma categoria com desconto (ex.: "VIP — 10%"), o desco
 - **Desconto automático à vista** — se configurado, aplica um percentual quando o pagamento é em dinheiro ou PIX (não acumula com desconto de categoria)
 - **Desconto de categoria do cliente** — aplicado sozinho quando a cliente é identificada
 
-### Desconto na venda — quem autorizou
+### Desconto na venda — autorização do administrador
 
-Até a versão 3.2.1 o desconto exigia **login e senha de administrador**. Parava a fila no balcão e, pior, não registrava nada: a venda guardava só o valor, sem quem liberou nem por quê.
+> **A partir da versão 3.10.0, desconto digitado na mão só sai com senha de administrador.**
 
-Agora quem está no caixa resolve na hora. Ao finalizar uma venda com desconto, o sistema pede:
+Quem está no caixa digita o desconto normalmente. Ao finalizar, o sistema pede a autorização:
 
-| Campo | O que preencher |
+| Situação | O que o sistema pede |
 |---|---|
-| **Autorizado por** | Nome de quem liberou. Campo livre — vale para o dono, o gerente por telefone, um sócio |
-| **Motivo** | Por que o desconto foi dado. Ex.: peça com defeito, cliente antiga, fechamento de evento |
-| **Sua senha** | A senha de quem está operando o caixa — confirma que o lançamento foi seu |
+| Quem opera **já é administrador** | Só a própria senha, para confirmar que é ele no teclado |
+| Quem opera **não é administrador** | O **login e a senha** de um administrador — chame quem pode liberar |
 
-Os três são obrigatórios. Sem eles a venda não fecha.
+Nos dois casos é obrigatório informar o **motivo** (peça com defeito, cliente antiga, fechamento de evento).
 
-> **Não é mais preciso chamar o administrador.** Vendedor, caixa e gerente resolvem sozinhos.
+**O nome de quem autorizou vem do cadastro**, não de um campo digitado. Assim ninguém assina no lugar de outra pessoa.
 
-**Onde isso aparece depois:** Relatórios → Evento / Pós-venda → seção **🏷️ Descontos autorizados**, com a venda, a data, o cliente, quem lançou, quem autorizou, o motivo e o valor. O controle deixou de ser uma trava e virou registro.
+> A autorização vale por **5 minutos** e serve para **uma venda só**. Se o sistema for reiniciado no meio, é preciso pedir de novo — é o comportamento seguro.
 
-> Desconto de **categoria de cliente** e resgate de **pontos** não pedem justificativa — vêm da tabela, não da mão do operador.
+**O que continua livre, sem pedir nada a ninguém:**
+
+- **Desconto de categoria do cliente** — quando a cliente identificada pertence a uma categoria com percentual, o PDV aplica sozinho
+- **Desconto automático à vista** — quando configurado, entra sozinho no pagamento em dinheiro ou PIX
+
+Só o que **passa** desses dois é que precisa de administrador.
+
+**Onde isso aparece depois:** Relatórios → Evento / Pós-venda → seção **🏷️ Descontos no fechamento**, com a venda, a data, o cliente, quem lançou, quem autorizou, o motivo e o valor.
 
 ### Finalizando (F10)
 
@@ -254,6 +262,55 @@ No botão **Vendas**, escolha **Cancelar** na linha desejada e informe o motivo.
 ### Fechando o caixa
 
 Clique em **Fechar caixa**. O sistema mostra o esperado por forma de pagamento. Informe quanto há de dinheiro na gaveta — ele calcula a diferença (sobra ou falta) e registra o fechamento.
+
+---
+
+### Vender pelo preço de custo
+
+Serve para quando a peça sai sem lucro: compra de funcionária, permuta com
+fornecedor, queima de estoque. A peça sai pelo **preço de custo cadastrado no
+produto** — o que a loja pagou por ela.
+
+**Como fazer**
+
+1. Coloque as peças no carrinho normalmente
+2. Clique em **🏷️ Preço de custo** na barra de cima (ou aperte **F8**)
+3. O sistema mostra quanto é a tabela, quanto é o custo e **quanto a loja
+   está abrindo mão**
+4. Um administrador confirma com a senha e escreve o **motivo**
+5. Confira o carrinho: cada peça aparece com o preço de tabela riscado e o
+   custo embaixo
+6. Finalize a venda normalmente
+
+Para desligar, clique no botão de novo — ele fica escrito
+**A PREÇO DE CUSTO — desligar** enquanto o modo está ativo.
+
+> **Nesta venda não existe desconto nenhum.** Nem o da categoria do cliente,
+> nem o automático do dinheiro, nem digitado na mão. O custo já é o piso: dar
+> desconto em cima dele faria a loja vender por menos do que pagou.
+
+**O que o sistema faz por trás**
+
+O preço é lido do cadastro do produto **na hora de gravar a venda**, não do
+que está na tela. Isso vale inclusive para os terminais em rede — ninguém
+consegue inventar um preço.
+
+Peça **sem preço de custo cadastrado** não entra: o sistema recusa a venda e
+diz o nome das peças que faltam. Se ele deixasse passar, a peça sairia de
+graça sem ninguém perceber.
+
+**Peça de fornecedor (consignada)**
+
+Pode sair a preço de custo. Como não houve lucro, **o fornecedor recebe de
+volta exatamente o custo da peça** e a loja fica com R$ 0,00. O fornecedor não
+perde nada — quem abre mão da margem é a loja, que é justamente o que "vender
+a preço de custo" significa.
+
+**Onde conferir depois**
+
+Em **📈 Relatórios → Evento**, na seção **🏷️ Vendas a preço de custo**: cada
+venda com o cliente, quem lançou, quem autorizou, o motivo, o valor de tabela,
+o que foi cobrado e a margem aberta mão. Também sai no Excel, em aba própria.
 
 ---
 
@@ -442,11 +499,29 @@ Serve para cadastrar uma peça parecida com uma que já existe: mesma modelagem 
 
 ### Duplicar uma variação
 
-Dentro do cadastro, na grade de cor e tamanho, cada linha tem um botão de **duplicar** (⎘).
+Dentro do cadastro, na grade de cor e tamanho, cada linha tem um botão de **duplicar**, no canto direito da linha.
 
 Clique nele e a linha é copiada logo abaixo, já com a **cor**, o **mínimo** e a **foto** — o cursor vai direto para o campo Tamanho, que é quase sempre o que muda. Serve para cadastrar P, M, G e GG da mesma cor sem redigitar tudo.
 
 A cópia nasce com estoque vazio e ganha código de barras próprio ao salvar.
+
+### Achar só as peças consignadas
+
+Ao lado do filtro de categorias existe um segundo filtro:
+
+| Opção | O que mostra |
+|---|---|
+| **Consignados e próprios** | Tudo (é como o sistema abre) |
+| **🤝 Somente consignados** | Só as peças de fornecedor em consignação |
+| **🏪 Somente da loja** | Só as peças que são suas |
+
+Serve para quando você precisa **editar as peças de um fornecedor** — mexer no preço, corrigir a fatia combinada, conferir o cadastro — sem ter que procurá-las no meio de centenas de peças próprias.
+
+Na lista, cada peça consignada mostra embaixo do nome de quem ela é e qual a fatia combinada:
+
+> 🤝 Consignado · Flor de Sal · 65% do lucro
+
+O filtro funciona junto com a busca e com a categoria. Buscar "croped" com o filtro em "somente consignados" traz só os cropeds consignados.
 
 ### Exportar lista
 
@@ -474,6 +549,27 @@ Ao excluir, a categoria é apenas desativada — o histórico é preservado. Se 
 
 Três abas:
 
+### Quem pode mexer no estoque
+
+> **A partir da versão 3.8.0, alterar a quantidade em estoque é só do administrador.**
+
+A tela continua aberta para todo mundo que tem permissão de ver estoque — o que mudou é quem pode mudar o número.
+
+| Ação | Quem faz |
+|---|---|
+| Consultar saldo, bipar código, ver histórico, imprimir balanço | Qualquer pessoa com permissão de ver estoque |
+| Entrada de mercadoria | Só administrador |
+| Saída manual | Só administrador |
+| Ajuste de inventário | Só administrador |
+| Transferir peças entre estoques | Só administrador |
+| Criar ou editar um local de estoque | Só administrador |
+
+**Vender continua igual para todo mundo.** A venda baixa o estoque sozinha, e devolução, troca e recebimento de compra também mexem no estoque normalmente. A trava vale só para quem digita a quantidade na mão.
+
+Por que existe: o número do estoque é a base do balanço, do relatório de conciliação e do valor do que a loja tem em mercadoria. Um ajuste errado feito no meio do movimento não deixa rastro fácil de desfazer.
+
+Quem não é administrador vê um aviso 🔒 no lugar dos botões, em vez de clicar e receber erro.
+
 ### Movimentar
 
 Busque a peça (bipe ou digite) e registre:
@@ -483,6 +579,8 @@ Busque a peça (bipe ou digite) e registre:
 - **Ajuste** — correção após contagem física
 
 Sempre informe o motivo. Toda movimentação fica registrada com data, usuário e motivo.
+
+> Se você não é administrador, esta aba mostra o saldo mas não mostra os três botões.
 
 ### Histórico (Kardex)
 
@@ -655,6 +753,14 @@ As etiquetas são de **60×40mm** (padrão Pimaco TR6040) e trazem o nome da loj
 
 A data de nascimento alimenta o alerta de aniversariantes do mês no Painel.
 
+### Função / cargo
+
+O cadastro tem o campo **Função / cargo** — almoxarifado, porteiro, financeiro, serviços gerais. Serve para funcionários, sócios e parceiros.
+
+Ao digitar, o campo sugere as funções já usadas. Aceite a sugestão sempre que servir: senão "PORTEIRO", "Porteiro " e "porteiro" viram três coisas diferentes na hora de filtrar.
+
+> **Função não é o mesmo que categoria.** A **categoria** é o segmento da pessoa (Funcionários, Sócio Contribuinte, Rei da Boemia) e define o desconto automático — cada cliente pertence a **uma**. A **função** é a ocupação dela dentro daquele segmento.
+
 ### Categorias de clientes
 
 Permitem agrupar clientes e dar **desconto automático** (ex.: "VIP — 10%"). Quando o cliente é identificado no PDV com **F4**, o desconto entra sozinho.
@@ -766,6 +872,7 @@ relatório "por dia". Por isso aqui o período é por **data E hora**.
 | Formas de pagamento e taxas | Quanto entrou por forma e quanto a maquininha cobrou |
 | Comissão de consignados | Quanto pagar a cada fornecedor |
 | Cortesias (brindes) | O que foi dado, para quem, quem autorizou e o custo |
+| Descontos no fechamento | Todo desconto dado no total da venda, com a origem |
 | Por vendedor(a) / Por categoria | Quebras extras |
 
 **O fechamento** segue esta conta, de cima para baixo:
@@ -779,9 +886,9 @@ relatório "por dia". Por isso aqui o período é por **data E hora**.
 =   LÍQUIDO A RECEBER
 ```
 
-**Taxas usadas** (Mercado Pago Smart 2):
+**Taxas usadas** — configuráveis em **Configurações → PDV** desde a versão 3.12.0. Já vêm preenchidas com as da Mercado Pago Smart 2:
 
-| Forma | Taxa |
+| Forma | Taxa padrão |
 |---|---|
 | Pix na chave | 0% |
 | Pix na maquininha | 0,49% |
@@ -789,10 +896,203 @@ relatório "por dia". Por isso aqui o período é por **data E hora**.
 | Crédito à vista | 3,05% |
 | Crédito 2x a 6x | 3,25% |
 
+> A taxa é calculada **por transação** e arredondada em cada uma, como a operadora cobra. Por isso a soma das taxas do relatório pode diferir de centavos de um cálculo feito sobre o total do dia — o do relatório é o correto.
+
 **Exportar:** **🖨️ Imprimir / PDF** (na janela de impressão escolha "Salvar como
 PDF" para enviar por WhatsApp) e **📊 Excel**, que gera uma aba para cada seção.
 
+#### Desconto na peça consignada
+
+Quando a venda fecha com desconto, **os dois lados absorvem a sua parte**. A conta é:
+
+```
+Valor da venda JÁ COM O DESCONTO
+(–) Custo da peça
+=   Lucro
+     → a fatia combinada vai para o fornecedor
+     → o resto fica com a loja
+```
+
+Exemplo: croped de R$ 80, custo R$ 33, fornecedor com 65% do lucro. Venda fechada com 10% de desconto:
+
+| | Sem desconto | Com 10% |
+|---|---|---|
+| Valor da peça | R$ 80,00 | R$ 72,00 |
+| (–) Custo | R$ 33,00 | R$ 33,00 |
+| = Lucro | R$ 47,00 | R$ 39,00 |
+| Fornecedor (65%) | R$ 63,55 | R$ 58,35 |
+| Loja (35%) | R$ 16,45 | R$ 13,65 |
+
+Dos R$ 8,00 de desconto, R$ 5,20 saíram do fornecedor e R$ 2,80 da loja — a mesma proporção do acerto.
+
+O relatório mostra, por fornecedor, o **valor de tabela**, o **desconto** e o **recebido**, para você conferir.
+
+> **A cortesia não entra nessa regra.** Quem dá o brinde é a loja, então o fornecedor recebe o acerto cheio.
+
+> **Vendas anteriores à versão 3.14.0** foram gravadas com a regra antiga, em que a loja absorvia o desconto sozinha. Elas ficam como estão — era o combinado na época — e o relatório avisa quando aparecem no período.
+
+#### Entendendo a comissão do consignado
+
+Esta é a conta que mais gera dúvida, então vale a explicação inteira.
+
+**O fornecedor não recebe uma porcentagem do preço de venda.** Ele recebe o **custo da peça de volta** mais a **fatia combinada do lucro**.
+
+Exemplo real: um croped que custou R$ 33,00 e foi vendido por R$ 80,00, com 65% combinados.
+
+```
+Custo da peça                       R$ 33,00
+Lucro da venda (80 − 33)            R$ 47,00
+Fatia do fornecedor (65% de 47)     R$ 30,55
+                                    --------
+Repasse ao fornecedor               R$ 63,55
+Fica com a loja (35% do lucro)      R$ 16,45
+```
+
+Se fosse 65% do preço de venda, o repasse seria R$ 52,00 — e o fornecedor sairia no prejuízo, porque a peça custou R$ 33,00 e ele receberia só R$ 52,00 por algo que já era dele.
+
+Por isso o relatório mostra a conta aberta: **custo + fatia do lucro = repasse**. Um repasse de R$ 415,50 sobre R$ 510,00 vendidos não significa 81% de comissão — significa R$ 240,00 de custo devolvido mais R$ 175,50 de lucro dividido.
+
+#### Quanto vendeu de peça sua e quanto de consignado
+
+Dois cartões no topo separam a origem do que saiu:
+
+| Cartão | O que soma |
+|---|---|
+| **Vendas do Salgueiro** | O que a loja recebeu pelas peças que são dela |
+| **Vendas de consignados** | O que a loja recebeu pelas peças de fornecedor |
+
+**Os dois juntos dão o faturamento bruto** — o mesmo valor do cartão ao lado. São feitos para você transportar direto para a planilha de faturamento.
+
+Aparecem também na aba **Vendas**, com o período De/até do topo da tela.
+
+Embaixo de cada cartão aparece a quantidade de peças e o **valor de tabela** daquele lado — esse sim bate com a lista de produtos no fim do relatório.
+
+> **Por que o valor do cartão é menor que o de tabela:** o desconto dado no fechamento é dividido entre as peças da venda, e a peça dada em cortesia entra valendo zero (a venda vale zero). É o mesmo critério que o sistema já usa em devolução e troca. A peça de cortesia continua contada nas **peças**, porque ela saiu do estoque.
+
+Na lista **📦 Produtos vendidos**, cada peça de fornecedor mostra embaixo do nome de quem ela é e o percentual combinado:
+
+> 🤝 Flor de Sal · 65% do lucro
+
+É o suficiente para conferir o acerto sem sair da lista.
+
+**Aviso de divergência ⚠️**
+
+Se um produto foi marcado como consignado mas não tem fornecedor definido ou o percentual de repasse está em zero, o card de vendas de consignados exibe ⚠️. O relatório lista esses produtos com o motivo, para você corrigir o cadastro. Corrija em **Produtos → Editar** e o aviso some na próxima geração do relatório.
+
+#### Recibo do consignado
+
+O botão **🖨️** ao lado do nome do fornecedor na seção de comissões abre um painel com três opções:
+
+| Opção | O que gera |
+|---|---|
+| **Este evento** | Recibo referente ao período exato do relatório aberto na tela (início e fim do evento) |
+| **Por mês** | Selecione o mês e o ano — útil para fechar o mês sem precisar ter um evento aberto |
+| **Por venda** | Lista todas as vendas do fornecedor para você escolher uma ou mais |
+
+Na opção **Por venda**, o sistema carrega automaticamente a lista de vendas do fornecedor com data, cliente e valor. Marque as vendas que quer incluir no recibo (pode ser mais de uma) e clique em **Gerar**. Use o botão **Selecionar todas** para marcar o conjunto completo de uma vez.
+
+Clique em **Gerar** e o sistema faz o download do PDF do recibo automaticamente.
+
+> O recibo mostra apenas as consignações do fornecedor escolhido, com o período impresso no cabeçalho.
+
+#### O desconto peça por peça
+
+Ao abrir os itens de uma venda, cada linha mostra:
+
+| Coluna | O que é |
+|---|---|
+| **Valor de tabela** | O preço cheio da peça |
+| **Desconto** | Quanto foi abatido **daquela peça** |
+| **Pagou** | Quanto entrou por ela |
+
+O desconto dado no **total da venda** é dividido entre as peças, proporcional ao valor de cada uma. Assim a soma das linhas fecha com o valor que a cliente pagou.
+
+Quando o abatimento veio dos dois lados, a origem aparece embaixo do valor:
+
+> −R$ 8,00
+> *R$ 5,00 no item + R$ 3,00 da venda*
+
+> **Por que isso mudou:** antes, o desconto do fechamento não aparecia em item nenhum — as linhas mostravam "—" e a soma delas era maior que o total cobrado. E quando o operador lançava o abatimento numa peça só, parecia que aquela peça tinha levado o desconto inteiro.
+
+Na peça dada em **cortesia**, o desconto é o valor cheio e a coluna Pagou fica zerada.
+
+#### O fechamento da lista de produtos
+
+A lista **📦 Produtos vendidos no evento** termina com a conta que leva ao mesmo faturamento do topo do relatório:
+
+```
+    Valor de tabela das peças        (preço cheio de tudo que saiu)
+(–) Descontos lançados nos itens     (abatimento dado peça a peça)
+(–) Cortesias                        (a peça saiu, a venda vale zero)
+(–) Descontos no fechamento          (abatimento dado no total da venda)
+=   FATURAMENTO BRUTO                ← igual ao cartão do topo
+```
+
+Por que existem duas contas:
+
+| Número | O que é |
+|---|---|
+| **Valor de tabela** | O preço cheio de cada peça que **saiu da loja** |
+| **Faturamento bruto** | O que a loja **recebeu** |
+
+E o que separa um do outro:
+
+1. **Cortesia** — a peça saiu do estoque, mas a venda vale zero. Precisa aparecer na lista (senão você não saberia que a peça saiu) e não pode entrar no faturamento (senão inflaria a receita).
+2. **Desconto no fechamento** — quando o desconto é dado no total da venda, e não item a item, a linha do produto continua com o preço cheio da peça. Quem levou o abatimento foi a venda.
+
+Os dois valores também aparecem em **cartões próprios no topo**: *Total em descontos* e *Total em cortesias*.
+
+> Se algum dia a conta não fechar, o relatório avisa em vermelho quanto sobrou sem explicação. Isso significa que apareceu um lançamento novo mexendo no total da venda — avise o suporte.
+
+#### 🏷️ Descontos no fechamento
+
+Lista **todo** desconto dado no total da venda, com a origem marcada:
+
+| Origem | O que é |
+|---|---|
+| **Autorizado** | O operador preencheu "autorizado por" e o motivo no fechamento |
+| **Automático / tabela** | Desconto de categoria do cliente ou desconto automático à vista — vem da tabela, ninguém digitou |
+
+Cada linha traz a venda, o cliente, quem lançou, quem autorizou, o motivo, o valor de tabela, quanto foi abatido e o percentual. No rodapé, os dois grupos aparecem somados em separado.
+
+> Desconto dado **item a item** não aparece aqui: ele já vem abatido na linha do produto, e por isso não separa os dois totais.
+
 ---
+
+### 👁️ Compras acompanhadas
+
+Para que serve: a loja dá desconto a funcionários e sócios. De vez em quando alguém usa esse desconto para comprar em quantidade e revender fora. Este relatório mostra o que essas pessoas levaram, para você perceber o padrão.
+
+**Como ligar** (uma vez só):
+
+1. **Configurações** → **👥 Categorias de clientes**
+2. Clique em **Editar** na categoria (ex.: Funcionários)
+3. Marque **👁️ Acompanhar as compras desta categoria**
+4. Salvar
+
+> Vale para qualquer categoria, inclusive as que você criar depois. Categoria sem desconto também pode ser acompanhada.
+
+**Como usar:**
+
+1. **Relatórios** → aba **👁️ Compras acompanhadas**
+2. Escolha o período em **De** e **até**
+3. Se quiser, filtre por categoria e informe **a partir de N peças** para ver só quem comprou em quantidade
+4. **Gerar**
+
+**O que aparece:**
+
+| Bloco | O que mostra |
+|---|---|
+| Cartões do topo | Pessoas, compras, peças levadas, valor pago e o desconto concedido |
+| Lista de pessoas | Uma linha por pessoa: compras, peças, média de peças por compra, desconto e quanto pagou |
+| Peças de cada pessoa | Clique no nome e abre o detalhe: **tipo de peça, quantidade e total** |
+| Peças mais levadas | Ranking das peças no período, com quantas pessoas levaram cada uma |
+
+**O sinal de alerta:** quem compra em média o **dobro de peças** do grupo aparece com o nome destacado e um ⚠️. Não é acusação — é onde vale a pena olhar. Três camisas do mesmo modelo numa compra é presente de família; dezoito é outra conversa.
+
+Quem não tem categoria acompanhada não entra, e as vendas sem identificação (Consumidor final) também ficam de fora.
+
+**Exportar:** botão **📊 Excel**, com uma aba por pessoa, uma com as peças de cada pessoa e outra com o total por peça.
 
 ### 📦 Estoque (conferência e inventário)
 
@@ -936,7 +1236,92 @@ Na tela aparecem os **10 primeiros**. A **impressão/PDF** e o **Excel** trazem 
 
 ---
 
-## 16. Configurações
+## 16. Catálogo de produtos
+
+Menu **📔 Catálogo**. Gera um arquivo PDF com as peças da loja, pronto para
+mandar no WhatsApp, imprimir ou levar num tablet para o cliente folhear.
+
+### Para que serve
+
+É a vitrine da loja em papel. Cada peça aparece com foto, nome, referência,
+as cores e os tamanhos que existem, o preço e um QR code. Quem recebe o
+arquivo consegue escolher a peça e dizer o número da referência — sem você
+ter que mandar foto por foto.
+
+### Passo a passo
+
+1. Clique em **📔 Catálogo** no menu
+2. Preencha o **Título** (o padrão é "Catálogo de Produtos")
+3. Se for uma coleção, escreva em **Coleção / temporada** — por exemplo,
+   "Coleção Verão 2027". Esse campo é opcional
+4. Marque o que deve aparecer em cada peça: **preço**, **referência** e
+   **QR code**. Os três vêm marcados
+5. Se quiser só o que está disponível para venda, marque
+   **Somente peças com estoque**
+6. Na lista de **Categorias**, desmarque o que não deve entrar. Os botões
+   **Todas** e **Nenhuma** ajudam quando são muitas
+7. Confira o resumo — ele mostra quantas **categorias**, quantas **peças** e
+   quantas **folhas** o arquivo vai ter, e muda sozinho conforme você marca
+8. Clique em **📄 Gerar Catálogo PDF** e escolha onde salvar
+
+> A geração leva alguns segundos. Catálogo com muitas fotos demora mais —
+> é normal, aguarde o botão voltar ao normal.
+
+### Como o arquivo é organizado
+
+| Folha | O que tem |
+|---|---|
+| 1ª | Capa com a cor e o logo da loja, o título e a coleção |
+| 2ª | Índice: cada categoria com quantas peças tem e em que folha começa |
+| 3ª em diante | As peças, **sempre 4 por folha** |
+| Última | Contra-capa com telefone e endereço da loja |
+
+### O que acontece por trás
+
+As peças saem **agrupadas por categoria, na ordem** — todas as blusas juntas,
+depois as calças, e assim por diante. Mas a categoria **não começa numa folha
+nova**: se as blusas terminam no meio de uma folha, as calças começam ali
+mesmo, logo abaixo.
+
+Isso é de propósito. Antes, cada categoria abria uma folha própria, então uma
+categoria com uma peça só gastava uma folha inteira com um cartão e três
+espaços vazios. Agora só a **última folha do catálogo** pode ficar
+incompleta.
+
+Para você não se perder, a categoria aparece em dois lugares: no alto da
+folha e numa etiqueta pequena em cima do nome de cada peça.
+
+> **As variações não repetem a peça.** Um vestido que existe em três cores e
+> quatro tamanhos aparece **uma vez só**, e as cores e os tamanhos são
+> listados dentro do cartão dele.
+
+### Sobre a foto
+
+A foto sai **quadrada**, cortada pelo centro. Fotos em pé ou deitadas são
+ajustadas automaticamente — o que estiver nas pontas pode ficar de fora, então
+vale conferir se a peça está centralizada na foto original.
+
+Peça sem foto cadastrada aparece com um desenho cinza no lugar. Para trocar,
+vá em **👗 Produtos**, abra a peça e clique na imagem.
+
+### Perguntas comuns
+
+**Posso gerar só uma categoria?** Pode. Clique em **Nenhuma** e marque só a
+que você quer.
+
+**O índice cabe sempre numa folha?** Sim. Até 18 categorias ele sai em coluna
+única com letra grande; acima disso passa para duas colunas e vai apertando,
+de forma que mesmo com 50 categorias continua em uma folha só.
+
+**Para que serve o QR code?** Ele guarda o código de barras da peça. Serve
+para bipar direto do papel ou da tela na hora de vender.
+
+**Posso tirar o preço?** Pode — desmarque **Preço de venda** antes de gerar.
+Útil para catálogo de atacado ou quando os preços ainda vão mudar.
+
+---
+
+## 17. Configurações
 
 ### Aparência
 
@@ -979,6 +1364,12 @@ Escolha a impressora do **cupom térmico** (80mm) e a de **etiquetas** (60×40mm
 
 A impressão é silenciosa — não abre janela de diálogo.
 
+### 📊 Relatórios
+
+Controla a exibição dos **cards de resumo** nos relatórios de Vendas e Evento.
+
+- **Exibir detalhe nos cards** — quando ligado (padrão), cada card mostra abaixo do valor principal a **quantidade de peças** e o **valor de tabela** (bruto, sem descontos aplicados). Quando desligado, os cards exibem só o valor principal, com visual mais limpo para projeção em tela.
+
 ### Rede
 
 Ativa o acesso de outros computadores da loja. Veja a seção [Terminal em rede](#19-terminal-em-rede).
@@ -1003,13 +1394,21 @@ Verifica se há versão nova e instala.
 
 Cadastro de usuários e permissões.
 
+### Função / cargo
+
+O cadastro tem o campo **Função / cargo** — almoxarifado, porteiro, financeiro, serviços gerais. Serve para funcionários, sócios e parceiros.
+
+Ao digitar, o campo sugere as funções já usadas. Aceite a sugestão sempre que servir: senão "PORTEIRO", "Porteiro " e "porteiro" viram três coisas diferentes na hora de filtrar.
+
+> **Função não é o mesmo que categoria.** A **categoria** é o segmento da pessoa (Funcionários, Sócio Contribuinte, Rei da Boemia) e define o desconto automático — cada cliente pertence a **uma**. A **função** é a ocupação dela dentro daquele segmento.
+
 ### Categorias de clientes
 
 Grupos de clientes com desconto automático.
 
 ---
 
-## 17. Usuários e permissões
+## 18. Usuários e permissões
 
 Cada pessoa deve ter seu próprio usuário. Isso permite saber quem fez cada venda, devolução ou ajuste de estoque.
 
@@ -1026,7 +1425,7 @@ Para trocar a senha de alguém, entre em Configurações → Usuários, edite o 
 
 ---
 
-## 18. Backup e segurança
+## 19. Backup e segurança
 
 ### Backup automático
 
@@ -1085,7 +1484,7 @@ Três avisos ao mesmo tempo, porque nem toda máquina da loja tem som:
 
 ---
 
-## 19. Terminal em rede
+## 20. Terminal em rede
 
 Permite que outro computador, **celular ou tablet** da loja acesse o sistema pelo navegador, usando o mesmo banco de dados.
 
@@ -1114,7 +1513,7 @@ O sistema se adapta à tela do aparelho:
 **O que muda no aparelho pela rede:** a impressão sai pela janela de impressão do próprio aparelho, não pela impressora térmica do balcão. Cupom e vale continuam sendo impressos silenciosamente **só no computador principal**.
 
 
-## 20. Atualizações
+## 21. Atualizações
 
 O sistema verifica atualizações sozinho pouco depois de abrir. Havendo versão nova, aparece um aviso no menu lateral e uma mensagem na tela.
 
@@ -1135,7 +1534,7 @@ Use isso depois de atualizar, para saber o que apareceu de novo no sistema.
 
 ---
 
-## 21. Solução de problemas
+## 22. Solução de problemas
 
 | Problema | O que fazer |
 |---|---|
@@ -1160,7 +1559,17 @@ Use isso depois de atualizar, para saber o que apareceu de novo no sistema.
 | **Não conferi no dia do recebimento** | Relatórios → 📦 Estoque → Agrupar por **Data de cadastro** |
 | **Quero bater o estoque desde o começo** | Relatórios → 📦 Estoque → marque "Mostrar movimentação" e deixe as datas de venda em branco |
 | **O relatório acusa diferença** | Costuma ser estoque anterior ao período. Limpe "Vendas de/até" e gere de novo |
+| **Não achei o botão de preço de custo** | Barra de cima do PDV: **🏷️ Preço de custo** — ou tecla **F8** |
+| **"Sem preço de custo cadastrado"** | A peça não tem custo no cadastro. Vá em 👗 Produtos e preencha o preço de custo |
+| **Não consigo dar desconto na venda a custo** | É proposital: o custo já é o piso. Desligue o modo se precisar de desconto |
+| **Quem vendeu a preço de custo?** | Relatórios → Evento → seção 🏷️ Vendas a preço de custo |
+| **Consignado a custo: o fornecedor perde?** | Não. Ele recebe o custo da peça de volta; quem abre mão da margem é a loja |
 | **Aviso de peça sem lugar definido** | A peça existe no total mas não foi distribuída. Vá em 🏢 Estoques e faça a distribuição |
+| **Peça sem foto no catálogo** | Aparece um desenho cinza no lugar. Vá em 👗 Produtos, abra a peça e clique na imagem |
+| **A foto do catálogo cortou a peça** | A foto sai quadrada, cortada pelo centro. Refaça a foto com a peça centralizada |
+| **O botão de gerar catálogo está apagado** | Nenhuma categoria está marcada. Clique em **Todas** ou marque ao menos uma |
+| **Não quero preço no catálogo** | Desmarque **Preço de venda** antes de gerar |
+| **O catálogo demora para sair** | Normal com muitas fotos. Espere o botão voltar ao normal — o resumo mostra quantas folhas serão |
 | **Preciso cadastrar peça igual a outra** | Botão **Duplicar** na linha do produto |
 | **A cliente perdeu o vale-troca** | 🎫 Vales-Troca → botão **🖨️ 2ª via** na linha (sai com o saldo atual) |
 | **O vale não imprimiu** | Clique em **🖨️ Imprimir o vale** no próprio aviso. Sem impressora configurada, abre a janela de impressão |
@@ -1174,6 +1583,32 @@ Use isso depois de atualizar, para saber o que apareceu de novo no sistema.
 | **Não acho a venda para trocar** | A busca começa no dia de hoje. Mude as datas **De** e **Até** se a compra foi outro dia |
 | **A venda não tem botão 🔄 Trocar** | A venda foi cancelada ou já teve todas as peças devolvidas |
 | **"Este vale-troca venceu em..."** | O vale passou do prazo. O prazo padrão fica em Configurações → PDV |
+| **Sumiu o botão de entrada no estoque** | A partir da 3.8.0 só o administrador altera quantidade. Entre com o login de administrador |
+| **"Apenas o administrador pode fazer isto"** | A ação mexe no número do estoque ou mostra quem está conectado. Peça ao administrador |
+| **Preciso editar só as peças consignadas** | Produtos → filtro ao lado das categorias → **🤝 Somente consignados** |
+| **A comissão do consignado parece alta demais** | Não é porcentagem do preço: o fornecedor recebe o custo da peça de volta **mais** a fatia do lucro. O relatório mostra a conta aberta |
+| **"Produtos vendidos" soma mais que o faturamento** | A partir da 3.9.0 a lista fecha no mesmo valor do topo, abatendo cortesias e descontos linha a linha |
+| **Quero saber quanto dei de desconto no evento** | Cartão **Total em descontos** no topo, e a seção 🏷️ Descontos no fechamento com cada venda |
+| **O relatório avisou que sobrou valor sem explicação** | Apareceu um lançamento novo mexendo no total da venda. Avise o suporte com o print |
+| **Não consigo fechar a venda com desconto** | Desde a 3.10.0 é preciso senha de administrador. Chame quem pode liberar |
+| **A autorização do desconto venceu** | Ela vale 5 minutos e serve para uma venda. Peça de novo |
+| **Quero acompanhar o que os funcionários compram** | Configurações → Categorias de clientes → marque **👁️ Acompanhar** na categoria. Depois, Relatórios → 👁️ Compras acompanhadas |
+| **O relatório de acompanhamento está vazio** | Nenhuma categoria foi marcada ainda, ou ninguém dessa categoria comprou no período |
+| **Quanto vendi de peça minha e de consignado?** | Cartões **Vendas do Salgueiro** e **Vendas de consignados**, no topo das abas Vendas e Evento |
+| **O card de consignados mostra ⚠️** | Há produtos marcados como consignados sem fornecedor ou sem percentual definido. O relatório lista quais são — corrija em Produtos → Editar |
+| **Quero o recibo de um fornecedor por mês, não por evento** | Relatório de evento → seção Comissão de consignados → botão 🖨️ ao lado do fornecedor → **Por mês** |
+| **O recibo "Este evento" mostrava vendas de outros dias** | Corrigido na 3.24.0. Atualize o aplicativo |
+| **A fatia do lucro do consignado aparecia com centavos a mais** | Corrigido na 3.24.0. Era um erro de arredondamento acumulado por item. Atualize o aplicativo |
+| **Quero esconder a qtd de peças e o valor de tabela dos cards** | Configurações → **📊 Relatórios** → desative **Exibir detalhe nos cards** |
+| **Não sei o percentual do fornecedor daquela peça** | Ele aparece embaixo do nome na lista de produtos vendidos, e na coluna própria do Excel |
+| **A operadora mudou a taxa do cartão** | Configurações → PDV → **Taxas da maquininha**. Vale para os relatórios gerados dali em diante |
+| **Zerei uma taxa sem querer** | Deixe o campo em branco e salve: o sistema volta ao valor padrão. Ou use **Restaurar padrão** |
+| **O balão do chat tapa o fim do relatório** | Arraste o balão para outro canto — ele fica onde você largar. Dois cliques devolvem ao lugar de origem |
+| **O balão apareceu no relatório impresso** | Corrigido na 3.13.0. Atualize o aplicativo |
+| **Não vejo o desconto nos itens da venda** | Corrigido na 3.14.0: cada peça mostra quanto foi descontado dela e quanto foi pago |
+| **Por que o líquido é igual ao bruto?** | Não houve devolução no período. A linha de devoluções aparece com R$ 0,00 |
+| **Onde coloco o cargo da pessoa?** | Campo **Função / cargo** no cadastro do cliente. Também entra na importação |
+| **O mesmo CPF virou dois clientes** | Acontecia quando um vinha de importação e outro do cadastro à mão. Corrigido na 3.15.0 |
 | **Sistema não abre** | Reinicie o computador. Persistindo, entre em contato com o suporte |
 
 ### Diferença entre cancelar e devolver
@@ -1188,4 +1623,4 @@ Esta confusão é comum e afeta os relatórios:
 **Suporte técnico**
 ML Lopes Design — mlopesdesign@gmail.com
 
-*Manual referente à versão 3.7.0*
+*Manual referente à versão 3.15.0*

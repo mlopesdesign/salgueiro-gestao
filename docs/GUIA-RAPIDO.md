@@ -113,15 +113,21 @@ Peça de R$ 100 comprada com 10% (pagou R$ 90):
 
 ## Dar desconto na venda
 
-1. Digite o desconto no campo **Desconto geral** (ou por item)
-2. Aperte **F10** e o sistema pede três coisas:
-   - **Autorizado por** — quem liberou (nome livre)
-   - **Motivo** — por quê
-   - **Sua senha** — a de quem está no caixa
-3. Confirme e siga para o pagamento
+**Desde a 3.10.0, desconto na mão só sai com senha de administrador.**
 
-> **Não precisa mais chamar o administrador.** Fica tudo registrado na venda e
-> aparece em Relatórios → Evento → **🏷️ Descontos autorizados**.
+1. Digite o desconto no campo **Desconto geral** (ou por item)
+2. Aperte **F10**
+3. O sistema pede a autorização:
+   - **Você é administrador?** digite só a sua senha
+   - **Não é?** chame quem pode liberar — ele digita o login e a senha dele
+4. Informe o **motivo** e confirme
+
+> A autorização vale 5 minutos e serve para uma venda só.
+
+**Continuam livres, sem pedir nada:** desconto de categoria do cliente e
+desconto automático à vista.
+
+Tudo fica registrado e aparece em Relatórios → Evento → **🏷️ Descontos no fechamento**.
 
 ---
 
@@ -174,6 +180,31 @@ quantidade — vira **Única / U** com o estoque que você digitou.
 
 ---
 
+## Editar só as peças consignadas
+
+1. Menu **👗 Produtos**
+2. No filtro ao lado das categorias, escolha **🤝 Somente consignados**
+3. A lista passa a mostrar só as peças de fornecedor — edite uma a uma
+
+> Embaixo do nome aparece de quem é a peça e a fatia combinada.
+> Para voltar, escolha **Consignados e próprios**.
+
+---
+
+## Mexer no estoque (só administrador)
+
+A partir da versão 3.8.0, **alterar quantidade em estoque é só do administrador**:
+entrada, saída manual, ajuste de inventário, transferência entre locais e criação
+de estoque.
+
+Quem não é administrador continua **consultando** normalmente: bipa o código, vê
+o saldo, imprime o balanço.
+
+> **Vender não mudou.** O PDV baixa o estoque sozinho, e devolução, troca e
+> recebimento de compra continuam funcionando para todo mundo.
+
+---
+
 ## Imprimir etiquetas
 
 **Um produto:** em **Produtos**, clique no botão **🏷️** da linha do produto e escolha a quantidade por variação.
@@ -189,6 +220,39 @@ quantidade — vira **Única / U** com o estoque que você digitou.
 3. Marque **Coluna "Conferido"** se for contar peça por peça
 4. Escolha **PDF** (imprimir) ou **Excel**
 5. **Gerar lista**
+
+---
+
+## Gerar o catálogo da loja em PDF
+
+1. Menu **📔 Catálogo**
+2. Preencha o **Título** e, se quiser, a **Coleção / temporada**
+3. Marque o que aparece em cada peça: **preço**, **referência**, **QR code**
+4. Desmarque as categorias que não entram (**Todas** / **Nenhuma** ajudam)
+5. Confira o resumo: **categorias · peças · folhas**
+6. **📄 Gerar Catálogo PDF** e escolha onde salvar
+
+> São sempre **4 peças por folha**, agrupadas por categoria. Capa, índice e
+> contra-capa entram sozinhas. Com muitas fotos demora alguns segundos.
+
+**Só uma categoria:** clique em **Nenhuma** e marque a que você quer.
+**Sem mostrar preço:** desmarque **Preço de venda** antes de gerar.
+
+---
+
+## Vender a preço de custo
+
+1. Ponha as peças no carrinho
+2. **🏷️ Preço de custo** na barra de cima (ou **F8**)
+3. Um administrador digita a senha e o **motivo**
+4. Confira: a tabela sai riscada e o custo aparece embaixo
+5. Finalize normalmente
+
+> Nesta venda **não há desconto nenhum** — nem o do dinheiro. O custo é o piso.
+> Para desligar, clique no botão de novo.
+
+**Peça sem custo cadastrado não entra** — o sistema diz quais são.
+**Conferir depois:** Relatórios → Evento → 🏷️ Vendas a preço de custo.
 
 ---
 
@@ -235,6 +299,17 @@ No celular o menu fica na gaveta — toque no **☰** no canto para abrir.
 
 ---
 
+## Tirar o balão do chat da frente
+
+Segure o botão do mouse em cima do balão 💬 e **arraste** para onde quiser.
+Ele fica ali, mesmo depois de fechar o sistema.
+
+**Dois cliques** no balão devolvem ele ao canto de baixo à direita.
+
+> A posição é de cada computador. E o balão **não sai mais na impressão**.
+
+---
+
 ## Chegou mensagem no chat
 
 Você vê de três formas, mesmo sem som:
@@ -242,6 +317,23 @@ Você vê de três formas, mesmo sem som:
 - **Etiqueta amarela** ao lado do balão 💬 com o número de não lidas — fica até você ler
 - **Aviso rápido** com quem mandou e o começo do texto — clique para abrir
 - Número no balão e bip, se a máquina tiver som
+
+---
+
+## Acompanhar o que os funcionários compram
+
+**Ligar (uma vez):** Configurações → **👥 Categorias de clientes** → Editar a
+categoria (ex.: Funcionários) → marcar **👁️ Acompanhar as compras desta categoria**.
+
+**Ver:** Relatórios → aba **👁️ Compras acompanhadas** → escolha o período → **Gerar**.
+
+| Para | Faça |
+|---|---|
+| Ver só quem comprou muito | Preencha **a partir de N peças** (ex.: 10) |
+| Ver o que a pessoa levou | Clique no nome — abre tipo de peça, quantidade e total |
+| Ver a peça mais levada | Tabela **Peças mais levadas no período**, no fim |
+
+> Quem compra o dobro da média do grupo aparece destacado com ⚠️.
 
 ---
 
@@ -314,6 +406,73 @@ diferentes. Na tela ficam os 10 primeiros; a impressão e o Excel trazem a lista
 
 ---
 
+## Quanto vendi de peça minha e de consignado
+
+Menu **📈 Relatórios** → aba **Vendas** (ou **🎪 Evento**). No topo:
+
+- **Vendas do Salgueiro** — o que entrou pelas peças da loja
+- **Vendas de consignados** — o que entrou pelas peças de fornecedor
+
+> Os dois somados dão o **faturamento bruto**. Embaixo de cada um aparece o
+> valor de tabela, que bate com a lista de produtos.
+
+Na lista de produtos vendidos, a peça de fornecedor mostra de quem é e o
+percentual combinado, embaixo do nome.
+
+> Se o card mostrar ⚠️, há produtos consignados sem fornecedor ou percentual
+> definido. O relatório lista quais são — corrija em Produtos → Editar.
+
+## Gerar recibo de consignado
+
+Relatórios → 🎪 Evento → seção **Comissão de consignados** → clique **🖨️**
+ao lado do nome do fornecedor.
+
+Escolha o modo:
+
+- **Este evento** — período do relatório aberto
+- **Por mês** — selecione mês e ano
+- **Por venda** — o sistema lista as vendas do fornecedor; marque uma ou mais e clique **Gerar**
+
+Clique **Gerar** e o PDF é baixado automaticamente.
+
+---
+
+## Mudar as taxas do cartão
+
+## Ocultar detalhe nos cards do relatório
+
+Menu **⚙️ Configurações** → aba **📊 Relatórios**.
+
+Desative **Exibir detalhe nos cards** para que os cards de resumo mostrem só o valor principal, sem a linha com a quantidade de peças e o valor de tabela (bruto). Útil quando o relatório é projetado em tela ou quando a loja prefere um visual mais limpo.
+
+---
+
+## Mudar as taxas do cartão
+
+Menu **⚙️ Configurações** → aba **PDV** → seção **Taxas da maquininha**, no fim da página.
+
+Cinco campos: Pix na chave, Pix na maquininha, Débito, Crédito à vista e
+Crédito parcelado. Salve e gere o relatório de evento de novo.
+
+> Já vêm com as taxas da Mercado Pago Smart 2. Só mexa se a operadora reajustar
+> ou se você trocar de maquininha. O botão **Restaurar padrão** devolve os
+> valores originais.
+
+---
+
+## Importar uma lista de clientes ou funcionários
+
+1. Menu **👥 Clientes** → aba **Importar / Exportar**
+2. Baixe o **Modelo Excel** se quiser começar do zero
+3. Colunas: **nome** (obrigatória), cpf, telefone, email, endereco, nascimento
+   (AAAA-MM-DD), **categoria**, **funcao**, limite_credito, obs
+4. Escolha o arquivo e clique em **Importar**
+
+> A **categoria** é criada sozinha se ainda não existir.
+> Quem já está cadastrado (mesmo CPF ou mesmo nome) é **atualizado**, não duplicado.
+
+---
+
 ## Onde ver os números
 
 - **📊 Painel** — vendas de hoje e do mês, alertas de estoque, resumo geral
@@ -345,6 +504,23 @@ diferentes. Na tela ficam os 10 primeiros; a impressão e o Excel trazem a lista
 | "Nenhum caixa aberto" ao trocar | A troca gera uma venda: abra o caixa antes |
 | A venda não tem botão 🔄 Trocar | Ela foi cancelada ou já teve tudo devolvido |
 | "Este vale-troca venceu em…" | O vale passou do prazo. Ajuste em Configurações → PDV |
+| Não consigo fechar a venda com desconto | Precisa de senha de administrador. Chame quem pode liberar |
+| Quero vigiar as compras dos funcionários | Marque **👁️ Acompanhar** na categoria e use Relatórios → 👁️ Compras acompanhadas |
+| Sumiu o botão de entrada no estoque | A partir da 3.8.0 é só do administrador. Entre com o login de administrador |
+| "Apenas o administrador pode fazer isto" | A ação altera o estoque ou mostra quem está conectado |
+| Preciso editar as peças de um fornecedor | Produtos → filtro **🤝 Somente consignados** |
+| A comissão do consignado parece alta | Não é % do preço: é o custo da peça de volta **mais** a fatia do lucro |
+| Recibo "Este evento" mostrava vendas erradas | Corrigido na 3.24.0. Atualize o aplicativo |
+| Fatia do lucro do consignado com centavos a mais | Corrigido na 3.24.0. Atualize o aplicativo |
+| Quero tirar a qtd de peças e o valor bruto dos cards | Configurações → **📊 Relatórios** → desative **Exibir detalhe nos cards** |
+| "Produtos vendidos" soma mais que o faturamento | Desde a 3.9.0 a lista fecha no mesmo valor do topo, com cortesias e descontos abatidos |
+| Não acho o botão de preço de custo | Barra do PDV: **🏷️ Preço de custo** — ou **F8** |
+| "Sem preço de custo cadastrado" | Preencha o preço de custo da peça em 👗 Produtos |
+| Não deixa dar desconto na venda a custo | É proposital: o custo já é o piso |
+| Quanto dei de desconto no evento? | Cartão **Total em descontos** no topo do relatório de evento |
+| Peça sem foto no catálogo | Sai um desenho cinza. Cadastre a foto em 👗 Produtos, clicando na imagem |
+| A foto do catálogo cortou a peça | Ela sai quadrada, cortada pelo centro. Refaça com a peça centralizada |
+| Botão de gerar catálogo apagado | Nenhuma categoria marcada. Clique em **Todas** |
 
 ---
 
@@ -358,4 +534,4 @@ lista todas as versões e o que cada uma trouxe. A sua aparece com o selo verde
 
 **Suporte:** ML Lopes Design — mlopesdesign@gmail.com
 
-*Guia referente à versão 3.7.0*
+*Guia referente à versão 3.19.0*

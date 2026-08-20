@@ -380,6 +380,10 @@ function encerrarAviso(db, quem, p) {
 // Quem está online agora (usado na tela de Mensagens e em Configurações → Rede)
 function terminais(db, quem) {
   if (!quem) return { ok: false, erro: 'Sessão expirada.' };
+  // Saber quem está conectado é do dono da loja (v3.8.0). O servidor já barra
+  // pela ROTAS_SO_ADMIN; repetir aqui deixa a regra testável sem subir o
+  // servidor e protege quem chamar o core direto.
+  if (quem.perfil !== 'admin') return { ok: false, erro: 'Apenas o administrador pode fazer isto.' };
   const online = idsOnline(db);
   const nomes = new Map(db.prepare('SELECT id, nome, perfil FROM usuarios').all().map(u => [u.id, u]));
   return {

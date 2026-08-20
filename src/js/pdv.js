@@ -1,5 +1,5 @@
 // PDV — frente de caixa
-import { api, el, esc, moeda, toast, modal, getConfig, pode, podeVerTela, setorAtivo, EM_REDE } from './app.js';
+import { api, el, esc, moeda, toast, modal, getConfig, pode, ehAdmin, podeVerTela, setorAtivo, EM_REDE } from './app.js';
 
 // Formas de pagamento disponíveis (respeita setores desligados pelo Dev).
 // 'troca' NÃO entra: é lançada pelo sistema quando o crédito de uma troca abate
@@ -11,6 +11,12 @@ const formasDisponiveis = () => FORMAS.filter(([v]) =>
 let itens = [];        // itens da venda em andamento
 let cliente = null;    // cliente selecionado
 let refresco = null;   // função para redesenhar a tela
+
+// Arredondamento de dinheiro no nível do MÓDULO: o modalPagamento é uma função
+// irmã de viewPdv e não enxerga variáveis declaradas lá dentro. Já houve uso
+// de `arred` no modal quando ela só existia dentro de viewPdv — ReferenceError
+// em tempo de execução, que nenhum `node --check` acusa.
+const arred = v => Math.round((Number(v) || 0) * 100) / 100;
 
 const FORMAS = [
   ['dinheiro', 'Dinheiro'], ['pix', 'PIX'], ['debito', 'Cartão Débito'],
@@ -127,6 +133,7 @@ function telaVenda(alvo, caixa) {
         <div style="display:flex;gap:8px">
           <button class="btn btn-suave" id="b-consulta">🔍 Consultar preço (F3)</button>
           <button class="btn btn-suave" id="b-troca" style="color:var(--vinho);font-weight:700">🔄 Troca (F6)</button>
+          <button class="btn btn-suave" id="b-custo" title="Vender pelo preço de custo (precisa de administrador)">🏷️ Preço de custo (F8)</button>
           <button class="btn btn-suave" id="b-vendas">Vendas do caixa</button>
           <button class="btn btn-suave" id="b-historico">📋 Histórico</button>
           ${pode('caixa.sangria') ? '<button class="btn btn-suave" id="b-supr">+ Suprimento</button>' : ''}
@@ -174,12 +181,17 @@ function telaVenda(alvo, caixa) {
   const $sug = tela.querySelector('#pdv-sugestoes');
   const $corpo = tela.querySelector('#pdv-itens');
 
-  const arred = v => Math.round(v * 100) / 100;
+  // `arred` agora é do módulo (topo do arquivo) — o modal de pagamento precisa dela.
 
   function totais() {
-    const sub = arred(itens.reduce((s, i) => s + arred(i.qtd * i.preco_unit) - arred(i.desconto), 0));
+    // No modo preço de custo o subtotal já sai pelo custo e o desconto é zero:
+    // é o mesmo resultado que o servidor vai calcular relendo o banco.
+    const modoCusto = !!tela._vendaCusto;
+    const sub = modoCusto
+      ? arred(itens.reduce((s, i) => s + arred(i.qtd * (Number(i.preco_custo) || 0)), 0))
+      : arred(itens.reduce((s, i) => s + arred(i.qtd * i.preco_unit) - arred(i.desconto), 0));
     let desc = 0;
-    if (pode('pdv.desconto')) {
+    if (!modoCusto && pode('pdv.desconto')) {
       const modo = tela.querySelector('#t-desc-modo')?.textContent || 'R$';
       const val = Number(tela.querySelector('#t-desc')?.value) || 0;
       if (modo === '%') {
@@ -197,6 +209,36 @@ function telaVenda(alvo, caixa) {
     const total = arred(Math.max(0, sub - desc));
     tela.querySelector('#t-sub').textContent = moeda(sub);
     tela.querySelector('#t-total').textContent = moeda(total);
+
+    // Faixa de aviso: vender a custo tem de ser impossível de não notar.
+    // O botão fica destacado e o rodapé mostra quanto a loja está abrindo mão.
+    const $bt = tela.querySelector('#b-custo');
+    if ($bt) {
+      $bt.style.background = modoCusto ? 'var(--vinho)' : '';
+      $bt.style.color = modoCusto ? '#fff' : '';
+      $bt.style.fontWeight = modoCusto ? '700' : '';
+      $bt.textContent = modoCusto ? '🏷️ A PREÇO DE CUSTO — desligar' : '🏷️ Preço de custo (F8)';
+    }
+    let $av = tela.querySelector('#t-aviso-custo');
+    if (modoCusto) {
+      const tabela = arred(itens.reduce((s, i) => s + arred(i.qtd * i.preco_unit) - arred(i.desconto), 0));
+      if (!$av) {
+        $av = el(`<div id="t-aviso-custo" style="background:#FDF6F6;border-left:3px solid var(--vinho);
+          padding:7px 10px;margin:6px 0;border-radius:0 6px 6px 0;font-size:12px;line-height:1.5"></div>`);
+        // A linha do TOTAL usa a classe `.tot-total`, NÃO `.tot-linha` — as duas
+        // existem no rodapé e são coisas diferentes. Procurar pela errada faz
+        // closest() devolver null e derruba a tela inteira no .before().
+        // Por isso a âncora é o próprio elemento pai, com guarda.
+        const $tot = tela.querySelector('#t-total');
+        const anc = $tot && ($tot.closest('.tot-total') || $tot.parentElement);
+        if (anc && anc.parentElement) anc.parentElement.insertBefore($av, anc);
+        else $av = null;   // sem lugar para encaixar: não quebra a tela
+      }
+      $av.innerHTML = `<b style="color:var(--vinho)">🏷️ Venda a preço de custo</b><br>
+        Tabela ${moeda(tabela)} · a loja abre mão de <b>${moeda(arred(tabela - sub))}</b>.<br>
+        <span style="color:var(--texto-suave)">Sem desconto e sem pontos nesta venda.</span>`;
+    } else if ($av) { $av.remove(); }
+
     return { sub, desc, total };
   }
 
@@ -205,21 +247,33 @@ function telaVenda(alvo, caixa) {
     if (!itens.length) {
       $corpo.appendChild(el(`<tr><td colspan="6" class="vazio">Bipe um produto para começar.</td></tr>`));
     }
+    // No modo preço de custo a peça é cobrada pelo custo: o preço de tabela sai
+    // riscado ao lado, para o operador ver o que está sendo aberto mão. O valor
+    // definitivo é o que o servidor relê do banco na hora de gravar.
+    const modoCusto = !!(tela && tela._vendaCusto);
     itens.forEach((i, idx) => {
+      const unit = modoCusto ? (Number(i.preco_custo) || 0) : i.preco_unit;
+      const descLin = modoCusto ? 0 : i.desconto;
+      const celPreco = modoCusto
+        ? `<td class="num"><s style="color:var(--texto-suave);font-size:.85em">${moeda(i.preco_unit)}</s>
+             <b style="color:var(--vinho);display:block">${moeda(unit)}</b></td>`
+        : `<td class="num">${moeda(unit)}</td>`;
       const tr = el(`<tr>
         <td><b>${esc(i.produto)}</b><br><small style="color:var(--texto-suave)">${esc(i.cor)} / ${esc(i.tamanho)}</small></td>
         <td><input data-c="qtd" type="number" min="1" max="${i.estoque || ''}" value="${i.qtd}"
           style="width:56px;padding:4px 6px;border:1px solid var(--borda);border-radius:6px;text-align:center"></td>
-        <td class="num">${moeda(i.preco_unit)}</td>
-        ${pode('pdv.desconto') ? `<td><input data-c="desconto" type="number" min="0" step="0.01" value="${i.desconto}"
-          style="width:76px;padding:4px 6px;border:1px solid var(--borda);border-radius:6px"></td>` : ''}
-        <td class="num"><b class="lin-total">${moeda(i.qtd * i.preco_unit - i.desconto)}</b></td>
+        ${celPreco}
+        ${pode('pdv.desconto') ? (modoCusto
+          ? `<td class="num" style="color:var(--texto-suave);font-size:.85em">—</td>`
+          : `<td><input data-c="desconto" type="number" min="0" step="0.01" value="${i.desconto}"
+          style="width:76px;padding:4px 6px;border:1px solid var(--borda);border-radius:6px"></td>`) : ''}
+        <td class="num"><b class="lin-total">${moeda(i.qtd * unit - descLin)}</b></td>
         <td class="acoes-linha"><button style="color:var(--vermelho)">✕</button></td>
       </tr>`);
 
       const $linTotal = tr.querySelector('.lin-total');
       const repintarLinha = () => {
-        $linTotal.textContent = moeda(i.qtd * i.preco_unit - i.desconto);
+        $linTotal.textContent = moeda(i.qtd * unit - descLin);
         totais();
       };
 
@@ -262,8 +316,13 @@ function telaVenda(alvo, caixa) {
       if (existente.qtd + 1 > v.estoque) { toast('Estoque insuficiente.', true); return; }
       existente.qtd++;
     } else {
+      // preco_custo vem de estoque:buscar e PRECISA ser copiado para o item:
+      // é ele que a venda a preço de custo usa para mostrar o valor na tela e
+      // para avisar quando a peça não tem custo cadastrado. Sem copiar aqui,
+      // toda peça era acusada de não ter custo. (bug da v3.19.1)
       itens.push({ variacao_id: v.id, produto: v.produto, cor: v.cor, tamanho: v.tamanho,
-                   qtd: 1, preco_unit: v.preco_venda, desconto: 0, estoque: v.estoque });
+                   qtd: 1, preco_unit: v.preco_venda, desconto: 0, estoque: v.estoque,
+                   preco_custo: Number(v.preco_custo) || 0, nome: v.produto });
     }
     $sug.innerHTML = ''; $busca.value = ''; $busca.focus();
     desenhar();
@@ -366,11 +425,26 @@ function telaVenda(alvo, caixa) {
   tela.querySelector('#pdv-finalizar').onclick = async () => {
     if (!itens.length) { toast('A venda está vazia.', true); return; }
     const ts = totais();
-    if (ts.desc > 0 && !tela._descontoAutorizado) {
+
+    // Venda a preço de custo: já foi autorizada ao ligar o modo, e não passa
+    // pela checagem de desconto — no custo não existe desconto nenhum.
+    if (tela._vendaCusto) {
+      modalPagamento(ts.total, 0, null,
+        () => { alvo.innerHTML = ''; viewPdv(alvo); },
+        tela._vendaCusto, true);
+      return;
+    }
+
+    // Só o que passa do desconto AUTOMÁTICO precisa de administrador (v3.10.0).
+    // O da categoria do cliente é livre — e o mesmo cálculo é refeito no
+    // servidor, que é quem de fato decide (auth.descontoLivre).
+    const livreCategoria = (cliente && (cliente.categoria_desconto || 0) > 0)
+      ? arred(ts.sub * cliente.categoria_desconto / 100) : 0;
+    if (ts.desc > livreCategoria + 0.01 && !tela._descontoAutorizado) {
       const just = await modalAutorizarDesconto(ts.desc);
       if (!just) return;
       tela._descontoAutorizado = true;
-      tela._descontoJustificativa = just;   // { autorizado_por, motivo } → vai para a venda
+      tela._descontoJustificativa = just;   // { autorizado_por, motivo, token } → vai para a venda
     }
     // Desconto de categoria do cliente e resgate de pontos entram autorizados
     // por natureza (vêm da tabela, não da mão do operador) — sem justificativa.
@@ -387,6 +461,41 @@ function telaVenda(alvo, caixa) {
   tela.querySelector('#b-historico').onclick = () => modalHistoricoVendas();
   tela.querySelector('#b-consulta').onclick = consultarPreco;
   tela.querySelector('#b-troca').onclick = () => modalBuscarVendaTroca();
+
+  // ── Venda a preço de custo (v3.19.0) ───────────────────────────────────────
+  // Liga/desliga o modo. Ligar exige autorização de administrador; desligar
+  // não, porque voltar ao preço cheio nunca é o caminho arriscado.
+  //
+  // O preço mostrado aqui é o do banco (`preco_custo`, que vem no item desde a
+  // busca) e serve só para o operador conferir — quem manda é o servidor, que
+  // relê o custo na hora de gravar.
+  tela.querySelector('#b-custo').onclick = async () => {
+    if (tela._vendaCusto) {                       // desligando
+      tela._vendaCusto = null;
+      toast('Preço de custo desligado. Voltou ao preço normal.');
+      refresco && refresco();
+      return;
+    }
+    if (!itens.length) { toast('Coloque as peças no carrinho antes.', true); return; }
+    const semCusto = itens.filter(i => !(Number(i.preco_custo) > 0));
+    if (semCusto.length) {
+      // `produto` é o nome que vem da busca; `nome` é cópia dele. Usar os dois
+      // com fallback evita a mensagem sair truncada em "cadastrado:" se algum
+      // caminho antigo montar o item sem um dos campos.
+      const nomes = [...new Set(semCusto.map(i => i.produto || i.nome || 'peça sem nome'))];
+      toast('Sem preço de custo cadastrado: ' + nomes.join(', ') +
+            '. Cadastre em Produtos antes de vender a custo.', true);
+      return;
+    }
+    const just = await modalVendaCusto(itens);
+    if (!just) return;
+    tela._vendaCusto = just;                      // { autorizado_por, motivo, token }
+    // Desconto não convive com preço de custo: custo é o piso.
+    tela.querySelector('#t-desc').value = '0.00';
+    tela._pontosResgate = null;
+    toast('Venda a preço de custo ligada. Descontos desativados.');
+    refresco && refresco();
+  };
 
   // atalhos
   tela.tabIndex = -1;
@@ -427,6 +536,7 @@ function telaVenda(alvo, caixa) {
     if (e.key === 'F3') { e.preventDefault(); tela.querySelector('#b-consulta').click(); }
     if (e.key === 'F4') { e.preventDefault(); tela.querySelector('#pdv-cliente').click(); }
     if (e.key === 'F6') { e.preventDefault(); tela.querySelector('#b-troca').click(); }
+    if (e.key === 'F8') { e.preventDefault(); tela.querySelector('#b-custo').click(); }
     if (e.key === 'F10') { e.preventDefault(); tela.querySelector('#pdv-finalizar').click(); }
   });
 
@@ -483,42 +593,47 @@ function escolherCliente(aoEscolher) {
 // autorizou e o motivo — os dois vão para `vendas.desconto_autorizado_por` e
 // `vendas.desconto_motivo` e saem no Relatório de Evento.
 // Devolve null se o operador desistir, ou { autorizado_por, motivo }.
+// Desconto manual: só sai com senha de ADMINISTRADOR (v3.10.0).
+// Quem já está logado como admin confirma com a própria senha; os demais
+// chamam um administrador ao balcão, que digita o login dele.
+// O nome de quem autorizou vem do backend (do cadastro), não de campo digitado.
 function modalAutorizarDesconto(desconto) {
+  const souAdmin = ehAdmin();
   return new Promise(resolve => {
     let resolvido = false;
-    const m = modal('Desconto — quem autorizou?', `
+    const m = modal('Desconto — autorização do administrador', `
       <p style="margin-bottom:6px">Desconto de <b style="color:var(--vinho);font-size:1.15em">${moeda(desconto)}</b> nesta venda.</p>
       <p style="margin-bottom:14px;font-size:12px;color:var(--texto-suave)">
-        Registre quem liberou e por quê. Fica gravado na venda e aparece no relatório do evento.
+        ${souAdmin
+          ? 'Confirme com a sua senha de administrador. Fica gravado na venda e aparece no relatório do evento.'
+          : 'Este desconto precisa de um administrador. Chame quem pode liberar para digitar o login e a senha.'}
       </p>
-      <div class="linha-2">
-        <div class="campo"><label>Autorizado por *</label>
-          <input id="ad-autor" autocomplete="off" placeholder="Nome de quem liberou"></div>
-        <div class="campo"><label>Motivo *</label>
-          <input id="ad-motivo" autocomplete="off" placeholder="Ex.: peça com defeito, cliente antiga…"></div>
-      </div>
+      ${souAdmin ? '' : `
+      <div class="campo"><label>Usuário do administrador *</label>
+        <input id="ad-user" autocomplete="off" placeholder="login de quem vai autorizar"></div>`}
       <div class="campo">
-        <label>Sua senha *</label>
+        <label>Senha do administrador *</label>
         <input id="ad-senha" type="password" placeholder="••••••" autocomplete="current-password">
-        <small style="color:var(--texto-suave);font-size:11px">
-          A senha de quem está operando o caixa agora — confirma que o lançamento foi seu.
-        </small>
       </div>
+      <div class="campo"><label>Motivo *</label>
+        <input id="ad-motivo" autocomplete="off" placeholder="Ex.: peça com defeito, cliente antiga…"></div>
       <div class="erro" id="ad-erro"></div>
     `, async (mm, fechar) => {
       const $err = mm.querySelector('#ad-erro');
-      const autor = mm.querySelector('#ad-autor').value.trim();
       const motivo = mm.querySelector('#ad-motivo').value.trim();
       const senha = mm.querySelector('#ad-senha').value;
-      if (!autor)  { $err.textContent = 'Informe quem autorizou o desconto.'; return; }
+      const usuario = souAdmin ? '' : (mm.querySelector('#ad-user').value.trim());
+      if (!souAdmin && !usuario) { $err.textContent = 'Informe o usuário do administrador.'; return; }
+      if (!senha)  { $err.textContent = 'Digite a senha do administrador.'; return; }
       if (!motivo) { $err.textContent = 'Informe o motivo do desconto.'; return; }
-      if (!senha)  { $err.textContent = 'Digite a sua senha para confirmar.'; return; }
-      const r = await api('auth:autorizarDesconto', { senha });
+      const r = await api('auth:autorizarDesconto', { usuario, senha });
       if (!r.ok) { $err.textContent = r.erro; return; }
       resolvido = true; fechar();
-      resolve({ autorizado_por: autor, motivo });
-    }, 'Confirmar desconto');
-    setTimeout(() => { try { m.querySelector('#ad-autor').focus(); } catch {} }, 60);
+      // O token é de uso único e vale 5 minutos: acompanha a venda até o
+      // servidor. Sem ele o backend recusa o desconto manual.
+      resolve({ autorizado_por: r.autorizado_por, motivo, token: r.token });
+    }, 'Autorizar desconto');
+    setTimeout(() => { try { m.querySelector(souAdmin ? '#ad-senha' : '#ad-user').focus(); } catch {} }, 60);
     // Detecta fechamento sem confirmar (clique em × ou fora do modal)
     const obs = new MutationObserver(() => {
       if (!document.contains(m)) { obs.disconnect(); if (!resolvido) resolve(null); }
@@ -527,11 +642,71 @@ function modalAutorizarDesconto(desconto) {
   });
 }
 
+// ---------- Venda a preço de custo ----------
+// Mesmo rito do desconto manual: administrador confirma com a própria senha,
+// quem não é admin digita login e senha de um. O token devolvido é de uso
+// único e o servidor recusa a venda sem ele.
+function modalVendaCusto(itensCarrinho) {
+  const souAdmin = ehAdmin();
+  const tabela = itensCarrinho.reduce((s, i) => s + i.qtd * i.preco_unit, 0);
+  const custo  = itensCarrinho.reduce((s, i) => s + i.qtd * (Number(i.preco_custo) || 0), 0);
+  const abre   = tabela - custo;
+  return new Promise(resolve => {
+    let resolvido = false;
+    const m = modal('Venda a preço de custo — autorização do administrador', `
+      <div style="background:#FDF6F6;border-left:3px solid var(--vinho);padding:10px 12px;margin-bottom:14px;border-radius:0 6px 6px 0">
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px">
+          <span>Preço de tabela</span><b>${moeda(tabela)}</b></div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px">
+          <span>Preço de custo</span><b style="color:var(--vinho)">${moeda(custo)}</b></div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;padding-top:5px;border-top:1px solid #f0dede">
+          <span>A loja abre mão de</span><b style="color:#c0392b">${moeda(abre)}</b></div>
+      </div>
+      <p style="margin-bottom:14px;font-size:12px;color:var(--texto-suave)">
+        ${souAdmin
+          ? 'Confirme com a sua senha. Fica gravado na venda e aparece no relatório do evento.'
+          : 'Precisa de um administrador. Chame quem pode liberar para digitar o login e a senha.'}
+        Nesta venda <b>não há desconto</b> — o custo já é o piso.
+      </p>
+      ${souAdmin ? '' : `
+      <div class="campo"><label>Usuário do administrador *</label>
+        <input id="vc-user" autocomplete="off" placeholder="login de quem vai autorizar"></div>`}
+      <div class="campo">
+        <label>Senha do administrador *</label>
+        <input id="vc-senha" type="password" placeholder="••••••" autocomplete="current-password">
+      </div>
+      <div class="campo"><label>Motivo *</label>
+        <input id="vc-motivo" autocomplete="off" placeholder="Ex.: funcionária, permuta, queima de estoque…"></div>
+      <div class="erro" id="vc-erro"></div>
+    `, async (mm, fechar) => {
+      const $err = mm.querySelector('#vc-erro');
+      const motivo = mm.querySelector('#vc-motivo').value.trim();
+      const senha = mm.querySelector('#vc-senha').value;
+      const usuario = souAdmin ? '' : (mm.querySelector('#vc-user').value.trim());
+      if (!souAdmin && !usuario) { $err.textContent = 'Informe o usuário do administrador.'; return; }
+      if (!senha)  { $err.textContent = 'Digite a senha do administrador.'; return; }
+      if (!motivo) { $err.textContent = 'Informe o motivo da venda a preço de custo.'; return; }
+      const r = await api('auth:autorizarDesconto', { usuario, senha });
+      if (!r.ok) { $err.textContent = r.erro; return; }
+      resolvido = true; fechar();
+      resolve({ autorizado_por: r.autorizado_por, motivo, token: r.token });
+    }, 'Autorizar venda a custo');
+    setTimeout(() => { try { m.querySelector(souAdmin ? '#vc-senha' : '#vc-user').focus(); } catch {} }, 60);
+    const obs = new MutationObserver(() => {
+      if (!document.contains(m)) { obs.disconnect(); if (!resolvido) resolve(null); }
+    });
+    obs.observe(document.body, { childList: true, subtree: true });
+  });
+}
+
 // ---------- Pagamento ----------
-function modalPagamento(total, descontoGeral, pontosResgate, aoConcluir, descontoJustificativa) {
-  // Configuração de desconto à vista (dinheiro/PIX)
+function modalPagamento(total, descontoGeral, pontosResgate, aoConcluir, descontoJustificativa, aCusto = false) {
+  // Configuração de desconto à vista (dinheiro/PIX).
+  // Na venda a preço de custo o automático à vista NÃO é oferecido: o custo já
+  // é o piso, abater de novo faria a loja vender abaixo do que pagou. Vale
+  // inclusive para pagamento em dinheiro.
   const cfg = getConfig();
-  const ativoAvista   = cfg.desconto_avista_ativo === '1';
+  const ativoAvista   = !aCusto && cfg.desconto_avista_ativo === '1';
   const pctAvista     = Math.max(0, Math.min(1, Number(cfg.desconto_avista_percent || 5) / 100));
   const minimoAvista  = Number(cfg.desconto_avista_minimo || 100);
 
@@ -541,6 +716,19 @@ function modalPagamento(total, descontoGeral, pontosResgate, aoConcluir, descont
 
   const m = modal(`Pagamento — total ${moeda(total)}`, `
     <div id="pg-avista-badge" style="display:none;background:#e8f5e9;border:1px solid var(--verde,#2e7d32);border-radius:8px;padding:8px 12px;margin-bottom:10px;color:var(--verde,#2e7d32);font-weight:600;font-size:13px"></div>
+    ${aCusto
+      // Já está no modo custo: deixa claro aqui também, senão o operador
+      // fecha a venda sem perceber que a peça saiu sem margem.
+      ? `<div style="background:#FDF6F6;border:1px solid var(--vinho);border-radius:8px;
+           padding:8px 12px;margin-bottom:10px;color:var(--vinho);font-weight:700;font-size:13px">
+           🏷️ Venda a PREÇO DE CUSTO — sem desconto nesta venda</div>
+         <div id="pg-taxa-box" style="display:none;background:#FFF8E1;border:1px solid #c8a415;
+           border-radius:8px;padding:8px 12px;margin-bottom:10px;color:#8a6d0b;font-size:12.5px;
+           line-height:1.5"></div>`
+      // Ainda não está: o atalho fica aqui porque é aqui que se procura por ele.
+      : `<button type="button" id="pg-ir-custo" class="btn btn-suave"
+           style="width:100%;margin-bottom:10px;font-size:13px;color:var(--vinho);font-weight:600">
+           🏷️ Vender a preço de custo…</button>`}
     <div id="pg-linhas"></div>
     <button class="btn btn-suave" id="pg-add" type="button">+ Adicionar forma de pagamento</button>
     <div class="tot-linha" style="margin-top:14px"><span>Pago</span><b id="pg-pago">R$ 0,00</b></div>
@@ -561,11 +749,17 @@ function modalPagamento(total, descontoGeral, pontosResgate, aoConcluir, descont
     }
     const r = await api('pdv:venda', {
       itens: itens.map(i => ({ variacao_id: i.variacao_id, qtd: i.qtd, preco_unit: i.preco_unit, desconto: i.desconto })),
-      desconto: descontoGeral + descontoAvista,  // desconto manual + desconto à vista
+      // Venda a preço de custo: o servidor relê o custo de cada peça no banco e
+      // ignora o preço enviado aqui. Este campo é o que dispara a trava.
+      ...(aCusto ? { tipo_venda: 'custo' } : {}),
+      desconto: aCusto ? 0 : descontoGeral + descontoAvista,  // desconto manual + desconto à vista
       // Justificativa do desconto avulso (v3.3.0). Só existe quando o operador
       // digitou desconto na mão — categoria e pontos não pedem.
       desconto_autorizado_por: descontoJustificativa ? descontoJustificativa.autorizado_por : null,
       desconto_motivo: descontoJustificativa ? descontoJustificativa.motivo : null,
+      // Token de uso único emitido pelo administrador que autorizou (v3.10.0).
+      // O servidor o exige sempre que o desconto passa do automático.
+      desconto_token: descontoJustificativa ? descontoJustificativa.token : null,
       cliente_id: cliente ? cliente.id : null,
       pontos_resgatar: pontosResgate ? pontosResgate.pontos : 0,
       pagamentos: pagamentos.map(pg => ({
@@ -595,6 +789,46 @@ function modalPagamento(total, descontoGeral, pontosResgate, aoConcluir, descont
     return Math.round(total * pctAvista * 100) / 100;
   }
 
+  // ── Acréscimo da taxa da maquininha na venda a preço de custo (v3.20.0) ────
+  // A loja está vendendo sem margem; se ainda pagasse a taxa do cartão, sairia
+  // no prejuízo. Então a taxa é somada ao valor da compra.
+  //
+  // A conta é custo/(1−taxa), NÃO custo×(1+taxa): a maquininha cobra o
+  // percentual sobre o valor COBRADO. Com R$ 100 e 3,05%, somar 3,05% cobraria
+  // 103,05 e a loja receberia 99,91; dividindo, cobra 103,15 e recebe 100,00.
+  //
+  // A taxa incide sobre o TOTAL da forma, uma vez só — não por parcela.
+  // Dinheiro, PIX na chave, crediário e vale têm taxa zero.
+  const _tx = {
+    pix:       Number(String(cfg.taxa_pix_chave        ?? 0).replace(',', '.')) || 0,
+    debito:    Number(String(cfg.taxa_debito           ?? 0.99).replace(',', '.')) || 0,
+    cred1:     Number(String(cfg.taxa_credito_vista    ?? 3.05).replace(',', '.')) || 0,
+    credN:     Number(String(cfg.taxa_credito_parcelado?? 3.25).replace(',', '.')) || 0
+  };
+  const taxaDe = (forma, parcelas) => {
+    if (forma === 'debito')  return _tx.debito;
+    if (forma === 'credito') return (Number(parcelas) || 1) > 1 ? _tx.credN : _tx.cred1;
+    if (forma === 'pix')     return _tx.pix;
+    return 0;
+  };
+  // Quanto somar ao total, dadas as formas escolhidas. Rateia o custo entre as
+  // formas na proporção do que foi digitado em cada uma.
+  function calcAcrescimo() {
+    if (!aCusto) return 0;
+    const pagos = pagamentos.filter(p => Number(p.valor) > 0);
+    const soma = pagos.reduce((s, p) => s + (Number(p.valor) || 0), 0);
+    if (soma <= 0) return 0;
+    let acr = 0;
+    for (const p of pagos) {
+      const t = taxaDe(p.forma, p.parcelas) / 100;
+      if (t <= 0) continue;
+      const fatia = Math.round(total * (Number(p.valor) / soma) * 100) / 100;
+      acr += Math.round((fatia / (1 - t) - fatia) * 100) / 100;
+    }
+    return Math.round(acr * 100) / 100;
+  }
+  let acrescimoTaxa = 0;
+
   const $linhas = m.querySelector('#pg-linhas');
   function desenhar() {
     $linhas.innerHTML = '';
@@ -607,7 +841,41 @@ function modalPagamento(total, descontoGeral, pontosResgate, aoConcluir, descont
       // Auto-ajuste apenas quando há 1 pagamento
       if (pagamentos.length === 1) pagamentos[0].valor = totalLiquido;
     }
-    const totalLiquido = total - descontoAvista;
+    // Acréscimo da taxa: recalcula e, com um pagamento só, já ajusta o valor
+    const novoAcr = calcAcrescimo();
+    if (novoAcr !== acrescimoTaxa) {
+      acrescimoTaxa = novoAcr;
+      if (pagamentos.length === 1) pagamentos[0].valor = arred(total + acrescimoTaxa);
+    }
+    const totalLiquido = arred(total - descontoAvista + acrescimoTaxa);
+
+    // Atalho para o modo preço de custo, aqui dentro do pagamento.
+    // Fecha este modal e aciona o mesmo botão da barra — um caminho só, para
+    // não existirem duas implementações da mesma regra.
+    const $irCusto = m.querySelector('#pg-ir-custo');
+    if ($irCusto && !$irCusto._ligado) {
+      $irCusto._ligado = true;
+      $irCusto.onclick = () => {
+        m.querySelector('header .fechar')?.click();
+        setTimeout(() => document.querySelector('#b-custo')?.click(), 80);
+      };
+    }
+
+    // Aviso do acréscimo da taxa (venda a custo paga em cartão)
+    const $tx = m.querySelector('#pg-taxa-box');
+    if ($tx) {
+      if (acrescimoTaxa > 0.004) {
+        const formasComTaxa = [...new Set(pagamentos
+          .filter(p => Number(p.valor) > 0 && taxaDe(p.forma, p.parcelas) > 0)
+          .map(p => `${nomeForma(p.forma)} ${taxaDe(p.forma, p.parcelas).toString().replace('.', ',')}%`))];
+        $tx.style.display = '';
+        $tx.innerHTML = `<b>💳 Taxa da maquininha somada à compra</b><br>
+          Custo ${moeda(total)} + ${moeda(acrescimoTaxa)} de taxa =
+          <b>${moeda(arred(total + acrescimoTaxa))}</b> a cobrar.<br>
+          <span style="opacity:.85">${formasComTaxa.join(' · ')} — assim a loja recebe
+          o custo inteiro. Em dinheiro ou PIX não há acréscimo.</span>`;
+      } else $tx.style.display = 'none';
+    }
 
     // Badge de desconto à vista
     const $badge = m.querySelector('#pg-avista-badge');
@@ -738,7 +1006,7 @@ async function imprimirCupom(d) {
         <td style="text-align:right">${moeda(p.valor)}</td></tr>
     ${p.troco > 0 ? `<tr><td colspan="2">Troco</td><td style="text-align:right">${moeda(p.troco)}</td></tr>` : ''}`;
   const parcelas = (d.parcelas || []).map(p =>
-    `<tr><td>Parcela ${p.numero}</td><td>${p.vencimento}</td>
+    `<tr><td>Parcela ${p.numero}</td><td>${p.vencimento ? p.vencimento.split('-').reverse().join('/') : '—'}</td>
       <td style="text-align:right">${moeda(p.valor)}</td></tr>`).join('');
 
   const cfg = getConfig();
@@ -951,7 +1219,7 @@ async function modalVendas() {
     const podeDevolver = v.status === 'concluida' && dev < Number(v.total);
     return `
     <tr data-id="${v.id}">
-      <td>#${v.id}</td><td>${esc(v.criado_em)}</td><td>${esc(v.cliente || '—')}</td>
+      <td>#${v.id}</td><td>${esc(_fmtDataHora(v.criado_em))}</td><td>${esc(v.cliente || '—')}</td>
       <td>${esc(v.formas || '')}</td>
       <td class="num"><b>${moeda(v.total)}</b></td>
       <td>${_pillVenda(v)}</td>
@@ -1111,7 +1379,7 @@ async function modalBuscarVendaTroca() {
       return `
       <tr data-id="${v.id}">
         <td>#${v.id}</td>
-        <td>${esc(v.criado_em ? v.criado_em.slice(0, 16).replace('T', ' ') : '—')}</td>
+        <td>${esc(_fmtDataHora(v.criado_em) || '—')}</td>
         <td>${esc(v.cliente || '—')}</td>
         <td>${esc(v.vendedor || '—')}</td>
         <td class="num"><b>${moeda(v.total)}</b></td>
@@ -1519,7 +1787,7 @@ async function modalHistoricoDevolucoes() {
     <tr>
       <td>#${d.id}</td>
       <td>#${d.venda_id}</td>
-      <td>${esc((d.criado_em || '').slice(0, 16))}</td>
+      <td>${esc(_fmtDataHora(d.criado_em) || '—')}</td>
       <td>${esc(d.cliente || '—')}</td>
       <td class="num">${d.pecas}</td>
       <td>${esc(FORMA_DEV[d.forma_reembolso] || d.forma_reembolso)}</td>
@@ -1553,7 +1821,7 @@ async function modalHistoricoVendas() {
       return `
       <tr data-id="${v.id}">
         <td>#${v.id}</td>
-        <td>${esc(v.criado_em ? v.criado_em.slice(0,16).replace('T',' ') : '—')}</td>
+        <td>${esc(_fmtDataHora(v.criado_em) || '—')}</td>
         <td>${esc(v.cliente || '—')}</td>
         <td>${esc(v.vendedor || '—')}</td>
         <td>${esc(v.formas || '')}</td>

@@ -175,7 +175,11 @@ table.grade .cod { font-family: Consolas, monospace; font-size: 12px; color: var
 #area-impressao { display: none; position: absolute; top: -9999px; left: -9999px; }
 @page { size: 80mm auto; margin: 2mm; }
 @media print {
-  body > #app, .modal-fundo, .toast { display: none !important; }
+  /* O balão do chat é filho DIRETO de body (mensagens.js), não de #app — sem
+     citá-lo aqui ele era impresso junto com o relatório, e ia parar no PDF que
+     vai para o cliente. Mesma coisa para a etiqueta e o aviso rápido. */
+  body > #app, .modal-fundo, .toast,
+  .msg-balao, .msg-etiqueta, .msg-toast, #msg-toast { display: none !important; }
   #area-impressao { display: block !important; position: static; top: 0; left: 0; }
   body { background: #fff; margin: 0; }
   .etiqueta { border: 1px dashed #ddd; }
@@ -342,7 +346,17 @@ table.grade .cod { font-family: Consolas, monospace; font-size: 12px; color: var
   background: var(--vinho); color: #fff; border: none; cursor: pointer; font-size: 24px; line-height: 1;
   box-shadow: 0 6px 20px rgba(0,0,0,.28); z-index: 8000;
   display: flex; align-items: center; justify-content: center; transition: transform .15s, background .15s;
+  touch-action: none;   /* o arrasto é tratado no JS; sem isso o toque rola a página */
 }
+/* Enquanto está sendo arrastado: sem transição (a bolinha não pode "perseguir"
+   o cursor com atraso) e sem o texto da tela sendo selecionado sem querer. */
+.msg-balao.arrastando { transition: none; cursor: grabbing; box-shadow: 0 10px 26px rgba(0,0,0,.34); }
+body.msg-arrastando { user-select: none; cursor: grabbing; }
+/* O rodapé do conteúdo termina 26px acima da borda e o balão ocupa 78px do
+   canto: sem esta folga a última linha do relatório fica por baixo dele.
+   A classe só existe enquanto o chat está ligado — quem não usa o chat não
+   fica com um vão inútil no fim de toda tela. */
+body.com-chat .conteudo { padding-bottom: 96px; }
 .msg-balao:hover { background: var(--vinho-escuro); transform: translateY(-2px); }
 .msg-balao .badge {
   position: absolute; top: -3px; right: -3px; min-width: 21px; height: 21px; padding: 0 5px;

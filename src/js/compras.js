@@ -1,5 +1,6 @@
 // Fornecedores + Compras
 import { api, el, esc, moeda, toast, modal } from './app.js';
+const dataBrH = (s) => s ? `${String(s).slice(0, 10).split('-').reverse().join('/')} ${String(s).slice(11, 16)}` : '—';
 
 export async function viewCompras(alvo) {
   const tela = el(`
@@ -45,7 +46,7 @@ async function abaCompras(corpo) {
   if (!lista.length) tbody.appendChild(el(`<tr><td colspan="8" class="vazio">Nenhuma compra registrada.</td></tr>`));
   for (const c of lista) {
     const tr = el(`<tr>
-      <td>#${c.id}</td><td>${esc(c.criado_em)}</td><td>${esc(c.fornecedor || '—')}</td>
+      <td>#${c.id}</td><td>${esc(dataBrH(c.criado_em))}</td><td>${esc(c.fornecedor || '—')}</td>
       <td>${esc(c.numero_nf || '—')}</td><td class="num">${c.qtd_itens}</td>
       <td class="num"><b>${moeda(c.total)}</b></td><td>${pill[c.status] || esc(c.status)}</td>
       <td class="acoes-linha">

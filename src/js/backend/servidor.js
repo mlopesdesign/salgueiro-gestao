@@ -30,6 +30,7 @@ import * as updater from './core/updater.js';
 import * as trocas from './core/trocas.js';
 import * as mensagens from './core/mensagens.js';
 import { LOGO_DEFAULT } from './core/logo-default.js';
+import { qrSvg } from '../vendor/qrcode.js';
 
 let db;
 let sessao = { usuario: null };
@@ -74,7 +75,16 @@ const rotas = {
   // v3.3.0: o desconto avulso deixou de exigir administrador. Quem está no PDV
   // confirma com a PRÓPRIA senha (a sessão manda, não o payload) e informa quem
   // autorizou e o motivo — que ficam gravados na venda.
-  'auth:autorizarDesconto': async (p) => auth.verificarOperador(db, sessao.usuario, p.senha),
+  // Desconto manual no PDV: só com senha de administrador (v3.10.0).
+  // Devolve um token de USO ÚNICO, com validade curta, que a venda tem de
+  // apresentar. Sem isso a trava seria só da tela: bastaria um terminal em
+  // rede montar o payload à mão para gravar desconto sem autorização nenhuma.
+  'auth:autorizarDesconto': async (p) => {
+    const r = await auth.autorizarDescontoAdmin(db, sessao.usuario, p || {});
+    if (!r.ok) return r;
+    const token = _novoTokenDesconto(r.autorizado_por, r.usuario_id);
+    return { ok: true, autorizado_por: r.autorizado_por, token };
+  },
 
   // Dashboard
   'dashboard:resumo': () => dashboard.resumo(db, sessao.usuario),
@@ -414,6 +424,56 @@ const rotas = {
   'relatorios:receitaPorLoja': (p) => relatorios.receitaPorLoja(db, p || {}),
   'relatorios:consignados': (p) => relatorios.consignadosMensal(db, p || {}),
   'relatorios:evento': (p) => relatorios.relatorioEvento(db, p || {}),
+  // Compras de quem tem categoria acompanhada (v3.10.0)
+  'relatorios:acompanhadas': (p) => relatorios.comprasAcompanhadas(db, p || {}),
+  'relatorios:acompanhadasXlsx': (p) => {
+    const r = relatorios.comprasAcompanhadas(db, p || {});
+    if (!r.ok) return r;
+    const wb = XLSX.utils.book_new();
+    const a2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+    const add = (nome, linhas, larguras) => {
+      if (!linhas.length) return;
+      const ws = XLSX.utils.json_to_sheet(linhas);
+      if (larguras) ws['!cols'] = larguras.map(w => ({ wch: w }));
+      XLSX.utils.book_append_sheet(wb, ws, nome.slice(0, 31));
+    };
+    add('Pessoas', r.clientes.map(c => ({
+      'Pessoa': c.cliente, 'Categoria': c.categoria, 'Desconto %': c.pct,
+      'Compras': c.compras, 'Peças': c.pecas, 'Média peças/compra': c.media_pecas,
+      'Valor de tabela': a2(c.tabela), 'Desconto': a2(c.desconto), 'Pagou': a2(c.pago),
+      'Primeira': c.primeira, 'Última': c.ultima
+    })), [26, 20, 11, 9, 8, 17, 15, 13, 13, 12, 12]);
+    // Uma linha por peça levada, com a pessoa ao lado — é a folha que mostra
+    // o padrão de revenda (mesma peça, muita quantidade, sempre a mesma pessoa).
+    const detalhe = [];
+    for (const c of r.clientes) {
+      for (const x of c.produtos) {
+        detalhe.push({
+          'Pessoa': c.cliente, 'Categoria': c.categoria,
+          'Tipo de peça': x.produto, 'Ref.': x.referencia || '',
+          'Cor': x.cor || '', 'Tamanho': x.tamanho || '',
+          'Quantidade': x.qtd, 'Total': a2(x.total)
+        });
+      }
+    }
+    add('Peças por pessoa', detalhe, [26, 20, 30, 12, 14, 10, 12, 13]);
+    add('Peças no total', r.por_produto.map(x => ({
+      'Tipo de peça': x.produto, 'Ref.': x.referencia || '',
+      'Cor': x.cor || '', 'Tamanho': x.tamanho || '',
+      'Quantidade': x.qtd, 'Total': a2(x.total), 'Pessoas': x.clientes
+    })), [30, 12, 14, 10, 12, 13, 10]);
+    add('Resumo', [
+      { Indicador: 'Período', Valor: `${r.de} até ${r.ate}` },
+      { Indicador: 'Pessoas', Valor: r.resumo.clientes },
+      { Indicador: 'Compras', Valor: r.resumo.compras },
+      { Indicador: 'Peças', Valor: r.resumo.pecas },
+      { Indicador: 'Valor de tabela', Valor: a2(r.resumo.tabela) },
+      { Indicador: 'Desconto concedido', Valor: a2(r.resumo.desconto) },
+      { Indicador: 'Pago', Valor: a2(r.resumo.pago) }
+    ], [26, 26]);
+    if (!wb.SheetNames.length) return { ok: false, erro: 'Nada para exportar no período.' };
+    return { ok: true, buffer: XLSX.write(wb, { type: 'base64', bookType: 'xlsx' }) };
+  },
   'relatorios:ranking': (p) => relatorios.ranking(db, p || {}),
   'relatorios:eventos': (p) => relatorios.eventosVenda(db, p || {}),
   'relatorios:rankingPeriodo': (p) => relatorios.rankingPeriodo(db, p || {}),
@@ -506,8 +566,19 @@ const rotas = {
         { Indicador: 'Ticket médio', Valor: a2(q.ticket) },
         { Indicador: 'Taxas de cartão', Valor: a2(q.taxas) },
         { Indicador: 'Comissão consignado', Valor: a2(q.comissao) },
-        { Indicador: 'Líquido a receber', Valor: a2(q.receber) }
-      ], [26, 26]);
+        { Indicador: 'Líquido a receber', Valor: a2(q.receber) },
+        // Conciliação (v3.9.0): as mesmas linhas que fecham a lista de
+        // produtos no faturamento bruto, para conferir na planilha.
+        { Indicador: '', Valor: '' },
+        { Indicador: 'Vendas do Salgueiro', Valor: a2(((q.origem || {}).proprio || {}).total || 0) },
+        { Indicador: 'Vendas de consignados', Valor: a2(((q.origem || {}).consignado || {}).total || 0) },
+        { Indicador: 'Total em descontos', Valor: a2((q.descontos || {}).valor || 0) },
+        { Indicador: 'Total em cortesias', Valor: a2((q.cortesias || {}).valor || 0) },
+        { Indicador: 'Valor de tabela das peças', Valor: a2((q.conciliacao || {}).tabela || 0) },
+        { Indicador: '(–) Cortesias', Valor: a2((q.conciliacao || {}).cortesias || 0) },
+        { Indicador: '(–) Descontos no fechamento', Valor: a2((q.conciliacao || {}).descontos || 0) },
+        { Indicador: '= Faturamento bruto', Valor: a2(q.bruto) }
+      ], [30, 26]);
     }
     if (s.vendas !== false) {
       add('Vendas', r.vendas.map(v => ({
@@ -525,18 +596,32 @@ const rotas = {
         'Venda': v.id, 'Data': v.data, 'Hora': v.hora,
         'Produto': it.produto, 'Referência': it.referencia || '',
         'Cor': it.cor || '', 'Tamanho': it.tamanho || '',
+        // Desconto do item MAIS a parte do desconto do fechamento que coube a
+        // ele, e o que a cliente pagou por aquela peça (v3.14.0).
         'Qtd': it.qtd, 'Preço unit.': a2(it.preco_unit),
-        'Desconto': a2(it.desconto), 'Total': a2(it.total)
+        'Valor de tabela': a2(it.tabela ?? it.total),
+        'Desconto no item': a2(it.desconto || 0),
+        'Desconto da venda': a2(it.desconto_venda || 0),
+        'Desconto total': a2(it.desconto_total ?? it.desconto ?? 0),
+        'Pagou': a2(it.recebido ?? it.total)
       });
-      add('Itens', linhas, [8, 11, 7, 34, 14, 12, 10, 7, 12, 11, 12]);
+      add('Itens', linhas, [8, 11, 7, 34, 14, 12, 10, 7, 12, 15, 15, 16, 14, 12]);
     }
     if (s.produtos !== false) {
+      // Origem e percentual do fornecedor por peça (v3.11.0): é o que permite
+      // conferir o acerto do consignado direto na planilha.
       add('Produtos vendidos', r.por_produto.map(x => ({
         'Produto': x.produto, 'Referência': x.referencia || '',
         'Cor': x.cor || '', 'Tamanho': x.tamanho || '',
-        'Qtd vendida': x.qtd, 'Preço unit.': a2(x.qtd ? x.total / x.qtd : 0),
-        'Total': a2(x.total)
-      })), [34, 14, 12, 10, 12, 12, 12]);
+        'Origem': x.consignado ? 'Consignado' : 'Salgueiro',
+        'Fornecedor': x.consignado ? (x.fornecedor || '') : '',
+        '% do fornecedor': x.consignado ? x.pct_fornecedor : '',
+        'Qtd vendida': x.qtd,
+        'Preço unit.': a2(x.qtd ? (x.tabela ?? x.total) / x.qtd : 0),
+        'Valor de tabela': a2(x.tabela ?? x.total),
+        'Desconto': a2(x.desconto || 0),
+        'Recebido': a2(x.recebido ?? x.total)
+      })), [34, 14, 12, 10, 13, 22, 16, 12, 12, 15, 12, 13]);
     }
     if (s.pagamentos !== false) {
       add('Pagamentos', r.por_forma.map(g => ({
@@ -546,11 +631,20 @@ const rotas = {
       })), [24, 8, 14, 10, 12, 14]);
     }
     if (s.consignado !== false && r.por_fornecedor.length) {
+      // Custo e fatia do lucro discriminados (v3.8.0): o repasse é
+      // custo + % do LUCRO, nunca % do preço de venda.
       add('Consignado', r.por_fornecedor.map(g => ({
-        'Fornecedor': g.fornecedor, 'Peças': g.pecas, 'Venda': a2(g.venda),
-        'Comissão': a2(g.comissao), 'Parte da loja': a2(g.parte_loja),
+        'Fornecedor': g.fornecedor, 'Peças': g.pecas,
+        'Valor de tabela': a2(g.venda),
+        'Desconto': a2(g.desconto || 0),
+        'Recebido': a2(g.recebido ?? g.venda),
+        'Custo das peças': a2(g.custo), 'Fatia do lucro': a2(g.lucro_fornecedor),
+        'Repasse': a2(g.comissao),
+        'Repasse dividindo o desconto': a2(g.comissao_ajustada ?? g.comissao),
+        'Diferença': a2(g.dif_desconto || 0),
+        'Sobra p/ a loja': a2(g.loja_real ?? g.parte_loja),
         'Pendente': a2(g.pendente)
-      })), [30, 8, 14, 14, 15, 14]);
+      })), [30, 8, 15, 12, 13, 15, 15, 14, 26, 12, 15, 14]);
     }
     if (s.cortesias !== false && r.cortesias.length) {
       add('Cortesias', r.cortesias.map(x => ({
@@ -559,6 +653,28 @@ const rotas = {
         'Autorizado por': x.autorizado_por || '', 'Peças': x.pecas,
         'Valor de tabela': a2(x.cortesia_valor), 'Custo p/ loja': a2(x.custo)
       })), [8, 11, 7, 34, 24, 22, 8, 15, 14]);
+    }
+    // Aba de descontos (v3.9.0): antes o Excel não trazia nenhuma — o valor
+    // que separa o total das peças do faturamento não tinha onde ser conferido.
+    if (s.descontos !== false && r.descontos && r.descontos.length) {
+      add('Descontos', r.descontos.map(x => ({
+        'Venda': x.venda_id, 'Data': x.data, 'Hora': x.hora,
+        'Cliente': x.cliente || '', 'Quem lançou': x.operador || '',
+        'Origem': x.origem, 'Autorizado por': x.autorizado_por || '',
+        'Motivo': x.motivo || '', 'Valor de tabela': a2(x.subtotal),
+        'Desconto': a2(x.desconto), '%': x.percent, 'Pago': a2(x.total)
+      })), [8, 11, 7, 22, 18, 20, 20, 28, 15, 12, 7, 13]);
+    }
+    // Aba de vendas a preço de custo (v3.19.0). Mesma lógica da de descontos:
+    // é margem que a loja abriu mão e precisa poder ser conferida fora do app.
+    if (s.vendas_custo !== false && r.vendas_custo && r.vendas_custo.length) {
+      add('Vendas a custo', r.vendas_custo.map(x => ({
+        'Venda': x.venda_id, 'Data': x.data, 'Hora': x.hora,
+        'Cliente': x.cliente || '', 'Quem lançou': x.operador || '',
+        'Autorizado por': x.autorizado_por || '', 'Motivo': x.motivo || '',
+        'Peças': x.pecas, 'Valor de tabela': a2(x.tabela),
+        'Cobrado': a2(x.total), 'Margem aberta': a2(x.margem_aberta), '%': x.percent
+      })), [8, 11, 7, 22, 18, 20, 28, 8, 15, 13, 15, 7]);
     }
     if (s.vendedor) {
       add('Vendedores', r.por_vendedor.map(g => ({
@@ -617,6 +733,180 @@ const rotas = {
     if (!r.ok) return r;
     const cfg = config.obter(db).config;
     return await _gerarPdfBase64(gerarHtmlRelatorioTransferencias(r.transferencias, cfg, p || {}));
+  },
+
+  // Recibo de prestação de contas para um fornecedor consignado (v3.16.0)
+  // Lista vendas de um fornecedor para o seletor do recibo (v3.22.0)
+  'relatorios:listarVendasFornecedor': (p) => {
+    const { fornecedor_id } = p || {};
+    if (!fornecedor_id) return { ok: false, erro: 'fornecedor_id obrigatório' };
+    const rows = db.prepare(`
+      SELECT v.id, v.criado_em, COALESCE(c.nome, 'Consumidor final') cliente,
+             SUM(cg.valor_venda) valor_tabela, COUNT(cg.id) pecas
+      FROM consignacoes cg
+      JOIN vendas v ON v.id = cg.venda_id
+      LEFT JOIN clientes c ON c.id = v.cliente_id
+      WHERE cg.fornecedor_id = ? AND v.status = 'concluida'
+      GROUP BY v.id ORDER BY v.criado_em DESC LIMIT 300
+    `).all(Number(fornecedor_id));
+    return { ok: true, vendas: rows };
+  },
+
+  'relatorios:reciboConsignado': async (p) => {
+    // Modos: 'evento' (de/ate), 'mes' (mes+ano), 'venda' (venda_ids[] ou venda_id)
+    const { fornecedor_id, modo, de, ate, venda_id, venda_ids, mes, ano } = p || {};
+    if (!fornecedor_id) return { ok: false, erro: 'Fornecedor não informado.' };
+
+    const _dataBrLocal = s => s ? String(s).slice(0,10).split('-').reverse().join('/') : '—';
+    let whereFiltro, arParams, periodoLabel;
+
+    if (modo === 'venda') {
+      const ids = Array.isArray(venda_ids) && venda_ids.length
+        ? venda_ids.map(Number)
+        : venda_id ? [Number(venda_id)] : [];
+      if (!ids.length) return { ok: false, erro: 'Selecione ao menos uma venda.' };
+      const ph = ids.map(() => '?').join(',');
+      whereFiltro = `AND cg.venda_id IN (${ph})`;
+      arParams = [fornecedor_id, ...ids];
+      if (ids.length === 1) {
+        const vRow = db.prepare('SELECT criado_em FROM vendas WHERE id=?').get(ids[0]);
+        periodoLabel = `Venda #${ids[0]}${vRow ? ' — ' + _dataBrLocal(vRow.criado_em) : ''}`;
+      } else {
+        periodoLabel = `${ids.length} vendas selecionadas`;
+      }
+    } else if (modo === 'mes') {
+      if (!mes || !ano) return { ok: false, erro: 'Mês e ano são obrigatórios.' };
+      const mm = String(mes).padStart(2,'0');
+      const ultimoDia = new Date(Number(ano), Number(mes), 0).getDate();
+      const deM = `${ano}-${mm}-01 00:00`; const ateM = `${ano}-${mm}-${ultimoDia} 23:59`;
+      whereFiltro = 'AND v.criado_em BETWEEN ? AND ?';
+      arParams = [fornecedor_id, deM, ateM];
+      const nomesMes = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                        'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+      periodoLabel = `${nomesMes[Number(mes)-1]} de ${ano}`;
+    } else {
+      // 'evento' (padrão) — usa de/ate
+      if (!de || !ate) return { ok: false, erro: 'Informe o período do evento.' };
+      whereFiltro = 'AND v.criado_em BETWEEN ? AND ?';
+      arParams = [fornecedor_id, de, ate];
+      periodoLabel = null; // gerarHtmlReciboConsignado usa de/ate diretamente
+    }
+
+    const itens = db.prepare(`
+      SELECT pr.nome produto, va.cor, va.tamanho,
+             cg.qtd, cg.valor_venda, cg.valor_custo,
+             cg.pct_fornecedor, cg.valor_fornecedor, cg.valor_loja, cg.status,
+             v.id venda_id, v.criado_em venda_data,
+             f.nome fornecedor, f.id fornecedor_id
+      FROM consignacoes cg
+      JOIN vendas v    ON v.id   = cg.venda_id
+      JOIN fornecedores f ON f.id = cg.fornecedor_id
+      JOIN produtos pr ON pr.id  = cg.produto_id
+      LEFT JOIN variacoes va ON va.produto_id = pr.id AND va.id = (
+        SELECT vi.variacao_id FROM venda_itens vi
+        JOIN variacoes v2 ON v2.id = vi.variacao_id
+        WHERE vi.venda_id = cg.venda_id AND v2.produto_id = pr.id LIMIT 1
+      )
+      WHERE cg.fornecedor_id = ? AND v.status = 'concluida'
+        ${whereFiltro}
+      ORDER BY v.criado_em, pr.nome, va.cor, va.tamanho
+    `).all(...arParams);
+
+    if (!itens.length) return { ok: false, erro: 'Nenhum item de consignado encontrado para este fornecedor no período informado.' };
+
+    const cfg = config.obter(db).config || {};
+    try {
+      const buf = await Neutralino.filesystem.readBinaryFile(`${NL_PATH}/src/img/logo-etq.jpeg`);
+      const bytes = new Uint8Array(buf); let bin = ''; const CHUNK = 8192;
+      for (let i = 0; i < bytes.length; i += CHUNK) bin += String.fromCharCode(...bytes.subarray(i, Math.min(i+CHUNK, bytes.length)));
+      cfg._logoUri = `data:image/jpeg;base64,${btoa(bin)}`;
+    } catch { cfg._logoUri = ''; }
+
+    const html = gerarHtmlReciboConsignado(itens, cfg, { de, ate, label: periodoLabel, modo: modo || 'evento' });
+    return await _gerarPdfBase64(html);
+  },
+
+  // ── Catálogo de Produtos (v3.17.0) ────────────────────────────────────────
+  'catalogo:categorias': () => {
+    const rows = db.prepare(`
+      SELECT c.id, c.nome, COUNT(p.id) total
+      FROM categorias c
+      JOIN produtos p ON p.categoria_id = c.id AND p.ativo = 1
+      GROUP BY c.id, c.nome
+      HAVING total > 0
+      ORDER BY c.nome
+    `).all();
+    const semCat = db.prepare(
+      "SELECT COUNT(*) total FROM produtos WHERE ativo=1 AND (categoria_id IS NULL OR categoria_id NOT IN (SELECT id FROM categorias))"
+    ).get();
+    if ((semCat.total || 0) > 0) rows.push({ id: null, nome: 'Sem categoria', total: semCat.total });
+    return { ok: true, categorias: rows };
+  },
+
+  'catalogo:gerar': async (p) => {
+    const { titulo, colecao, categorias, soEstoque, mostrarPreco, mostrarRef, mostrarQr } = p || {};
+    const todasCats = !Array.isArray(categorias) || categorias.length === 0;
+    const catIds = todasCats ? [] : categorias.filter(c => c !== null).map(Number);
+    const incluiSemCat = todasCats || categorias.includes(null);
+
+    const filtroEst  = soEstoque
+      ? 'AND EXISTS (SELECT 1 FROM variacoes v2 WHERE v2.produto_id=p.id AND v2.ativo=1 AND v2.estoque>0)'
+      : '';
+    const filtroCat = todasCats ? '' : catIds.length
+      ? `AND (p.categoria_id IN (${catIds.map(() => '?').join(',')})${incluiSemCat ? ' OR p.categoria_id IS NULL' : ''})`
+      : (incluiSemCat ? 'AND p.categoria_id IS NULL' : 'AND 1=0');
+
+    const rows = db.prepare(`
+      SELECT p.id, p.nome, p.referencia, p.foto foto_prod, p.preco_venda,
+             COALESCE(c.nome,'Sem categoria') categoria, c.id categoria_id,
+             va.cor, va.tamanho, va.estoque, va.codigo_barras, va.foto foto_var
+      FROM produtos p
+      LEFT JOIN categorias c ON c.id = p.categoria_id
+      LEFT JOIN variacoes va ON va.produto_id = p.id AND va.ativo = 1
+      WHERE p.ativo = 1 ${filtroEst} ${filtroCat}
+      ORDER BY COALESCE(c.nome,'Sem categoria'), p.nome, va.cor, va.tamanho
+    `).all(...(todasCats ? [] : catIds.length ? catIds : []));
+
+    if (!rows.length) return { ok: false, erro: 'Nenhum produto encontrado com os filtros escolhidos.' };
+
+    // Agrega variantes por produto
+    const prodMap = new Map();
+    for (const row of rows) {
+      if (!prodMap.has(row.id)) {
+        prodMap.set(row.id, {
+          id: row.id, nome: row.nome, referencia: row.referencia,
+          foto: row.foto_prod, preco_venda: row.preco_venda,
+          categoria: row.categoria, categoria_id: row.categoria_id,
+          cores: [], tamanhos: [], codigo_barras: null
+        });
+      }
+      const prod = prodMap.get(row.id);
+      if (row.cor  && row.cor  !== 'Única' && !prod.cores.includes(row.cor))    prod.cores.push(row.cor);
+      if (row.tamanho && row.tamanho !== 'U' && !prod.tamanhos.includes(row.tamanho)) prod.tamanhos.push(row.tamanho);
+      if (row.codigo_barras && !prod.codigo_barras) prod.codigo_barras = row.codigo_barras;
+      if (!prod.foto && row.foto_var) prod.foto = row.foto_var;
+    }
+
+    // Agrupa por categoria
+    const catMap = new Map();
+    for (const prod of prodMap.values()) {
+      if (!catMap.has(prod.categoria)) catMap.set(prod.categoria, []);
+      catMap.get(prod.categoria).push(prod);
+    }
+    const cats = [...catMap.entries()].map(([nome, produtos]) => ({ nome, produtos }));
+
+    // Logo
+    const cfg = config.obter(db).config || {};
+    try {
+      const buf = await Neutralino.filesystem.readBinaryFile(`${NL_PATH}/src/img/logo-etq.jpeg`);
+      const bytes = new Uint8Array(buf); let bin = ''; const CHUNK = 8192;
+      for (let i = 0; i < bytes.length; i += CHUNK)
+        bin += String.fromCharCode(...bytes.subarray(i, Math.min(i + CHUNK, bytes.length)));
+      cfg._logoUri = `data:image/jpeg;base64,${btoa(bin)}`;
+    } catch { cfg._logoUri = cfg.logo_cupom || cfg.logo || ''; }
+
+    const html = gerarHtmlCatalogo(cats, cfg, { titulo, colecao, mostrarPreco, mostrarRef, mostrarQr });
+    return _gerarPdfBase64(html);
   },
 
   'lojas:listar': (p) => lojas.listar(db, p || {}),
@@ -731,6 +1021,460 @@ const rotas = {
 };
 
 
+// ── Catálogo de Produtos — gerador de HTML ────────────────────────────────────
+function gerarHtmlCatalogo(cats, cfg, opts = {}) {
+  const { titulo = 'Catálogo de Produtos', colecao = '', mostrarPreco = true, mostrarRef = true, mostrarQr = true } = opts;
+  const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const R       = cfg.cor_primaria || '#B01E23';
+  const R_DK    = '#7a1219';
+  const loja    = esc(cfg.loja_nome || 'Boutique');
+  const sub     = esc(cfg.loja_subtitulo || '');
+  const tel     = esc(cfg.loja_telefone || '');
+  const end_    = esc(cfg.loja_endereco || '');
+  const logoUri = cfg._logoUri || '';
+  const dataHoje = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+
+  // Mapa de cores conhecidas → hex CSS
+  const COR_MAP = {
+    branco:'#ffffff', preto:'#1a1a1a', vermelho:'#c0392b', azul:'#2980b9',
+    verde:'#27ae60', amarelo:'#f1c40f', laranja:'#e67e22', rosa:'#e91e63',
+    roxo:'#9b59b6', cinza:'#95a5a6', marrom:'#795548', bege:'#e8dcc8',
+    vinho:'#7b1c2c', caramelo:'#c67c2f', nude:'#d4a688', off:'#f0ebe3',
+    creme:'#f5f0d8', lilas:'#c39bd3', salmao:'#e88070', mostarda:'#c8a415',
+    bordo:'#800020', coral:'#ff6b6b', terracota:'#c1440e', khaki:'#8b8040',
+  };
+  function corChip(cor) {
+    const k = cor.toLowerCase().trim().replace(/\s+/g, '');
+    const hex = COR_MAP[k] || COR_MAP[k.split(' ')[0]];
+    if (!hex) return `<span class="sz-badge">${esc(cor)}</span>`;
+    const claro = hex === '#ffffff' || hex === '#f0ebe3' || hex === '#f5f0d8' || hex === '#e8dcc8';
+    return `<span class="cor-dot" style="background:${hex};border:1.5px solid ${claro ? '#bbb' : hex}" title="${esc(cor)}"></span>`;
+  }
+
+  const totalProdutos = cats.reduce((s, c) => s + c.produtos.length, 0);
+
+  // ── FLUXO CONTÍNUO ────────────────────────────────────────────────────────
+  // Os produtos são ORDENADOS por categoria, mas a categoria NÃO quebra página.
+  // Uma página só termina quando os 4 espaços estão preenchidos — assim nunca
+  // existe página com 1 ou 2 peças por causa de categoria pequena. A categoria
+  // continua identificada: etiqueta no card e faixa no cabeçalho da página.
+  const POR_PAG = 4;
+  const itens = [];
+  for (const cat of cats) for (const p of cat.produtos) itens.push({ ...p, _cat: cat.nome });
+
+  // Página real onde cada categoria começa (capa=1, índice=2, produtos a partir de 3)
+  const pgDaCat = {};
+  itens.forEach((it, i) => {
+    if (pgDaCat[it._cat] === undefined) pgDaCat[it._cat] = 3 + Math.floor(i / POR_PAG);
+  });
+
+  // ── CAPA ──────────────────────────────────────────────────────────────────
+  const capa = `
+<div class="page capa">
+  <div class="capa-barra-topo" style="background:${R_DK}"></div>
+  <div class="capa-corpo">
+    <div class="capa-logo-wrap">
+      ${logoUri
+        ? `<img class="capa-logo" src="${logoUri}" alt="${loja}">`
+        : `<div class="capa-loja-txt">${loja}</div>`}
+    </div>
+    <div class="capa-divisor" style="background:rgba(255,255,255,.3)"></div>
+    <h1 class="capa-titulo">${esc(titulo)}</h1>
+    ${colecao ? `<p class="capa-colecao">${esc(colecao)}</p>` : ''}
+    ${sub ? `<p class="capa-sub">${sub}</p>` : ''}
+  </div>
+  <div class="capa-rodape" style="border-top:1px solid rgba(255,255,255,.2)">
+    <span>${dataHoje}</span>
+    <span>${totalProdutos} produto${totalProdutos !== 1 ? 's' : ''} &nbsp;·&nbsp; ${cats.length} categoria${cats.length !== 1 ? 's' : ''}</span>
+  </div>
+</div>`;
+
+  // ── ÍNDICE ────────────────────────────────────────────────────────────────
+  // Sempre UMA folha, em três escalas conforme a quantidade de categorias.
+  // Duas colunas só entram quando uma não dá conta: com poucas categorias a
+  // coluna dupla deixaria duas metades curtas boiando no meio da folha.
+  //   até 18  → 1 coluna, fonte grande
+  //   19 a 34 → 2 colunas, fonte média
+  //   35+     → 2 colunas, compacto (em vez de virar a folha)
+  const indEscala = cats.length <= 18 ? ' ind-largo'
+                  : cats.length > 34  ? ' ind-compacto' : '';
+  const indice = `
+<div class="page pg-indice">
+  <div class="pg-header" style="border-bottom:3px solid ${R}">
+    <span class="pg-header-titulo" style="color:${R}">Índice</span>
+    <span class="pg-header-loja">${loja}</span>
+  </div>
+  <div class="indice-corpo${indEscala}">
+    <div class="ind-cols">
+    ${cats.map((c, i) => `
+    <div class="ind-linha">
+      <span class="ind-num" style="color:${R}">${String(i + 1).padStart(2, '0')}</span>
+      <span class="ind-nome">${esc(c.nome)}</span>
+      <span class="ind-pts"></span>
+      <span class="ind-qt">${c.produtos.length} peça${c.produtos.length !== 1 ? 's' : ''}</span>
+      <span class="ind-pag" style="color:${R}">${pgDaCat[c.nome] || ''}</span>
+    </div>`).join('')}
+    </div>
+  </div>
+  <div class="pg-footer">${loja} &nbsp;·&nbsp; ${esc(titulo)}</div>
+</div>`;
+
+  // ── CARD DE PRODUTO ───────────────────────────────────────────────────────
+  function cardProduto(prod) {
+    const imgHtml = prod.foto
+      ? `<img class="card-foto" src="${prod.foto}" alt="${esc(prod.nome)}">`
+      : `<div class="card-sem-foto"><svg viewBox="0 0 40 40" width="36" height="36"><rect width="40" height="40" fill="none"/><path d="M5 32 L15 18 L22 26 L27 20 L35 32Z" fill="#ddd"/><circle cx="28" cy="12" r="4" fill="#ddd"/></svg></div>`;
+
+    const qrId  = prod.codigo_barras || String(prod.id);
+    const qrHtml = mostrarQr && qrId
+      ? `<div class="card-qr">${qrSvg(qrId, { ecc: 'M', margin: 0 })}</div>` : '';
+
+    const precoHtml = mostrarPreco && prod.preco_venda != null
+      ? `<div class="card-preco" style="color:${R}">${Number(prod.preco_venda).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>`
+      : '';
+
+    const refHtml = mostrarRef && prod.referencia
+      ? `<div class="card-ref">REF: ${esc(prod.referencia)}</div>` : '';
+
+    const coresHtml = prod.cores.length
+      ? `<div class="card-linha"><div class="card-cores">${prod.cores.map(corChip).join('')}</div></div>` : '';
+
+    const tamsHtml = prod.tamanhos.length
+      ? `<div class="card-linha">${prod.tamanhos.map(t => `<span class="sz-badge">${esc(t)}</span>`).join('')}</div>` : '';
+
+    const catHtml = prod._cat
+      ? `<div class="card-cat" style="color:${R};border-color:${R}">${esc(prod._cat)}</div>` : '';
+
+    return `
+<div class="card">
+  <div class="card-img-box"><div class="card-img-inner">${imgHtml}</div></div>
+  <div class="card-body">
+    ${catHtml}
+    <div class="card-nome">${esc(prod.nome)}</div>
+    ${refHtml}
+    <div class="card-mid">${coresHtml}${tamsHtml}</div>
+    <div class="card-bot">
+      ${precoHtml}
+      ${qrHtml}
+    </div>
+  </div>
+</div>`;
+  }
+
+  // ── PÁGINAS DE PRODUTOS — fluxo contínuo, sempre 4 por página ──────────────
+  let paginas = '';
+  let pgGlobal = 2; // capa=1, índice=2
+  for (let i = 0; i < itens.length; i += POR_PAG) {
+    pgGlobal++;
+    const fatia = itens.slice(i, i + POR_PAG);
+    // categorias presentes NESTA página, na ordem em que aparecem
+    const catsPag = [];
+    for (const it of fatia) if (!catsPag.includes(it._cat)) catsPag.push(it._cat);
+    while (fatia.length < POR_PAG) fatia.push(null);
+
+    paginas += `
+<div class="page pg-grade">
+  <div class="pg-header" style="border-bottom:2px solid ${R}">
+    <span class="pg-header-cat" style="color:${R}">${catsPag.map(esc).join(' &nbsp;·&nbsp; ')}</span>
+    <span class="pg-header-loja">${loja}</span>
+  </div>
+  <div class="grade">
+    ${fatia.map(p => p ? cardProduto(p) : '<div class="card card-vazio"></div>').join('\n    ')}
+  </div>
+  <div class="pg-footer">${loja} &nbsp;·&nbsp; ${esc(titulo)} &nbsp;·&nbsp; pág. ${pgGlobal}</div>
+</div>`;
+  }
+
+  // ── CONTRA-CAPA ───────────────────────────────────────────────────────────
+  const contracapa = `
+<div class="page contracapa">
+  <div class="cc-faixa" style="background:${R_DK}"></div>
+  <div class="cc-corpo">
+    ${logoUri
+      ? `<img class="cc-logo" src="${logoUri}" alt="${loja}">`
+      : `<div class="cc-loja-txt">${loja}</div>`}
+    ${sub ? `<div class="cc-sub">${sub}</div>` : ''}
+    <div class="cc-divisor" style="background:rgba(255,255,255,.3)"></div>
+    ${tel  ? `<div class="cc-contato">📞 &nbsp;${tel}</div>`  : ''}
+    ${end_ ? `<div class="cc-contato">📍 &nbsp;${end_}</div>` : ''}
+  </div>
+  <div class="cc-rodape" style="border-top:1px solid rgba(255,255,255,.15)">
+    <span>${dataHoje}</span>
+    <span>${totalProdutos} produto${totalProdutos !== 1 ? 's' : ''}</span>
+  </div>
+</div>`;
+
+  // ── HTML COMPLETO ─────────────────────────────────────────────────────────
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>${esc(titulo)}</title>
+<style>
+@page { size: A4 portrait; margin: 0; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; background: #fff; color: #1a1a1a; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+/* ── PÁGINA BASE ── */
+.page {
+  width: 210mm;
+  height: 297mm;
+  overflow: hidden;
+  position: relative;
+  page-break-after: always;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── CAPA ── */
+.capa { background: ${R}; color: #fff; }
+.capa-barra-topo { height: 10mm; flex-shrink: 0; }
+.capa-corpo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7mm;
+  padding: 0 22mm;
+}
+.capa-logo-wrap { display: flex; align-items: center; justify-content: center; }
+.capa-logo { max-width: 60mm; max-height: 28mm; object-fit: contain; filter: brightness(0) invert(1); display: block; }
+.capa-loja-txt { font-size: 34pt; font-weight: 900; letter-spacing: .06em; text-align: center; text-transform: uppercase; }
+.capa-divisor { width: 24mm; height: 1.5px; margin: 2mm auto; }
+.capa-titulo { font-size: 22pt; font-weight: 200; letter-spacing: .12em; text-transform: uppercase; text-align: center; }
+.capa-colecao { font-size: 13pt; font-style: italic; opacity: .85; text-align: center; }
+.capa-sub { font-size: 10pt; opacity: .65; text-align: center; }
+.capa-rodape {
+  padding: 5mm 14mm;
+  display: flex;
+  justify-content: space-between;
+  font-size: 8.5pt;
+  opacity: .7;
+  flex-shrink: 0;
+}
+
+/* ── CABEÇALHO / RODAPÉ DAS PÁGINAS INTERNAS ── */
+.pg-header {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 4mm 8mm 3mm;
+}
+.pg-header-titulo { font-size: 16pt; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.pg-header-cat    { font-size: 10.5pt; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.pg-header-loja   { font-size: 7.5pt; color: #aaa; letter-spacing: .06em; text-transform: uppercase; }
+.pg-footer {
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 7pt;
+  color: #bbb;
+  letter-spacing: .04em;
+  padding: 2.5mm 10mm;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* ── ÍNDICE — duas colunas, uma folha só ──
+   Propriedade columns em vez de flex: o navegador reparte as linhas entre
+   as duas colunas sozinho, e break-inside:avoid impede que uma linha seja
+   cortada ao meio na virada da coluna.
+   NÃO usar crase aqui: este CSS mora dentro de um template literal. */
+.pg-indice { padding: 0; }
+/* O corpo centraliza verticalmente; as colunas moram no filho .ind-cols.
+   Sem esse wrapper o conteúdo cola no topo e sobra meia folha em branco
+   quando a loja tem poucas categorias. */
+.indice-corpo {
+  flex: 1;
+  padding: 6mm 14mm;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+.ind-cols {
+  width: 100%;
+  columns: 2;
+  column-gap: 10mm;
+  column-fill: balance;
+}
+.ind-linha {
+  display: flex;
+  align-items: baseline;
+  gap: 2mm;
+  padding: 3.4mm 0;
+  border-bottom: 1px solid #f0f0f0;
+  break-inside: avoid;
+  -webkit-column-break-inside: avoid;
+  page-break-inside: avoid;
+}
+.ind-num  { font-size: 13pt; font-weight: 900; width: 8mm; flex-shrink: 0; }
+.ind-nome { font-size: 9.5pt; font-weight: 500; white-space: nowrap; overflow: hidden; }
+.ind-qt   { font-size: 7pt; color: #aaa; white-space: nowrap; }
+.ind-pts  { flex: 1; border-bottom: 1.2px dotted #ddd; margin-bottom: 2px; min-width: 4mm; }
+.ind-pag  { font-size: 9.5pt; font-weight: 700; width: 7mm; text-align: right; flex-shrink: 0; }
+
+/* Até 18 categorias: uma coluna só, na escala grande — preenche a folha
+   inteira sem parecer esticado, e mantém o índice legível de longe. */
+.ind-largo .ind-cols { columns: 1; }
+.ind-largo .ind-linha { padding: 4.6mm 0; gap: 3mm; }
+.ind-largo .ind-num   { font-size: 19pt; width: 13mm; }
+.ind-largo .ind-nome  { font-size: 12.5pt; }
+.ind-largo .ind-qt    { font-size: 8.5pt; }
+.ind-largo .ind-pag   { font-size: 11pt; width: 9mm; }
+
+/* 35 ou mais: aperta em vez de virar a folha */
+.ind-compacto .ind-linha { padding: 1.4mm 0; gap: 1.5mm; }
+.ind-compacto .ind-num   { font-size: 10pt; width: 6.5mm; }
+.ind-compacto .ind-nome  { font-size: 8pt; }
+.ind-compacto .ind-qt    { font-size: 6pt; }
+.ind-compacto .ind-pag   { font-size: 8pt; width: 6mm; }
+
+/* ── GRADE 2×2 — cards 20% menores; a folga vira MARGEM de respiro ──
+   Card 84×112mm (antes 105×135). O espaço liberado não fica sobrando num
+   canto: virou margem lateral de 16mm e vertical de 15mm, que é o que uma
+   gráfica chama de área de sangria visual. */
+.pg-grade { padding: 0; }
+.grade {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 84mm 84mm;
+  grid-auto-rows: 126mm;
+  justify-content: center;
+  align-content: center;
+  gap: 6mm;
+  padding: 6mm 16mm;
+  background: #fff;
+  overflow: hidden;
+}
+
+/* ── CARD ──
+   84×126mm contra 105×135mm da versão anterior: −20% de largura e −25% de
+   área. A altura tem folga DELIBERADA: 126 − 4 de recuo − 76 de foto = 46mm
+   de área de informação para ~32mm de conteúdo.
+   Histórico dos cortes, para ninguém reduzir isto de novo sem renderizar:
+     112mm → preço e QR cortados fora do cartão;
+     120mm → QR cortado pela metade;
+     124mm → QR inteiro, mas o overflow:hidden comia o recuo de baixo
+             (2,5mm embaixo contra 5mm à direita — QR "sentado" na base).
+   Quando o conteúdo encosta no limite, o flex sacrifica o padding em
+   silêncio: não dá erro, só fica feio. Renderizar o PDF e medir. */
+.card {
+  background: #fff;
+  border: 1px solid #e6e6e6;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  width: 84mm;
+  height: 126mm;
+}
+.card-vazio { border: none; background: #fff; }
+
+/* Foto quadrada (76×76mm) com margem interna em todos os lados.
+   4mm aqui e no .card-body: foto e texto alinhados na mesma coluna. */
+.card-img-box {
+  flex-shrink: 0;
+  padding: 4mm 4mm 0;
+}
+.card-img-inner {
+  width: 76mm;
+  height: 76mm;
+  overflow: hidden;
+  background: #f4f4f4;
+}
+.card-foto {
+  width: 76mm;
+  height: 76mm;
+  object-fit: cover;
+  display: block;
+}
+.card-sem-foto {
+  width: 76mm;
+  height: 76mm;
+  background: #efefef;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Info do card — compacta, empilhada, preço cola no fundo */
+.card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: 2.5mm 4mm 4mm;
+  gap: 1mm;
+  overflow: hidden;
+}
+.card-cat  {
+  font-size: 5.5pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  border-left: 2px solid;
+  padding-left: 1.5mm;
+  line-height: 1.2;
+}
+.card-nome { font-size: 8.5pt; font-weight: 700; line-height: 1.2; color: #111; }
+.card-ref  { font-size: 6pt; color: #bbb; letter-spacing: .06em; }
+.card-mid  { display: flex; flex-direction: column; gap: 1mm; }
+.card-linha { display: flex; flex-wrap: wrap; gap: 2px; align-items: center; }
+.cor-dot   { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.sz-badge  {
+  display: inline-block;
+  border: 1px solid #d8d8d8;
+  border-radius: 2px;
+  padding: 0 3px;
+  font-size: 6pt;
+  color: #555;
+  line-height: 1.6;
+  letter-spacing: .02em;
+}
+.card-bot  { display: flex; justify-content: space-between; align-items: center; margin-top: auto; padding-top: 1.5mm; }
+.card-preco { font-size: 11pt; font-weight: 900; line-height: 1; }
+/* O QR é um bloco preto denso: com o mesmo recuo do texto ele PARECE mais
+   colado na borda do que está. 1mm a mais compensa opticamente — fica 5mm
+   da borda direita contra os 4mm do texto. */
+.card-qr   { width: 10mm; height: 10mm; flex-shrink: 0; margin-right: 1mm; }
+.card-qr svg { width: 10mm; height: 10mm; display: block; }
+
+/* ── CONTRA-CAPA ── */
+.contracapa { background: ${R}; color: #fff; }
+.cc-faixa   { height: 10mm; flex-shrink: 0; }
+.cc-corpo   {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5mm;
+  padding: 0 22mm;
+}
+.cc-logo    { max-width: 60mm; max-height: 28mm; object-fit: contain; filter: brightness(0) invert(1); display: block; }
+.cc-loja-txt { font-size: 28pt; font-weight: 900; letter-spacing: .06em; text-align: center; text-transform: uppercase; }
+.cc-sub     { font-size: 11pt; opacity: .75; text-align: center; }
+.cc-divisor { width: 20mm; height: 1px; margin: 3mm auto; }
+.cc-contato { font-size: 12pt; opacity: .85; text-align: center; }
+.cc-rodape  {
+  padding: 5mm 14mm;
+  display: flex;
+  justify-content: space-between;
+  font-size: 8.5pt;
+  opacity: .6;
+  flex-shrink: 0;
+}
+</style>
+</head>
+<body>
+${capa}
+${indice}
+${paginas}
+${contracapa}
+</body>
+</html>`;
+}
+
 // ── Impressão local direta (sem extensão PS1) ─────────────────────────────────
 // ── Geração de PDF via Edge headless ─────────────────────────────────────────
 // Recebe HTML completo (standalone), renderiza com Edge --headless=new em A4,
@@ -842,6 +1586,197 @@ function gerarHtmlRomaneio(r, cfg) {
     <div><div class="ln"></div>Recebido por</div>
   </div>
   </body></html>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Recibo de prestação de contas — consignado (v3.16.0)
+// ─────────────────────────────────────────────────────────────────────────────
+function gerarHtmlReciboConsignado(itens, cfg, periodo) {
+  const esc2   = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const arred  = v => Math.round((v||0)*100)/100;
+  const moeda  = v => 'R$ ' + arred(v).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+  const dataBr = s => s ? String(s).slice(0,10).split('-').reverse().join('/') : '—';
+  const now    = new Date();
+  const _p2    = n => String(n).padStart(2,'0');
+  const emitido = `${_p2(now.getDate())}/${_p2(now.getMonth()+1)}/${now.getFullYear()} ${_p2(now.getHours())}:${_p2(now.getMinutes())}`;
+  const nomeLoja = cfg.nome_loja || 'Boutique do Salgueiro';
+  const logoUri  = cfg._logoUri  || '';   // injetado pela rota via leitura de arquivo
+  const fornecedor = itens[0]?.fornecedor || '—';
+  const deBr  = dataBr(String(periodo.de  || '').slice(0,10));
+  const ateBr = dataBr(String(periodo.ate || '').slice(0,10));
+  const periodoTexto = periodo.label ||
+    (deBr !== '—' && ateBr !== '—' ? `${deBr} até ${ateBr}` : '—');
+
+  // Agrega por produto (nome + cor + tamanho)
+  const map = new Map();
+  for (const cg of itens) {
+    const cor = (cg.cor && cg.cor !== 'Única') ? cg.cor : null;
+    const tam = (cg.tamanho && cg.tamanho !== 'U') ? cg.tamanho : null;
+    const chave = [cg.produto, cor, tam].filter(Boolean).join(' · ');
+    const g = map.get(chave) || { produto: cg.produto, cor, tam, qtd: 0,
+      venda: 0, custo: 0, comissao: 0, pcts: new Set(), pendente: 0 };
+    g.qtd      += Number(cg.qtd)             || 0;
+    g.venda     = arred(g.venda     + (cg.valor_venda      || 0));
+    g.custo     = arred(g.custo     + (cg.valor_custo      || 0));
+    g.comissao  = arred(g.comissao  + (cg.valor_fornecedor || 0));
+    if (cg.pct_fornecedor) g.pcts.add(Number(cg.pct_fornecedor));
+    if (cg.status === 'pendente') g.pendente = arred(g.pendente + (cg.valor_fornecedor || 0));
+    map.set(chave, g);
+  }
+  const grupos = [...map.values()];
+
+  // Totais gerais
+  const totQtd   = grupos.reduce((s,g) => s + g.qtd, 0);
+  const totVenda  = grupos.reduce((s,g) => arred(s + g.venda), 0);
+  const totCusto  = grupos.reduce((s,g) => arred(s + g.custo), 0);
+  const totComissao = grupos.reduce((s,g) => arred(s + g.comissao), 0);
+  const totPendente = grupos.reduce((s,g) => arred(s + g.pendente), 0);
+  const totLoja   = arred(totVenda - totComissao);
+  const totLucroForn = arred(totComissao - totCusto);
+
+  const linhasItens = grupos.map(g => {
+    const pctLabel = g.pcts.size === 1 ? `${[...g.pcts][0]}%` : 'variado';
+    const descricao = [g.produto, g.cor, g.tam].filter(Boolean).join(' · ');
+    return `<tr>
+      <td>${esc2(descricao)}</td>
+      <td class="num">${g.qtd}</td>
+      <td class="num">${moeda(g.venda)}</td>
+      <td class="num">${moeda(g.custo)}</td>
+      <td class="num">${esc2(pctLabel)}</td>
+      <td class="num"><b>${moeda(g.comissao)}</b></td>
+    </tr>`;
+  }).join('');
+
+  const statusBadge = totPendente > 0.005
+    ? `<span style="display:inline-block;padding:3mm 8mm;border-radius:20px;font-size:13px;font-weight:700;text-transform:uppercase;background:#fff3e0;color:#b76a00;border:2px solid #f0a040">⏳ Pendente — ${moeda(totPendente)} a pagar</span>`
+    : `<span style="display:inline-block;padding:3mm 8mm;border-radius:20px;font-size:13px;font-weight:700;text-transform:uppercase;background:#e8f5e9;color:#2e7d32;border:2px solid #66bb6a">✓ Acertado</span>`;
+
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+@page{size:A4;margin:15mm 18mm}
+body{font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#222;background:#fff}
+.cab{display:flex;align-items:flex-start;justify-content:space-between;border-bottom:3px solid #8B2635;padding-bottom:8mm;margin-bottom:7mm}
+.cab-logo{max-height:18mm;max-width:48mm;object-fit:contain;margin-bottom:2mm;display:block}
+.cab-nome{font-size:15px;font-weight:700;color:#8B2635}
+.cab-dir{text-align:right}
+.cab-dir h1{font-size:20px;font-weight:700;color:#8B2635;letter-spacing:.02em}
+.cab-dir .sub{font-size:11px;color:#777;margin-top:2px}
+.cab-dir .emitido{font-size:10px;color:#aaa;margin-top:3px}
+.bloco-forn{background:#fdf6f6;border:1px solid #e8d0d0;border-radius:6px;padding:5mm 7mm;margin-bottom:6mm}
+.bloco-forn .rot{font-size:9px;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin-bottom:1mm}
+.bloco-forn .nome{font-size:17px;font-weight:700;color:#333}
+.bloco-forn .per{font-size:11px;color:#777;margin-top:2mm}
+h2{font-size:11px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #e0e0e0;padding-bottom:2mm;margin-bottom:3mm;margin-top:6mm}
+table{width:100%;border-collapse:collapse;margin-bottom:5mm;font-size:11px}
+thead th{background:#8B2635;color:#fff;padding:2.5mm 3mm;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.03em}
+thead th.num{text-align:right}
+tbody tr:nth-child(even){background:#faf8f8}
+tbody td{padding:2mm 3mm;border-bottom:1px solid #eee;vertical-align:middle}
+tbody td.num{text-align:right}
+.tr-total td{background:#f2e8e8;font-weight:700;border-top:2px solid #8B2635;padding:3mm}
+.res{display:grid;grid-template-columns:1fr 1fr;gap:6mm;margin-bottom:6mm}
+.res-linha{display:flex;justify-content:space-between;align-items:center;padding:2mm 0;border-bottom:1px solid #eee;font-size:11px;gap:4mm}
+.res-linha.dest{font-weight:700;font-size:13px;color:#8B2635;border-top:2px solid #8B2635;border-bottom:2px solid #8B2635;padding:3mm 0;margin-top:1mm}
+.res-linha.suave{color:#888;font-size:10px}
+.obs{background:#fffbe6;border:1px solid #f0c040;border-radius:4px;padding:3mm 4mm;font-size:10px;color:#856404;margin-bottom:5mm;line-height:1.5}
+.sit{margin-bottom:7mm}
+.sit .rot{font-size:10px;color:#888;margin-bottom:2mm}
+.ass{display:grid;grid-template-columns:1fr 1fr;gap:18mm;margin-top:14mm}
+.ass-box .linha{border-top:1px solid #bbb;padding-top:2mm;margin-top:16mm;text-align:center}
+.ass-box .nome{font-size:11px;font-weight:700;color:#333}
+.ass-box .papel{font-size:10px;color:#888}
+.ass-box .data{font-size:10px;color:#bbb;margin-top:2mm}
+.rodape{border-top:1px solid #ddd;padding-top:3mm;margin-top:8mm;font-size:9px;color:#bbb;text-align:center}
+</style>
+</head><body>
+
+<div class="cab">
+  <div>
+    ${logoUri ? `<img class="cab-logo" src="${logoUri}" onerror="this.style.display='none'">` : ''}
+    <div class="cab-nome">${esc2(nomeLoja)}</div>
+  </div>
+  <div class="cab-dir">
+    <h1>Prestação de Contas</h1>
+    <div class="sub">Produtos Consignados</div>
+    <div class="emitido">Emitido em ${emitido}</div>
+  </div>
+</div>
+
+<div class="bloco-forn">
+  <div class="rot">Fornecedor</div>
+  <div class="nome">${esc2(fornecedor)}</div>
+  <div class="per">Apuração: <b>${esc2(periodoTexto)}</b></div>
+</div>
+
+<h2>Produtos vendidos no período</h2>
+<table>
+  <thead><tr>
+    <th>Produto / Variação</th>
+    <th class="num">Qtd</th>
+    <th class="num">Vl. tabela</th>
+    <th class="num">Custo unit.</th>
+    <th class="num">% acerto</th>
+    <th class="num">Repasse</th>
+  </tr></thead>
+  <tbody>
+    ${linhasItens}
+    <tr class="tr-total">
+      <td><b>TOTAL</b></td>
+      <td class="num"><b>${totQtd}</b></td>
+      <td class="num"><b>${moeda(totVenda)}</b></td>
+      <td class="num"><b>${moeda(totCusto)}</b></td>
+      <td class="num">—</td>
+      <td class="num"><b>${moeda(totComissao)}</b></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Resumo financeiro</h2>
+<div class="res">
+  <div>
+    <div class="res-linha"><span>Peças vendidas</span><b>${totQtd} peça(s)</b></div>
+    <div class="res-linha"><span>Valor de tabela</span><b>${moeda(totVenda)}</b></div>
+    <div class="res-linha"><span>Custo das peças</span><b>${moeda(totCusto)}</b></div>
+  </div>
+  <div>
+    <div class="res-linha"><span>Fatia do lucro (fornecedor)</span><b>${moeda(totLucroForn)}</b></div>
+    <div class="res-linha dest"><span>TOTAL A REPASSAR</span><b>${moeda(totComissao)}</b></div>
+    <div class="res-linha suave"><span>Parte da loja (receita)</span><b>${moeda(totLoja)}</b></div>
+  </div>
+</div>
+
+<div class="obs">
+  📌 <b>Como calculamos o repasse:</b> o fornecedor recebe o <b>custo das peças</b> de volta
+  mais a <b>fatia do lucro</b> combinada (valor de venda − custo × percentual acordado).
+  O repasse <u>não</u> é uma porcentagem direta do preço de venda — por isso costuma ser maior
+  do que o percentual sugere.
+</div>
+
+<div class="sit">
+  <div class="rot">Situação neste período:</div>
+  ${statusBadge}
+</div>
+
+<div class="ass">
+  <div class="ass-box">
+    <div class="linha">
+      <div class="nome">${esc2(nomeLoja)}</div>
+      <div class="papel">Responsável</div>
+      <div class="data">Data de acerto: ___ / ___ / ______</div>
+    </div>
+  </div>
+  <div class="ass-box">
+    <div class="linha">
+      <div class="nome">${esc2(fornecedor)}</div>
+      <div class="papel">Fornecedor / Representante</div>
+      <div class="data">Data de acerto: ___ / ___ / ______</div>
+    </div>
+  </div>
+</div>
+
+<div class="rodape">${esc2(nomeLoja)} · Salgueiro Gestão · Documento gerado automaticamente em ${emitido}</div>
+</body></html>`;
 }
 
 // HTML standalone para relatório resumido de transferências (paisagem A4)
@@ -1039,6 +1974,49 @@ function exigirLogin(canal) {
            'dev:trocarSenha', 'dev:setores', 'dev:resetarFabrica'].includes(canal);
 }
 
+// ── Tokens de autorização de desconto (v3.10.0) ─────────────────────────────
+// Vivem só na memória do processo: se o sistema for reiniciado no meio de uma
+// venda, o operador pede a autorização de novo — que é o comportamento seguro.
+// Uso único e validade de 5 minutos, tempo de chamar o administrador ao balcão
+// sem deixar uma autorização "pendurada" para a venda seguinte.
+const _tokensDesconto = new Map();
+const TOKEN_DESCONTO_MS = 5 * 60 * 1000;
+
+function _novoTokenDesconto(autorizadoPor, usuarioId) {
+  const token = 'D' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+  _tokensDesconto.set(token, { expira: Date.now() + TOKEN_DESCONTO_MS, autorizado_por: autorizadoPor, usuario_id: usuarioId });
+  // limpeza preguiçosa dos vencidos — a lista nunca passa de alguns itens
+  for (const [k, v] of _tokensDesconto) if (v.expira < Date.now()) _tokensDesconto.delete(k);
+  return token;
+}
+
+// Consome o token: devolve os dados na primeira vez, null da segunda em diante.
+function _consumirTokenDesconto(token) {
+  const t = _tokensDesconto.get(String(token || ''));
+  if (!t) return null;
+  _tokensDesconto.delete(token);
+  if (t.expira < Date.now()) return null;
+  return t;
+}
+
+// Rotas EXCLUSIVAS do administrador — ter a permissão não basta.
+// Decisão do Marcio (13/08/2026): mudar número de estoque e ver quem está
+// conectado é do dono da loja, não do operador. A permissão `estoque.movimentar`
+// continua existindo e ainda vale para o perfil Estoquista VER as telas; o que
+// ela deixou de liberar é a escrita.
+//
+// ATENÇÃO ao que NÃO está aqui: venda, devolução, troca e recebimento de compra
+// continuam baixando/subindo estoque normalmente — eles passam pelo core direto
+// (pdv.registrarVenda → estoques.aplicar), não por estas rotas. Incluí-las aqui
+// travaria o caixa.
+const ROTAS_SO_ADMIN = new Set([
+  'estoque:movimentar',      // entrada, saída manual e ajuste de inventário
+  'estoques:salvar',         // criar/editar local de estoque
+  'estoques:desativar',      // desativar local
+  'estoques:transferir',     // transferência entre locais (romaneio)
+  'mensagens:terminais'      // "Quem está online agora"
+]);
+
 // Executor único de rotas — idêntico à V1 (menos o troca-troca de sessão,
 // que só existia por causa dos terminais em rede; aqui a sessão é única).
 async function processar(canal, payload, sess) {
@@ -1050,6 +2028,12 @@ async function processar(canal, payload, sess) {
     }
     const bloqueio = licenca.verificar(canal);
     if (bloqueio) return { ok: false, erro: bloqueio };
+    // Trava de administrador — vem ANTES da permissão comum, senão o admin
+    // seria o único a passar pelos dois testes e a mensagem de erro sairia
+    // errada para quem tem a permissão mas não é admin.
+    if (ROTAS_SO_ADMIN.has(canal) && (!sess.usuario || sess.usuario.perfil !== 'admin')) {
+      return { ok: false, erro: 'Apenas o administrador pode fazer isto.' };
+    }
     const permNec = PERM_ROTA[canal];
     if (permNec && !permissoes.pode(sess.usuario, permNec)) {
       return { ok: false, erro: 'Você não tem permissão para esta ação.' };
@@ -1061,6 +2045,57 @@ async function processar(canal, payload, sess) {
         (Array.isArray(p.itens) && p.itens.some(i => (Number(i.desconto) || 0) > 0));
       if (temDesc) return { ok: false, erro: 'Você não tem permissão para dar desconto.' };
     }
+    // Desconto MANUAL exige autorização de administrador (v3.10.0).
+    //
+    // O que é livre: o desconto da categoria do cliente e o automático à vista.
+    // Os dois são recalculados aqui a partir do banco e da configuração — o
+    // payload não é consultado para isso, senão bastaria mentir a origem.
+    // Só o que EXCEDE esse valor precisa do token emitido em auth:autorizarDesconto.
+    // Venda a custo NÃO passa por aqui: ela tem trava própria logo abaixo e o
+    // core já zera o desconto. Sem esta guarda, um payload a custo que chegasse
+    // com desconto consumiria o token de uso único aqui e a trava de custo
+    // ficaria sem token para validar.
+    if (canal === 'pdv:venda' && String((payload || {}).tipo_venda || '') !== 'custo') {
+      const p = payload || {};
+      const desc = Number(p.desconto) || 0;
+      if (desc > 0) {
+        const sub = (Array.isArray(p.itens) ? p.itens : []).reduce(
+          (s, i) => s + (Number(i.qtd) || 0) * (Number(i.preco_unit) || 0) - (Number(i.desconto) || 0), 0);
+        const livre = auth.descontoLivre(db, {
+          cliente_id: p.cliente_id, subtotal: sub,
+          pagamentos: p.pagamentos, config: config.obter(db).config
+        });
+        if (desc > livre + 0.01) {
+          const t = _consumirTokenDesconto(p.desconto_token);
+          if (!t) {
+            return { ok: false, erro: 'Desconto acima do automático precisa de autorização do administrador. Peça a autorização e refaça o fechamento.' };
+          }
+          // Quem autorizou vem do token (do banco), nunca do campo enviado.
+          p.desconto_autorizado_por = t.autorizado_por;
+        }
+      }
+    }
+    // Venda a PREÇO DE CUSTO exige autorização de administrador (v3.19.0).
+    //
+    // Mesma trava do desconto manual: token de uso único emitido em
+    // auth:autorizarDesconto e consumido aqui. Sem ele a venda é recusada —
+    // a checagem não pode viver só na tela, senão um terminal em rede monta
+    // o payload à mão e vende tudo a custo.
+    //
+    // O motivo é obrigatório: é o único rastro de por que a loja abriu mão da
+    // margem. Quem autorizou vem do TOKEN (lido do banco), nunca do formulário.
+    if (canal === 'pdv:venda' && String((payload || {}).tipo_venda || '') === 'custo') {
+      const p = payload;
+      const t = _consumirTokenDesconto(p.desconto_token);
+      if (!t) {
+        return { ok: false, erro: 'Venda a preço de custo precisa de autorização do administrador. Peça a autorização e refaça o fechamento.' };
+      }
+      if (!String(p.desconto_motivo || '').trim()) {
+        return { ok: false, erro: 'Informe o motivo da venda a preço de custo.' };
+      }
+      p.desconto_autorizado_por = t.autorizado_por;
+    }
+
     // Setores desligados pelo Dev que aparecem como forma de pagamento no PDV
     if (canal === 'pdv:venda') {
       const formas = Array.isArray((payload || {}).pagamentos) ? payload.pagamentos.map(pg => pg.forma) : [];
@@ -1115,7 +2150,11 @@ const PERM_ROTA = {
   // relatório de estoque: quem cuida do estoque precisa dele, mesmo sem acesso a relatórios de venda
   'relatorios:estoque': 'estoque.ver',
   'relatorios:consignados': 'relatorios.ver',
+  'catalogo:categorias': 'produtos.ver', 'catalogo:gerar': 'produtos.ver',
+  'relatorios:listarVendasFornecedor': 'relatorios.ver',
+  'relatorios:reciboConsignado': 'relatorios.ver',
   'relatorios:evento': 'relatorios.ver', 'relatorios:eventoXlsx': 'relatorios.ver',
+  'relatorios:acompanhadas': 'relatorios.ver', 'relatorios:acompanhadasXlsx': 'relatorios.ver',
   'relatorios:ranking': 'relatorios.ver', 'relatorios:rankingXlsx': 'relatorios.ver',
   'relatorios:eventos': 'relatorios.ver', 'relatorios:rankingPeriodo': 'relatorios.ver',
   'relatorios:rankingPeriodoXlsx': 'relatorios.ver',

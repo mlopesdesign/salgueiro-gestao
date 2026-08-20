@@ -409,6 +409,178 @@ function Tratar-Cliente($cliente) {
   }
 }
 
+# PID do aplicativo principal (processo pai desta extensão)
+$ppid = 0
+try {
+  $ppid = [int](Get-CimInstance Win32_Process -Filter "ProcessId = $PID" -ErrorAction Stop).ParentProcessId
+} catch {}
+
+# Força janela à frente ao inicializar (PDV deve ter prioridade de foco)
+try {
+  if ($ppid -gt 0) {
+    Add-Type -AssemblyName Microsoft.VisualBasic
+    [Microsoft.VisualBasic.Interaction]::AppActivate($ppid)
+  }
+} catch {}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AJUSTE DA JANELA DO PDV
+#
+# 1) Remove o botão do meio (maximizar/restaurar): tira SOMENTE WS_MAXIMIZEBOX.
+#    Não encosta em WS_THICKFRAME — foi remover esse outro bit (via
+#    "resizable": false) que quebrou a v3.25.13.
+#
+# 2) Amarra o tamanho de restauração à área de trabalho do monitor. O Neutralino
+#    abre com maximize:true sem nunca definir um tamanho "normal" válido; o
+#    Windows fica com rcNormalPosition zerado e restaurar joga a janela para um
+#    tamanho degenerado — é isso que a faz sumir e piscar o fundo.
+#    (Bug do Neutralino, issue #1281, aberto na 6.3.0.)
+#    A área de trabalho é lida do sistema, então serve para qualquer resolução.
+#
+# A janela é achada varrendo a lista de janelas de topo por Z-order e filtrando
+# pelo PID — NÃO por MainWindowHandle, que na v3.25.18 voltou vazio.
+#
+# Win32 declarado via Reflection.Emit, não Add-Type: Add-Type compila C# pelo
+# csc.exe, que abre janelas pretas de terminal.
+# ─────────────────────────────────────────────────────────────────────────────
+$logJanela = "$env:APPDATA\SalgueiroGestao\janela.log"
+function LogJanela([string]$m) {
+  try { Add-Content -Path $logJanela -Value "[$(Get-Date -Format s)] $m" -Encoding UTF8 } catch {}
+}
+
+try {
+  $nomeAsm = New-Object System.Reflection.AssemblyName('SalgWin32')
+  $acesso  = [System.Reflection.Emit.AssemblyBuilderAccess]::Run
+  $asm = $null
+  try { $asm = [AppDomain]::CurrentDomain.DefineDynamicAssembly($nomeAsm, $acesso) } catch {}
+  if (-not $asm) { $asm = [System.Reflection.Emit.AssemblyBuilder]::DefineDynamicAssembly($nomeAsm, $acesso) }
+  $tipo = $asm.DefineDynamicModule('SalgWin32Mod').DefineType('SalgU32', 'Public, Class')
+
+  $attr = [System.Reflection.MethodAttributes]'Public, Static, PinvokeImpl'
+  $conv = [System.Reflection.CallingConventions]::Standard
+  $nat  = [System.Runtime.InteropServices.CallingConvention]::Winapi
+  $chs  = [System.Runtime.InteropServices.CharSet]::Auto
+  $psig = [System.Reflection.MethodImplAttributes]::PreserveSig
+  $intRef = [int].MakeByRefType()
+
+  $api = @(
+    @('GetDesktopWindow',        [IntPtr], @()),
+    @('GetTopWindow',            [IntPtr], @([IntPtr])),
+    @('GetWindow',               [IntPtr], @([IntPtr],[uint32])),
+    @('IsWindowVisible',         [bool],   @([IntPtr])),
+    @('GetWindowTextLengthW',    [int],    @([IntPtr])),
+    @('GetWindowThreadProcessId',[uint32], @([IntPtr],$intRef)),
+    @('GetWindowLongW',          [int],    @([IntPtr],[int])),
+    @('SetWindowLongW',          [int],    @([IntPtr],[int],[int])),
+    @('SetWindowPos',            [bool],   @([IntPtr],[IntPtr],[int],[int],[int],[int],[uint32])),
+    @('GetWindowPlacement',      [bool],   @([IntPtr],[IntPtr])),
+    @('SetWindowPlacement',      [bool],   @([IntPtr],[IntPtr])),
+    @('SystemParametersInfoW',   [bool],   @([uint32],[uint32],[IntPtr],[uint32]))
+  )
+  foreach ($f in $api) {
+    $tipo.DefinePInvokeMethod($f[0],'user32.dll',$attr,$conv,$f[1],$f[2],$nat,$chs).SetImplementationFlags($psig)
+  }
+  $U32 = $tipo.CreateType()
+
+  $GWL_STYLE      = -16
+  $WS_MAXIMIZEBOX = 0x00010000
+  $GW_HWNDNEXT    = [uint32]2
+  $SWP_REDESENHAR = [uint32]0x0037   # NOSIZE|NOMOVE|NOZORDER|NOACTIVATE|FRAMECHANGED
+  $SPI_GETWORKAREA= [uint32]0x0030
+  $SW_SHOWMAXIMIZED = 3
+
+  # PIDs que contam como "o aplicativo": o processo pai e qualquer processo
+  # cujo nome pareça o do PDV (cobre o caso do pai não ser a janela).
+  $pidsAlvo = New-Object 'System.Collections.Generic.HashSet[int]'
+  if ($ppid -gt 0) { [void]$pidsAlvo.Add([int]$ppid) }
+  try {
+    Get-Process -ErrorAction SilentlyContinue |
+      Where-Object { $_.ProcessName -like '*algueiro*' } |
+      ForEach-Object { [void]$pidsAlvo.Add([int]$_.Id) }
+  } catch {}
+  LogJanela ("ppid=$ppid pids alvo=" + ($pidsAlvo -join ','))
+
+  # Varre janelas de topo por Z-order procurando uma visível, com título, do PDV
+  function AcharJanela {
+    $achada = [IntPtr]::Zero
+    try {
+      $h = $U32::GetTopWindow($U32::GetDesktopWindow())
+      while ($h -ne [IntPtr]::Zero) {
+        if ($U32::IsWindowVisible($h) -and $U32::GetWindowTextLengthW($h) -gt 0) {
+          $wpid = 0
+          [void]$U32::GetWindowThreadProcessId($h, [ref]$wpid)
+          if ($pidsAlvo.Contains([int]$wpid)) { $achada = $h; break }
+        }
+        $h = $U32::GetWindow($h, $GW_HWNDNEXT)
+      }
+    } catch { LogJanela ("erro na varredura: " + $_.Exception.Message) }
+    return $achada
+  }
+
+  # A janela pode não existir ainda: tenta por ~15 s
+  $hwnd = [IntPtr]::Zero
+  for ($t = 0; $t -lt 60; $t++) {
+    $hwnd = AcharJanela
+    if ($hwnd -ne [IntPtr]::Zero) { break }
+    Start-Sleep -Milliseconds 250
+  }
+
+  if ($hwnd -eq [IntPtr]::Zero) {
+    LogJanela "FALHOU: nenhuma janela encontrada em 15s"
+  } else {
+    LogJanela ("janela encontrada: hwnd=" + $hwnd)
+
+    # ---- Área de trabalho do monitor (desconta a barra de tarefas) ----
+    $rc = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(16)
+    $L=0; $T=0; $R=1280; $B=800
+    try {
+      if ($U32::SystemParametersInfoW($SPI_GETWORKAREA, [uint32]0, $rc, [uint32]0)) {
+        $L = [System.Runtime.InteropServices.Marshal]::ReadInt32($rc, 0)
+        $T = [System.Runtime.InteropServices.Marshal]::ReadInt32($rc, 4)
+        $R = [System.Runtime.InteropServices.Marshal]::ReadInt32($rc, 8)
+        $B = [System.Runtime.InteropServices.Marshal]::ReadInt32($rc, 12)
+      }
+    } finally { [System.Runtime.InteropServices.Marshal]::FreeHGlobal($rc) }
+    LogJanela "area de trabalho: $L,$T,$R,$B"
+
+    # ---- Amarra o tamanho de restauração à área de trabalho inteira ----
+    # WINDOWPLACEMENT = 11 inteiros (44 bytes):
+    #  0 length | 4 flags | 8 showCmd | 12,16 ptMin | 20,24 ptMax | 28..40 rcNormal
+    $wp = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(44)
+    try {
+      [System.Runtime.InteropServices.Marshal]::WriteInt32($wp, 0, 44)
+      if ($U32::GetWindowPlacement($hwnd, $wp)) {
+        $antesShow = [System.Runtime.InteropServices.Marshal]::ReadInt32($wp, 8)
+        $an = @(28,32,36,40 | ForEach-Object { [System.Runtime.InteropServices.Marshal]::ReadInt32($wp, $_) })
+        LogJanela ("placement ANTES: showCmd=$antesShow rcNormal=" + ($an -join ','))
+
+        [System.Runtime.InteropServices.Marshal]::WriteInt32($wp, 8,  $SW_SHOWMAXIMIZED)
+        [System.Runtime.InteropServices.Marshal]::WriteInt32($wp, 28, $L)   # left
+        [System.Runtime.InteropServices.Marshal]::WriteInt32($wp, 32, $T)   # top
+        [System.Runtime.InteropServices.Marshal]::WriteInt32($wp, 36, $R)   # right
+        [System.Runtime.InteropServices.Marshal]::WriteInt32($wp, 40, $B)   # bottom
+        $okwp = $U32::SetWindowPlacement($hwnd, $wp)
+        LogJanela ("placement DEPOIS: rcNormal=$L,$T,$R,$B aplicado=$okwp")
+      } else { LogJanela "GetWindowPlacement falhou" }
+    } finally { [System.Runtime.InteropServices.Marshal]::FreeHGlobal($wp) }
+
+    # ---- Remove o botão do meio ----
+    $estilo = $U32::GetWindowLongW($hwnd, $GWL_STYLE)
+    LogJanela ("estilo ANTES = 0x{0:X8}" -f $estilo)
+    if ($estilo -band $WS_MAXIMIZEBOX) {
+      $novo = $estilo -band (-bnot $WS_MAXIMIZEBOX)
+      [void]$U32::SetWindowLongW($hwnd, $GWL_STYLE, $novo)
+      [void]$U32::SetWindowPos($hwnd, [IntPtr]::Zero, 0, 0, 0, 0, $SWP_REDESENHAR)
+      $conf = $U32::GetWindowLongW($hwnd, $GWL_STYLE)
+      LogJanela ("estilo DEPOIS = 0x{0:X8} | botao removido = {1}" -f $conf, (($conf -band $WS_MAXIMIZEBOX) -eq 0))
+    } else {
+      LogJanela "WS_MAXIMIZEBOX ja estava ausente"
+    }
+  }
+} catch {
+  LogJanela ("EXCECAO: " + $_.Exception.Message)
+}
+
 Enviar-Evento 'rede.extensao.pronta' @{ ok = $true }
 
 # laco principal

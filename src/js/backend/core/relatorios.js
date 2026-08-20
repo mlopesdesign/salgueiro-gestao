@@ -68,8 +68,50 @@ function vendasPeriodo(db, p) {
     ORDER BY total DESC
   `).all(...arCat);
 
+  // Vendido de peça CONSIGNADA × peça do SALGUEIRO (v3.11.1).
+  //
+  // A separação é feita pelo produto (`produtos.consignado`), não pela tabela
+  // `consignacoes`: a consignação só é gerada quando a peça é vendida.
+  //
+  // O valor é o RECEBIDO, não o preço de tabela: `vi.total` × (total da venda ÷
+  // subtotal da venda). Esse fator distribui por item o desconto dado no
+  // fechamento e zera a cortesia (venda vale 0). É o mesmo rateio usado em
+  // devoluções (v2.0.48) e trocas (v3.2.1).
+  //
+  // Assim `proprio + consignado = faturamento bruto`. A primeira versão destes
+  // cartões somava preço de tabela e mostrava "Vendas do Salgueiro" MAIOR que o
+  // faturamento — dois números conflitantes no mesmo topo, exatamente o que a
+  // v3.9.0 tinha acabado de eliminar. `tabela` fica à parte, para conferência.
+  // O que voltou de cada item, para o valor ficar líquido de devolução como o
+  // cartão de faturamento desta aba já é.
+  const _devItem = `COALESCE((
+        SELECT SUM(di.qtd) * (CAST(vi.total AS REAL) / vi.qtd)
+          FROM devolucao_itens di
+          JOIN devolucoes d ON d.id = di.devolucao_id
+         WHERE d.venda_id = vi.venda_id AND di.variacao_id = vi.variacao_id), 0)`;
+  const split = db.prepare(`
+    SELECT COALESCE(p.consignado,0) consignado,
+           SUM(vi.qtd) pecas,
+           SUM(vi.total) tabela,
+           SUM((vi.total - ${_devItem})
+               * CASE WHEN v.subtotal > 0 THEN CAST(v.total AS REAL) / v.subtotal ELSE 0 END) recebido
+      FROM venda_itens vi
+      JOIN vendas v ON v.id = vi.venda_id
+      JOIN variacoes va ON va.id = vi.variacao_id
+      JOIN produtos p ON p.id = va.produto_id
+     WHERE v.status='concluida' AND date(v.criado_em) BETWEEN ? AND ? ${fLoja}
+     GROUP BY COALESCE(p.consignado,0)
+  `).all(...ar);
+  const acha = (c) => split.find(x => x.consignado === c) || { pecas: 0, tabela: 0, recebido: 0 };
+  const origem = {
+    consignado: { pecas: acha(1).pecas || 0, total: arred(acha(1).recebido || 0), tabela: arred(acha(1).tabela || 0) },
+    proprio: { pecas: acha(0).pecas || 0, total: arred(acha(0).recebido || 0), tabela: arred(acha(0).tabela || 0) }
+  };
+  const _difO = arred(arred(resumo.total) - origem.proprio.total - origem.consignado.total);
+  if (Math.abs(_difO) > 0.005) origem.proprio.total = arred(origem.proprio.total + _difO);
+
   return { ok: true, de, ate,
-    resumo: { qtd: resumo.qtd, total: arred(resumo.total), ticket: arred(resumo.ticket) },
+    resumo: { qtd: resumo.qtd, total: arred(resumo.total), ticket: arred(resumo.ticket), origem },
     por_dia: porDia, por_vendedor: porVendedor, por_categoria: porCategoria };
 }
 
@@ -215,6 +257,31 @@ const TAXAS_PADRAO = {
   dinheiro: 0, crediario: 0, vale: 0
 };
 
+// Taxas configuradas pela loja (v3.12.0). Precedência, do mais fraco ao mais
+// forte: TAXAS_PADRAO → o que está gravado em `config` → `p.taxas` da chamada.
+// Valor em branco ou inválido cai no padrão, para uma digitação errada em
+// Configurações não zerar a taxa e inflar o líquido a receber sem ninguém ver.
+function taxasDaConfig(cfg) {
+  const num = (v, padrao) => {
+    // ATENÇÃO: `Number('')` é 0, não NaN. Sem testar o vazio antes, um campo em
+    // branco em Configurações zeraria a taxa e o líquido a receber apareceria
+    // maior do que é — erro caro e silencioso.
+    const txt = String(v == null ? '' : v).replace(',', '.').trim();
+    if (txt === '') return padrao;
+    const n = Number(txt);
+    return Number.isFinite(n) && n >= 0 && n <= 100 ? n : padrao;
+  };
+  if (!cfg) return { ...TAXAS_PADRAO };
+  return {
+    ...TAXAS_PADRAO,
+    pix_chave: num(cfg.taxa_pix_chave, TAXAS_PADRAO.pix_chave),
+    pix_maquina: num(cfg.taxa_pix_maquina, TAXAS_PADRAO.pix_maquina),
+    debito: num(cfg.taxa_debito, TAXAS_PADRAO.debito),
+    credito_vista: num(cfg.taxa_credito_vista, TAXAS_PADRAO.credito_vista),
+    credito_parcelado: num(cfg.taxa_credito_parcelado, TAXAS_PADRAO.credito_parcelado)
+  };
+}
+
 // Taxa (%) de um pagamento, conforme forma e nº de parcelas.
 function taxaPagamento(forma, parcelas, taxas, pixNaMaquina) {
   const n = Number(parcelas) || 1;
@@ -248,7 +315,13 @@ function relatorioEvento(db, p) {
   inicio = inicio.slice(0, 16) + ':00';
   fim = fim.slice(0, 16) + ':59';
 
-  const taxas = Object.assign({}, TAXAS_PADRAO, p.taxas || {});
+  // Lê as taxas gravadas em Configurações → PDV. `p.taxas` (se vier) ainda
+  // manda, para simular um cenário sem mexer no que está salvo.
+  let _cfgTaxas = null;
+  try { _cfgTaxas = db.prepare("SELECT chave, valor FROM config WHERE chave LIKE 'taxa_%'").all(); } catch { _cfgTaxas = null; }
+  const _cfg = {};
+  for (const l of (_cfgTaxas || [])) _cfg[l.chave] = l.valor;
+  const taxas = Object.assign({}, taxasDaConfig(_cfg), p.taxas || {});
   const pixMaq = !!p.pix_maquina;
   const lojaId = Number(p.loja_id) || 0;
   const fLoja = lojaId ? 'AND v.loja_id = ?' : '';
@@ -266,7 +339,7 @@ function relatorioEvento(db, p) {
   `).all(...ar);
 
   const itens = db.prepare(`
-    SELECT vi.venda_id, vi.qtd, vi.preco_unit, vi.desconto, vi.total,
+    SELECT vi.venda_id, vi.variacao_id, vi.qtd, vi.preco_unit, vi.desconto, vi.total,
            pr.nome produto, COALESCE(pr.referencia,'') referencia,
            COALESCE(va.cor,'') cor, COALESCE(va.tamanho,'') tamanho
     FROM venda_itens vi
@@ -312,7 +385,44 @@ function relatorioEvento(db, p) {
   for (const it of itens) {
     const v = mapa.get(it.venda_id); if (!v) continue;
     it.total = arred(it.total); it.preco_unit = arred(it.preco_unit);
+    it.desconto = arred(it.desconto);
     v.itens.push(it); v.pecas += Number(it.qtd) || 0;
+  }
+
+  // Desconto POR PRODUTO (v3.14.0).
+  //
+  // Antes a coluna de desconto do relatório mostrava só `venda_itens.desconto`
+  // — o abatimento lançado na linha. O desconto dado no FECHAMENTO da venda
+  // (categoria do cliente, automático à vista, o que o admin autoriza) não
+  // aparecia em item nenhum: a venda saía com "—" em todas as linhas e um
+  // total menor que a soma delas. Quando o operador lançava o abatimento numa
+  // linha só, parecia que aquele produto tinha levado o desconto inteiro.
+  //
+  // Agora o desconto do fechamento é rateado entre as peças, proporcional ao
+  // valor de cada uma, e cada linha mostra quanto foi tirado dela e quanto
+  // entrou de fato. A soma dos `recebido` fecha com o total da venda.
+  //
+  // A sobra de centavo do rateio vai para o item de maior valor — sem isso as
+  // linhas não somariam exatamente o total, que é o ponto de tudo isto.
+  for (const v of mapa.values()) {
+    if (!v.itens.length) continue;
+    const somaItens = arred(v.itens.reduce((s, i) => s + i.total, 0));
+    const fator = somaItens > 0 ? v.total / somaItens : 0;
+    let acumulado = 0;
+    for (const it of v.itens) {
+      it.recebido = arred(it.total * fator);
+      it.desconto_venda = arred(it.total - it.recebido); // a parte do fechamento
+      it.desconto_total = arred(it.desconto + it.desconto_venda);
+      it.tabela = arred(it.total + it.desconto);         // preço cheio da linha
+      acumulado = arred(acumulado + it.recebido);
+    }
+    const sobra = arred(v.total - acumulado);
+    if (Math.abs(sobra) > 0.005) {
+      const maior = v.itens.reduce((a, b) => (b.recebido > a.recebido ? b : a), v.itens[0]);
+      maior.recebido = arred(maior.recebido + sobra);
+      maior.desconto_venda = arred(maior.total - maior.recebido);
+      maior.desconto_total = arred(maior.desconto + maior.desconto_venda);
+    }
   }
 
   // Pagamentos + taxa da maquininha
@@ -341,16 +451,56 @@ function relatorioEvento(db, p) {
     const v = mapa.get(cg.venda_id);
     cg.valor_venda = arred(cg.valor_venda); cg.valor_fornecedor = arred(cg.valor_fornecedor);
     cg.valor_loja = arred(cg.valor_loja); cg.valor_custo = arred(cg.valor_custo);
+
+    // Efeito do desconto do FECHAMENTO sobre a peça consignada (v3.14.0).
+    //
+    // `valor_venda` foi gravado na hora da venda com o valor do item — que já
+    // é líquido do desconto lançado NA LINHA, mas não do desconto dado no
+    // total da venda. Ou seja: quando a venda fecha com desconto, a loja
+    // recebe menos pela peça mas o repasse ao fornecedor continua calculado
+    // sobre o valor cheio. Quem paga o desconto inteiro é a loja.
+    //
+    // Aqui isso deixa de ser invisível: `recebido` é o que entrou de fato,
+    // `desconto` é quanto a peça levou, e `fornecedor_ajustado` mostra quanto
+    // seria o repasse se a base fosse o recebido. A REGRA NÃO MUDOU — o valor
+    // a pagar continua sendo `valor_fornecedor`. O relatório só passou a
+    // mostrar a diferença para o dono decidir.
+    const fatorV = (v && v.subtotal > 0) ? v.total / v.subtotal : 1;
+    cg.recebido = arred(cg.valor_venda * fatorV);
+    cg.desconto = arred(cg.valor_venda - cg.recebido);
+    const lucroReal = arred(cg.recebido - cg.valor_custo);
+    cg.fornecedor_ajustado = arred(cg.valor_custo + lucroReal * (Number(cg.pct_fornecedor) || 0) / 100);
+    cg.dif_desconto = arred(cg.valor_fornecedor - cg.fornecedor_ajustado);
     if (v) { v.consignados.push(cg); v.comissao = arred(v.comissao + cg.valor_fornecedor); }
     const g = porFornecedor.get(cg.fornecedor_id) ||
       { fornecedor_id: cg.fornecedor_id, fornecedor: cg.fornecedor,
-        pecas: 0, venda: 0, comissao: 0, parte_loja: 0, pendente: 0 };
+        pecas: 0, venda: 0, custo: 0, comissao: 0, parte_loja: 0, pendente: 0,
+        desconto: 0, recebido: 0, comissao_ajustada: 0 };
     g.pecas += Number(cg.qtd) || 0;
     g.venda = arred(g.venda + cg.valor_venda);
+    g.custo = arred(g.custo + cg.valor_custo);
     g.comissao = arred(g.comissao + cg.valor_fornecedor);
     g.parte_loja = arred(g.parte_loja + cg.valor_loja);
-    if (cg.status === 'pendente') g.pendente = arred(g.pendente + cg.valor_fornecedor);
+    g.desconto = arred(g.desconto + cg.desconto);
+    g.recebido = arred(g.recebido + cg.recebido);
+    g.comissao_ajustada = arred(g.comissao_ajustada + cg.fornecedor_ajustado);
+    if (cg.status === 'pendente') g.pendente = arred(g.pendente + cg.fornecedor_ajustado);
     porFornecedor.set(cg.fornecedor_id, g);
+  }
+  // Discriminação do repasse (v3.8.0): o fornecedor recebe o CUSTO da peça
+  // MAIS a fatia dele no lucro — nunca uma porcentagem do preço de venda.
+  // Sem estes dois campos a tabela mostrava "vendido R$ 510 · comissão R$ 415,50"
+  // e o leitor concluía, errado, que a comissão era de 81%.
+  for (const g of porFornecedor.values()) {
+    // Fatia do lucro e repasse calculados sobre o RECEBIDO (v3.21.1).
+    // Antes usava g.comissao (= valor_fornecedor gravado, base tabela em vendas
+    // pré-v3.14.0). Agora usa comissao_ajustada = custo + pct%×(recebido-custo).
+    g.lucro_fornecedor = arred(g.comissao_ajustada - g.custo);  // fatia do lucro sobre recebido
+    g.lucro_total = arred(g.venda - g.custo);                   // lucro gerado pela peça
+    // Diferença informativa entre o repasse gravado e o calculado sobre recebido.
+    g.dif_desconto = arred(g.comissao - g.comissao_ajustada);
+    // O que sobra para a loja depois do repasse calculado sobre recebido.
+    g.loja_real = arred(g.recebido - g.comissao_ajustada);
   }
 
   // Agregados auxiliares
@@ -375,18 +525,44 @@ function relatorioEvento(db, p) {
   for (const c of cats) c.total = arred(c.total);
 
   // Produtos vendidos no evento (consolidado por variação)
+  // A lista de produtos identifica a peça consignada e o percentual combinado
+  // com o fornecedor (v3.11.0): sem isso não dá para saber, olhando a lista,
+  // quanto daquele total vai embora no acerto.
   const prods = db.prepare(`
-    SELECT pr.nome produto, COALESCE(pr.referencia,'') referencia,
+    SELECT va.id variacao_id,
+           pr.nome produto, COALESCE(pr.referencia,'') referencia,
            COALESCE(va.cor,'') cor, COALESCE(va.tamanho,'') tamanho,
+           COALESCE(pr.consignado,0) consignado,
+           COALESCE(pr.pct_fornecedor,0) pct_fornecedor,
+           COALESCE(fo.nome,'') fornecedor,
            SUM(vi.qtd) qtd, SUM(vi.total) total
     FROM venda_itens vi
     JOIN vendas v ON v.id = vi.venda_id
     JOIN variacoes va ON va.id = vi.variacao_id
     JOIN produtos pr ON pr.id = va.produto_id
+    LEFT JOIN fornecedores fo ON fo.id = pr.fornecedor_id
     WHERE v.status='concluida' AND v.criado_em BETWEEN ? AND ? ${fLoja}
     GROUP BY va.id ORDER BY total DESC
   `).all(...ar);
   for (const x of prods) x.total = arred(x.total);
+  // Desconto e valor recebido por peça na lista consolidada (v3.14.0): vêm do
+  // rateio já feito item a item, para a coluna somar exatamente o faturamento.
+  const _porVar = new Map();
+  for (const it of itens) {
+    const a = _porVar.get(it.variacao_id) || { desconto: 0, desc_item: 0, recebido: 0, tabela: 0 };
+    a.desconto = arred(a.desconto + (it.desconto_total || 0));
+    a.desc_item = arred(a.desc_item + (it.desconto || 0));
+    a.recebido = arred(a.recebido + (it.recebido || 0));
+    a.tabela = arred(a.tabela + (it.tabela || 0));
+    _porVar.set(it.variacao_id, a);
+  }
+  for (const x of prods) {
+    const a = _porVar.get(x.variacao_id) || { desconto: 0, desc_item: 0, recebido: x.total, tabela: x.total };
+    x.desconto = a.desconto;      // total abatido daquela peça
+    x.desc_item = a.desc_item;    // só o lançado na linha da venda
+    x.recebido = a.recebido;
+    x.tabela = a.tabela;          // preço cheio
+  }
 
   // Cortesias do período: o que foi dado, para quem, quem autorizou e quanto
   // custou de verdade para a loja (preço de custo das peças que saíram do estoque).
@@ -423,9 +599,19 @@ function relatorioEvento(db, p) {
     custo: arred(cortesias.reduce((s, x) => s + x.custo, 0))
   };
 
-  // Descontos avulsos do período (v3.3.0). Só entram os que o operador lançou
-  // na mão — desconto de categoria e resgate de pontos não passam por aqui.
-  // O nome de quem autorizou é campo livre: quem libera nem sempre tem login.
+  // Descontos dados no FECHAMENTO da venda (v3.9.0).
+  //
+  // Até a 3.8.0 esta lista só trazia o desconto AVULSO — aquele em que o
+  // operador preencheu "autorizado por". Só que desconto de categoria de
+  // cliente, desconto automático à vista e arredondamento de balcão também
+  // reduzem `vendas.total` sem passar por autorização nenhuma. Eles sumiam do
+  // relatório e reapareciam como uma diferença sem nome entre o total das
+  // peças e o faturamento. Agora TODO desconto de fechamento é listado, com a
+  // origem marcada.
+  //
+  // A cortesia fica de fora: nela o desconto é o valor inteiro da venda
+  // (regra da v2.2.0) e ela já tem seção própria. Contá-la aqui dobraria o
+  // abatimento na conciliação.
   const descontos = db.prepare(`
     SELECT v.id venda_id, v.criado_em, v.subtotal, v.desconto, v.total,
            v.desconto_autorizado_por autorizado_por, v.desconto_motivo motivo,
@@ -435,8 +621,9 @@ function relatorioEvento(db, p) {
     LEFT JOIN usuarios u ON u.id = v.usuario_id
     LEFT JOIN clientes c ON c.id = v.cliente_id
     WHERE v.status = 'concluida' AND v.desconto > 0
-      AND v.desconto_autorizado_por IS NOT NULL
       AND v.criado_em BETWEEN ? AND ? ${fLoja}
+      AND NOT EXISTS (SELECT 1 FROM venda_pagamentos vp
+                       WHERE vp.venda_id = v.id AND vp.forma = 'cortesia')
     ORDER BY v.criado_em
   `).all(...ar);
   for (const d of descontos) {
@@ -446,23 +633,178 @@ function relatorioEvento(db, p) {
     d.percent = d.subtotal > 0 ? Math.round((d.desconto / d.subtotal) * 1000) / 10 : 0;
     d.data = String(d.criado_em).slice(0, 10);
     d.hora = String(d.criado_em).slice(11, 16);
+    // Sem "autorizado por" o desconto não veio do modal de autorização:
+    // é da tabela (categoria do cliente, à vista) ou foi acerto no fechamento.
+    d.autorizado = !!(d.autorizado_por && String(d.autorizado_por).trim());
+    d.origem = d.autorizado ? 'Autorizado' : 'Automático / tabela';
   }
   const descontoResumo = {
     qtd: descontos.length,
-    valor: arred(descontos.reduce((s, d) => s + d.desconto, 0))
+    valor: arred(descontos.reduce((s, d) => s + d.desconto, 0)),
+    autorizados: arred(descontos.filter(d => d.autorizado).reduce((s, d) => s + d.desconto, 0)),
+    automaticos: arred(descontos.filter(d => !d.autorizado).reduce((s, d) => s + d.desconto, 0))
+  };
+
+  // ── Vendas a PREÇO DE CUSTO (v3.19.0) ─────────────────────────────────────
+  // Seção própria, como as cortesias e os descontos. É dinheiro que a loja
+  // deixou de ganhar por decisão de alguém, então tem de ter nome, motivo e
+  // valor — sem isso não há como auditar depois.
+  //
+  // A margem aberta mão é calculada pela DIFERENÇA ENTRE O PREÇO DE TABELA
+  // ATUAL e o que foi cobrado. Fica a ressalva de que, se o preço de venda da
+  // peça mudar depois, essa diferença muda junto — o que foi cobrado está
+  // gravado em venda_itens e não muda; o preço cheio não é histórico.
+  const vendasCusto = db.prepare(`
+    SELECT v.id venda_id, v.criado_em, v.total,
+           v.desconto_autorizado_por autorizado_por, v.desconto_motivo motivo,
+           COALESCE(u.nome, '—') operador,
+           COALESCE(c.nome, '—') cliente,
+           (SELECT COALESCE(SUM(vi.qtd), 0) FROM venda_itens vi WHERE vi.venda_id = v.id) pecas,
+           (SELECT COALESCE(SUM(vi.qtd * p.preco_venda), 0)
+              FROM venda_itens vi
+              JOIN variacoes va ON va.id = vi.variacao_id
+              JOIN produtos  p  ON p.id  = va.produto_id
+             WHERE vi.venda_id = v.id) tabela
+    FROM vendas v
+    LEFT JOIN usuarios u ON u.id = v.usuario_id
+    LEFT JOIN clientes c ON c.id = v.cliente_id
+    WHERE v.status = 'concluida' AND v.tipo_venda = 'custo'
+      AND v.criado_em BETWEEN ? AND ? ${fLoja}
+    ORDER BY v.criado_em
+  `).all(...ar);
+  for (const c of vendasCusto) {
+    c.total = arred(c.total);
+    c.tabela = arred(c.tabela);
+    c.margem_aberta = arred(c.tabela - c.total);   // o que a loja deixou de ganhar
+    c.percent = c.tabela > 0 ? Math.round((c.margem_aberta / c.tabela) * 1000) / 10 : 0;
+    c.data = String(c.criado_em).slice(0, 10);
+    c.hora = String(c.criado_em).slice(11, 16);
+  }
+  const custoResumo = {
+    qtd: vendasCusto.length,
+    pecas: vendasCusto.reduce((s, c) => s + (Number(c.pecas) || 0), 0),
+    cobrado: arred(vendasCusto.reduce((s, c) => s + c.total, 0)),
+    tabela: arred(vendasCusto.reduce((s, c) => s + c.tabela, 0)),
+    margem_aberta: arred(vendasCusto.reduce((s, c) => s + c.margem_aberta, 0))
   };
 
   const soma = (f) => arred(vendas.reduce((s, v) => s + (Number(f(v)) || 0), 0));
   const bruto = soma(v => v.total);
   const devolucoes = soma(v => v.devolvido);
   const liquido = arred(bruto - devolucoes);
+
+  // ── Conciliação da lista de produtos com o faturamento (v3.9.0) ───────────
+  // Exigência do Marcio: "o total do faturamento bruto tem que ser idêntico ao
+  // total de peças que aparece no final".
+  //
+  // A lista de produtos soma `venda_itens` a preço de tabela; o faturamento
+  // soma `vendas.total`. Os dois só se separam por dois motivos, e agora os
+  // dois são nomeados e abatidos na própria seção:
+  //
+  //   valor de tabela  −  cortesias  −  desconto de fechamento  =  bruto
+  //
+  // Quem calcula é o core, não a tela: se a diferença fosse obtida por
+  // subtração na interface, qualquer motivo novo de divergência apareceria
+  // disfarçado de "desconto" e ninguém perceberia. Aqui cada parcela vem da
+  // sua própria origem e `confere` denuncia quando a conta não fecha.
+  // `tabela` é o preço CHEIO de cada peça (v3.14.0) — o mesmo número que a
+  // coluna "Valor de tabela" da lista mostra. Antes partia de `venda_itens.total`,
+  // que já vinha líquido do desconto lançado na linha: a seção acabava com dois
+  // valores diferentes chamados "valor de tabela". Como o preço cheio entra na
+  // conta, o desconto lançado no item também precisa ser abatido — daí a
+  // parcela `desc_itens`, que antes não existia.
+  const tabelaTotal = arred(prods.reduce((s, x) => s + (Number(x.tabela ?? x.total) || 0), 0));
+  const descItens = arred(prods.reduce((s, x) => s + (Number(x.desc_item) || 0), 0));
+  const cortesiaTabela = arred(cortesiaResumo.valor);
+  const descontoFechamento = arred(descontoResumo.valor);
+  const conciliacao = {
+    tabela: tabelaTotal,
+    desc_itens: descItens,
+    cortesias: cortesiaTabela,
+    descontos: descontoFechamento,
+    bruto,
+    // sobra: o que a conta não explicou. Tem de ser zero — se não for, há um
+    // caminho novo mexendo em vendas.total que o relatório ainda não conhece.
+    sobra: arred(tabelaTotal - descItens - cortesiaTabela - descontoFechamento - bruto)
+  };
+  conciliacao.confere = Math.abs(conciliacao.sobra) < 0.005;
+
+  // Vendido de peça CONSIGNADA × peça do SALGUEIRO no evento (v3.11.1).
+  // O valor é o RECEBIDO: cada item entra pelo fator (total ÷ subtotal) da sua
+  // venda, o que rateia o desconto do fechamento e zera a cortesia. Com isso
+  // `proprio + consignado = faturamento bruto` — os cartões do topo somam o
+  // mesmo número do cartão ao lado, e não o valor de tabela.
+  // `tabela` fica junto para quem quiser conferir com a lista de produtos.
+  const splitEv = db.prepare(`
+    SELECT COALESCE(pr.consignado,0) consignado,
+           SUM(vi.qtd) pecas,
+           SUM(vi.total + vi.desconto) tabela,
+           SUM(vi.total * CASE WHEN v.subtotal > 0 THEN CAST(v.total AS REAL) / v.subtotal ELSE 0 END) recebido
+      FROM venda_itens vi
+      JOIN vendas v ON v.id = vi.venda_id
+      JOIN variacoes va ON va.id = vi.variacao_id
+      JOIN produtos pr ON pr.id = va.produto_id
+     WHERE v.status='concluida' AND v.criado_em BETWEEN ? AND ? ${fLoja}
+     GROUP BY COALESCE(pr.consignado,0)
+  `).all(...ar);
+  const achaEv = (c) => splitEv.find(x => x.consignado === c) || { pecas: 0, tabela: 0, recebido: 0 };
+  // Total do card de consignados: somatório de g.recebido do porFornecedor
+  // (v3.21.1). Antes usava splitEv.recebido, que em vendas pré-v3.14.0 com
+  // v.total=v.subtotal devolvia o valor de tabela em vez do recebido, fazendo
+  // o card divergir da soma da tabela de comissões.
+  const consigRecebidoCard = arred([...porFornecedor.values()].reduce((s, g) => s + g.recebido, 0));
+  const origem = {
+    consignado: { pecas: achaEv(1).pecas || 0, total: consigRecebidoCard, tabela: arred(achaEv(1).tabela || 0) },
+    proprio: { pecas: achaEv(0).pecas || 0, total: arred(achaEv(0).recebido || 0), tabela: arred(achaEv(0).tabela || 0) }
+  };
+
+  // ── Peça consignada que NÃO gerou repasse (v3.20.1) ───────────────────────
+  // O cartão "Vendas de consignados" conta toda peça com `produtos.consignado=1`.
+  // A seção de comissão lê a tabela `consignacoes`, e ela só é gravada quando a
+  // peça tem FORNECEDOR e PERCENTUAL > 0 (`core/pdv.js:371`). Peça marcada como
+  // consignada sem fornecedor — ou com 0% — aparece no cartão e some da seção,
+  // e as duas somas deixam de bater sem explicação nenhuma.
+  //
+  // Em vez de esconder, o relatório NOMEIA as peças: é cadastro incompleto, e
+  // alguém precisa arrumar antes de acertar com o fornecedor.
+  const semRepasse = db.prepare(`
+    SELECT pr.id, pr.nome, pr.fornecedor_id, COALESCE(pr.pct_fornecedor,0) pct,
+           SUM(vi.qtd) pecas,
+           SUM(vi.total + vi.desconto) tabela,
+           SUM(vi.total * CASE WHEN v.subtotal > 0 THEN CAST(v.total AS REAL) / v.subtotal ELSE 0 END) recebido
+      FROM venda_itens vi
+      JOIN vendas v ON v.id = vi.venda_id
+      JOIN variacoes va ON va.id = vi.variacao_id
+      JOIN produtos pr ON pr.id = va.produto_id
+     WHERE v.status='concluida' AND COALESCE(pr.consignado,0) = 1
+       AND (pr.fornecedor_id IS NULL OR COALESCE(pr.pct_fornecedor,0) <= 0)
+       AND v.criado_em BETWEEN ? AND ? ${fLoja}
+     GROUP BY pr.id
+     ORDER BY pr.nome
+  `).all(...ar);
+  for (const s of semRepasse) {
+    s.tabela = arred(s.tabela);
+    s.recebido = arred(s.recebido);
+    s.motivo = !s.fornecedor_id ? 'sem fornecedor definido' : 'percentual do fornecedor está em 0%';
+  }
+  origem.consignado.sem_repasse = {
+    qtd: semRepasse.length,
+    pecas: semRepasse.reduce((s, x) => s + (Number(x.pecas) || 0), 0),
+    tabela: arred(semRepasse.reduce((s, x) => s + x.tabela, 0)),
+    recebido: arred(semRepasse.reduce((s, x) => s + x.recebido, 0)),
+    itens: semRepasse
+  };
+  // Centavo de arredondamento pode sobrar no rateio: joga na peça própria,
+  // que é a maior fatia, para os dois cartões somarem o bruto exato.
+  const _difOrig = arred(bruto - origem.proprio.total - origem.consignado.total);
+  if (Math.abs(_difOrig) > 0.005) origem.proprio.total = arred(origem.proprio.total + _difOrig);
   const taxaTotal = arred([...porForma.values()].reduce((s, g) => s + g.taxa_valor, 0));
-  const comissaoTotal = arred([...porFornecedor.values()].reduce((s, g) => s + g.comissao, 0));
+  const comissaoTotal = arred([...porFornecedor.values()].reduce((s, g) => s + g.comissao_ajustada, 0));
   const pecasTotal = vendas.reduce((s, v) => s + v.pecas, 0);
 
   return {
     ok: true, inicio, fim, pix_maquina: pixMaq, taxas,
-    vendas, cortesias, descontos,
+    vendas, cortesias, descontos, vendas_custo: vendasCusto,
     por_produto: prods,
     por_forma: [...porForma.values()],
     por_fornecedor: [...porFornecedor.values()],
@@ -474,6 +816,8 @@ function relatorioEvento(db, p) {
       taxas: taxaTotal, comissao: comissaoTotal,
       cortesias: cortesiaResumo,
       descontos: descontoResumo,
+      vendas_custo: custoResumo,
+      conciliacao, origem,
       // ticket médio só sobre vendas que geraram receita (ignora cortesias)
       ticket: (() => {
         const pagas = vendas.filter(v => v.liquido > 0);
@@ -912,6 +1256,155 @@ function estoqueDetalhado(db, p) {
     filtros: { catId, fornId, situacao, de, ate, mov_de: p.mov_de || '', mov_ate: p.mov_ate || '' } };
 }
 
+
+// ---------- Compras acompanhadas (v3.10.0) ----------
+// Para que serve: a loja dá desconto a funcionários e sócios. De vez em quando
+// alguém usa esse desconto para comprar em quantidade e revender. Este
+// relatório mostra o que cada pessoa dessas categorias levou no período —
+// tipo de peça, quantas e quanto pagou — para o dono perceber o padrão.
+//
+// Quem entra: SÓ as categorias marcadas com `monitorar` em Configurações →
+// Categorias de clientes. Nenhuma categoria é acompanhada por conta própria.
+//
+// p: { de, ate, categoria_id?, min_pecas?, loja_id? }
+function comprasAcompanhadas(db, p) {
+  p = p || {};
+  const RXD = /^\d{4}-\d{2}-\d{2}$/;
+  const hoje = new Date();
+  const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  const de = RXD.test(p.de || '') ? p.de : iso(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
+  const ate = RXD.test(p.ate || '') ? p.ate : iso(hoje);
+  // O período vai de 00:00:00 a 23:59:59 — comparar só a data cortaria o
+  // último dia, que é a armadilha registrada na v2.4.0.
+  const ini = `${de} 00:00:00`, fim = `${ate} 23:59:59`;
+
+  const catFiltro = Number(p.categoria_id) || 0;
+  const lojaId = Number(p.loja_id) || 0;
+  const cond = [];
+  const args = [ini, fim];
+  if (catFiltro) { cond.push('AND cl.categoria_id = ?'); args.push(catFiltro); }
+  if (lojaId) { cond.push('AND v.loja_id = ?'); args.push(lojaId); }
+  const extra = cond.join(' ');
+
+  // Categorias disponíveis para o filtro da tela (só as acompanhadas)
+  const categorias = db.prepare(`SELECT id, nome, COALESCE(desconto_percent,0) desconto_percent
+                                   FROM categorias_clientes
+                                  WHERE ativo=1 AND COALESCE(monitorar,0)=1
+                                  ORDER BY nome`).all();
+  if (!categorias.length) {
+    return { ok: true, de, ate, categorias: [], clientes: [], por_produto: [],
+             resumo: { clientes: 0, compras: 0, pecas: 0, tabela: 0, desconto: 0, pago: 0 },
+             sem_categoria_marcada: true };
+  }
+
+  // Uma linha por item vendido a cliente de categoria acompanhada.
+  // `generico=1` (Consumidor final) fica de fora: não é pessoa a acompanhar.
+  const itens = db.prepare(`
+    SELECT cl.id cliente_id, cl.nome cliente,
+           COALESCE(cc.nome,'—') categoria, cc.id categoria_id,
+           COALESCE(cc.desconto_percent,0) pct,
+           v.id venda_id, v.criado_em, v.subtotal, v.desconto, v.total,
+           pr.id produto_id, pr.nome produto, COALESCE(pr.referencia,'') referencia,
+           COALESCE(va.cor,'') cor, COALESCE(va.tamanho,'') tamanho,
+           vi.qtd, vi.preco_unit, vi.total item_total
+      FROM venda_itens vi
+      JOIN vendas v ON v.id = vi.venda_id
+      JOIN clientes cl ON cl.id = v.cliente_id
+      JOIN categorias_clientes cc ON cc.id = cl.categoria_id
+      JOIN variacoes va ON va.id = vi.variacao_id
+      JOIN produtos pr ON pr.id = va.produto_id
+     WHERE v.status='concluida'
+       AND v.criado_em BETWEEN ? AND ?
+       AND COALESCE(cc.monitorar,0) = 1
+       AND COALESCE(cl.generico,0) = 0
+       ${extra}
+     ORDER BY cl.nome, v.criado_em, vi.id
+  `).all(...args);
+
+  // Agrupa por cliente e, dentro dele, por tipo de peça.
+  const porCliente = new Map();
+  const porProduto = new Map();
+  for (const it of itens) {
+    let c = porCliente.get(it.cliente_id);
+    if (!c) {
+      c = { cliente_id: it.cliente_id, cliente: it.cliente, categoria: it.categoria,
+            categoria_id: it.categoria_id, pct: it.pct,
+            vendas: new Set(), compras: 0, pecas: 0, tabela: 0, pago: 0, desconto: 0,
+            primeira: it.criado_em, ultima: it.criado_em, produtos: new Map() };
+      porCliente.set(it.cliente_id, c);
+    }
+    const qtd = Number(it.qtd) || 0;
+    const tot = arred(Number(it.item_total) || 0);
+    c.vendas.add(it.venda_id);
+    c.pecas += qtd;
+    c.tabela = arred(c.tabela + tot);
+    if (it.criado_em < c.primeira) c.primeira = it.criado_em;
+    if (it.criado_em > c.ultima) c.ultima = it.criado_em;
+
+    const chave = `${it.produto_id}|${it.cor}|${it.tamanho}`;
+    const rot = { produto: it.produto, referencia: it.referencia, cor: it.cor, tamanho: it.tamanho };
+    const pc = c.produtos.get(chave) || { ...rot, qtd: 0, total: 0 };
+    pc.qtd += qtd; pc.total = arred(pc.total + tot);
+    c.produtos.set(chave, pc);
+
+    const pg = porProduto.get(chave) || { ...rot, qtd: 0, total: 0, clientes: new Set() };
+    pg.qtd += qtd; pg.total = arred(pg.total + tot); pg.clientes.add(it.cliente_id);
+    porProduto.set(chave, pg);
+  }
+
+  // O que a pessoa PAGOU vem da venda, não da soma dos itens: o desconto de
+  // categoria é dado no fechamento e não aparece na linha do item. Somar item
+  // a item mostraria o preço de tabela e esconderia justamente o benefício.
+  const vendasIds = [...new Set(itens.map(i => i.venda_id))];
+  if (vendasIds.length) {
+    const marcas = vendasIds.map(() => '?').join(',');
+    const vs = db.prepare(`SELECT v.id, v.cliente_id, v.subtotal, v.desconto, v.total
+                             FROM vendas v WHERE v.id IN (${marcas})`).all(...vendasIds);
+    for (const v of vs) {
+      const c = porCliente.get(v.cliente_id);
+      if (!c) continue;
+      c.pago = arred(c.pago + (Number(v.total) || 0));
+      c.desconto = arred(c.desconto + (Number(v.desconto) || 0));
+    }
+  }
+
+  const minPecas = Number(p.min_pecas) || 0;
+  const clientes = [...porCliente.values()]
+    .map(c => ({
+      cliente_id: c.cliente_id, cliente: c.cliente, categoria: c.categoria,
+      categoria_id: c.categoria_id, pct: c.pct,
+      compras: c.vendas.size, pecas: c.pecas,
+      tabela: c.tabela, desconto: c.desconto, pago: c.pago,
+      ticket: c.vendas.size ? arred(c.pago / c.vendas.size) : 0,
+      media_pecas: c.vendas.size ? Math.round((c.pecas / c.vendas.size) * 10) / 10 : 0,
+      primeira: String(c.primeira).slice(0, 10), ultima: String(c.ultima).slice(0, 10),
+      produtos: [...c.produtos.values()].sort((a, b) => b.qtd - a.qtd || b.total - a.total)
+    }))
+    .filter(c => c.pecas >= minPecas)
+    .sort((a, b) => b.pecas - a.pecas || b.pago - a.pago);
+
+  const resumo = {
+    clientes: clientes.length,
+    compras: clientes.reduce((s, c) => s + c.compras, 0),
+    pecas: clientes.reduce((s, c) => s + c.pecas, 0),
+    tabela: arred(clientes.reduce((s, c) => s + c.tabela, 0)),
+    desconto: arred(clientes.reduce((s, c) => s + c.desconto, 0)),
+    pago: arred(clientes.reduce((s, c) => s + c.pago, 0))
+  };
+
+  // Ranking de tipo de peça no período inteiro (todas as pessoas juntas):
+  // é o que denuncia a peça levada em quantidade.
+  const ids = new Set(clientes.map(c => c.cliente_id));
+  const por_produto = [...porProduto.values()]
+    .map(g => ({ produto: g.produto, referencia: g.referencia, cor: g.cor, tamanho: g.tamanho,
+                 qtd: g.qtd, total: g.total, clientes: [...g.clientes].filter(i => ids.has(i)).length }))
+    .filter(g => g.clientes > 0)
+    .sort((a, b) => b.qtd - a.qtd || b.total - a.total);
+
+  return { ok: true, de, ate, categorias, clientes, por_produto, resumo, sem_categoria_marcada: false };
+}
+
 export {
   estoqueDetalhado, vendasPeriodo, curvaAbc, pecasParadas, receitaPorLoja, consignadosMensal,
-  relatorioEvento, ranking, rankingPeriodo, eventosVenda, TAXAS_PADRAO };
+  relatorioEvento, ranking, rankingPeriodo, eventosVenda, comprasAcompanhadas,
+  TAXAS_PADRAO, taxasDaConfig };

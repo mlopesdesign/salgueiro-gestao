@@ -1,5 +1,6 @@
 // Módulo Estoque — movimentação, kardex, reposição e etiquetas
-import { api, el, esc, moeda, toast, modal, getConfig } from './app.js';
+import { api, el, esc, moeda, toast, modal, getConfig, ehAdmin } from './app.js';
+const dataBrH = (s) => s ? `${String(s).slice(0, 10).split('-').reverse().join('/')} ${String(s).slice(11, 16)}` : '—';
 
 // ---------- EAN-13 em SVG (sem dependências) ----------
 const L = ['0001101','0011001','0010011','0111101','0100011','0110001','0101111','0111011','0110111','0001011'];
@@ -119,15 +120,21 @@ export async function viewEstoque(alvo) {
 
 // ---------- Aba: Movimentar ----------
 function abaMovimentar(corpo) {
+  // Entrada, saída manual e ajuste passaram a ser exclusivos do administrador
+  // (v3.8.0). Quem não é admin continua consultando o saldo e bipando o código
+  // — só não vê os botões que o backend recusaria.
+  const admin = ehAdmin();
   const painel = el(`
     <div class="painel">
       <div class="barra">
-        <input type="text" id="mov-busca" placeholder="Bipe o código de barras ou digite nome/referência…">
+        <input type="text" id="mov-busca" placeholder="${admin ? 'Bipe o código de barras ou digite nome/referência…' : 'Bipe o código de barras ou digite nome/referência para consultar o saldo…'}">
       </div>
+      ${admin ? '' : `<p style="margin:0 12px 10px;font-size:12.5px;color:var(--texto-suave)">
+        🔒 Só o administrador altera a quantidade em estoque. Aqui você consulta o saldo.</p>`}
       <table>
         <thead><tr><th>Produto</th><th>Cor / Tamanho</th><th>Código</th>
-          <th class="num">Estoque</th><th style="width:230px"></th></tr></thead>
-        <tbody><tr><td colspan="5" class="vazio">Busque um produto para movimentar.</td></tr></tbody>
+          <th class="num">Estoque</th>${admin ? '<th style="width:230px"></th>' : ''}</tr></thead>
+        <tbody><tr><td colspan="${admin ? 5 : 4}" class="vazio">Busque um produto para ${admin ? 'movimentar' : 'consultar'}.</td></tr></tbody>
       </table>
     </div>`);
   const tbody = painel.querySelector('tbody');
@@ -140,11 +147,12 @@ function abaMovimentar(corpo) {
     tbody.innerHTML = '';
     const lista = r.ok ? r.variacoes : [];
     if (!lista.length) {
-      tbody.appendChild(el(`<tr><td colspan="5" class="vazio">Nada encontrado para "${esc(termo)}".</td></tr>`));
+      tbody.appendChild(el(`<tr><td colspan="${admin ? 5 : 4}" class="vazio">Nada encontrado para "${esc(termo)}".</td></tr>`));
       return;
     }
     // leitor de código de barras: 1 resultado exato → abre direto a entrada
-    if (lista.length === 1 && lista[0].codigo_barras === termo) {
+    // (só para o admin; para os demais o bip é consulta de saldo)
+    if (admin && lista.length === 1 && lista[0].codigo_barras === termo) {
       formMovimento(lista[0], 'entrada', pesquisar);
     }
     for (const v of lista) {
@@ -153,13 +161,15 @@ function abaMovimentar(corpo) {
         <td>${esc(v.cor)} / ${esc(v.tamanho)}</td>
         <td style="font-family:Consolas,monospace">${esc(v.codigo_barras || '')}</td>
         <td class="num"><b>${v.estoque}</b></td>
-        <td class="acoes-linha">
+        ${admin ? `<td class="acoes-linha">
           <button data-a="entrada" style="color:var(--verde)">+ Entrada</button>
           <button data-a="saida" style="color:var(--vermelho)">− Saída</button>
           <button data-a="ajuste">Ajustar</button>
-        </td></tr>`);
-      for (const acao of ['entrada', 'saida', 'ajuste']) {
-        tr.querySelector(`[data-a=${acao}]`).onclick = () => formMovimento(v, acao, pesquisar);
+        </td>` : ''}</tr>`);
+      if (admin) {
+        for (const acao of ['entrada', 'saida', 'ajuste']) {
+          tr.querySelector(`[data-a=${acao}]`).onclick = () => formMovimento(v, acao, pesquisar);
+        }
       }
       tbody.appendChild(tr);
     }
@@ -217,7 +227,7 @@ async function abaKardex(corpo) {
   if (!lista.length) tbody.appendChild(el(`<tr><td colspan="7" class="vazio">Nenhum movimento registrado.</td></tr>`));
   for (const m of lista) {
     tbody.appendChild(el(`<tr>
-      <td>${esc(m.criado_em)}</td>
+      <td>${esc(dataBrH(m.criado_em))}</td>
       <td>${esc(m.produto)}</td>
       <td>${esc(m.cor)} / ${esc(m.tamanho)}</td>
       <td>${nomes[m.tipo] || esc(m.tipo)}</td>

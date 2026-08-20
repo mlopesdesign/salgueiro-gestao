@@ -3,7 +3,7 @@
 > Mapa técnico gerado automaticamente por `tools/graphify.js`.
 > **Não edite à mão.** Regere com `node tools/graphify.js` a cada alteração estrutural.
 
-**Versão:** 3.7.0 · **Gerado em:** 2026-08-10
+**Versão:** 3.25.0 · **Gerado em:** 2026-08-19
 **Aplicação:** `br.com.mllopes.salgueirogestao` (Neutralino 6 + WebView2)
 **Cliente:** Boutique do Salgueiro · **Autor:** ML Lopes Design
 
@@ -60,6 +60,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `relatorios` | 📈 Relatórios | `src/js/relatorios.js` |
 | `ranking` | 🏆 Ranking | `src/js/ranking.js` |
 | `vales` | 🎫 Vales-Troca | — (em app.js) |
+| `catalogo` | 📔 Catálogo | `src/js/catalogo.js` |
 | `mensagens` | 💬 Mensagens | `src/js/mensagens.js` |
 | `config` | ⚙️ Configurações | — (em app.js) |
 
@@ -69,10 +70,10 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 
 | Arquivo | Linhas | Funções | Exporta |
 |---|---|---|---|
-| `auth.js` | 113 | 6 | listarUsuarios, login, salvarUsuario, trocarSenha, verificarAdmin, verificarOperador |
-| `clientes.js` | 193 | 7 | excluirCategoria, exportar, importar, listar, listarCategorias, salvar, salvarCategoria |
+| `auth.js` | 185 | 8 | autorizarDescontoAdmin, descontoLivre, listarUsuarios, login, salvarUsuario, trocarSenha, verificarAdmin, verificarOperador |
+| `clientes.js` | 223 | 7 | excluirCategoria, exportar, importar, listar, listarCategorias, salvar, salvarCategoria |
 | `compras.js` | 157 | 8 | cancelarCompra, criarCompra, excluirFornecedor, listarCompras, listarFornecedores, obterCompra, receberCompra, salvarFornecedor |
-| `config.js` | 60 | 2 | obter, salvar |
+| `config.js` | 70 | 2 | obter, salvar |
 | `consignacao.js` | 95 | 3 | acertar, listar, resumo |
 | `crediario.js` | 108 | 5 | aniversariantes, excluirCliente, obterCliente, parcelasAbertas, receberParcela |
 | `dashboard.js` | 214 | 2 | resumo |
@@ -83,14 +84,14 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `licenca.js` | 288 | 25 | DEV_USUARIO, MODULOS, NOME_PLANO, PLANOS, SETORES, devAplicar, devEntrar, devRemover, +14 |
 | `logo-default.js` | 4 | 0 | LOGO_DEFAULT |
 | `lojas.js` | 91 | 5 | arred, desativar, excluir, listar, lojaPadrao, salvar |
-| `mensagens.js` | 402 | 21 | JANELA_POPUP_H, ONLINE_TTL_S, confirmarAviso, contatos, encerrarAviso, enviar, enviarAviso, historico, +4 |
+| `mensagens.js` | 406 | 21 | JANELA_POPUP_H, ONLINE_TTL_S, confirmarAviso, contatos, encerrarAviso, enviar, enviarAviso, historico, +4 |
 | `nuvem.js` | 353 | 14 | desconectar, fazerBackup, fazerBackupTodos, iniciarOAuth, obterStatus, precisaBackupDiario, registrarOAuthListener, salvarClientId |
-| `pdv.js` | 413 | 10 | abrirCaixa, caixaAtual, cancelarVenda, fecharCaixa, listarVendas, listarVendasGeral, movimentoCaixa, obterVenda, +2 |
+| `pdv.js` | 548 | 12 | abrirCaixa, caixaAtual, cancelarVenda, fecharCaixa, listarVendas, listarVendasGeral, movimentoCaixa, obterVenda, +2 |
 | `permissoes.js` | 94 | 3 | CATALOGO, DEFAULTS, TODAS, efetivas, normalizar, pode |
 | `pontos.js` | 110 | 9 | ajustar, calcularGanho, calcularResgate, creditar, debitar, getConfig, historico, saldo, +1 |
-| `produtos.js` | 215 | 7 | excluirCategoria, excluirProduto, listarCategorias, listarProdutos, obterProduto, salvarCategoria, salvarProduto |
+| `produtos.js` | 230 | 7 | excluirCategoria, excluirProduto, listarCategorias, listarProdutos, obterProduto, salvarCategoria, salvarProduto |
 | `rede.js` | 150 | 3 | SOMENTE_LOCAL, imprimir, iniciar, listarImpressoras, parar, preparar, status |
-| `relatorios.js` | 917 | 19 | TAXAS_PADRAO, consignadosMensal, curvaAbc, estoqueDetalhado, eventosVenda, pecasParadas, ranking, rankingPeriodo, +3 |
+| `relatorios.js` | 1412 | 21 | TAXAS_PADRAO, comprasAcompanhadas, consignadosMensal, curvaAbc, estoqueDetalhado, eventosVenda, pecasParadas, ranking, +5 |
 | `trocas.js` | 252 | 2 | DESTINOS, registrar |
 | `updater.js` | 50 | 1 | verificarAtualizacao |
 | `util.js` | 68 | 4 | auditar, codigoInterno, dvEan13, hashSenha, verificarSenha |
@@ -101,32 +102,33 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | Arquivo | Linhas | Funções |
 |---|---|---|
 | `ambiente.js` | 237 | 3 |
-| `db.js` | 518 | 5 |
+| `db.js` | 565 | 5 |
 | `servidor-rede-embutido.js` | 440 | 15 |
-| `servidor.js` | 1348 | 8 |
+| `servidor.js` | 2395 | 14 |
 
 ## 6. Telas (`src/js`)
 
 | Arquivo | Linhas | Exporta |
 |---|---|---|
-| `app.js` | 1631 | EM_REDE, api, aplicarTema, el, esc |
-| `clientes.js` | 490 | viewClientes |
-| `compras.js` | 227 | viewCompras |
-| `configuracoes.js` | 1333 | viewConfiguracoes |
-| `estoque.js` | 333 | abrirEtiquetas, ean13Svg, viewEstoque |
-| `estoques.js` | 606 | viewEstoques |
+| `app.js` | 1659 | EM_REDE, api, aplicarTema, ehAdmin, el |
+| `catalogo.js` | 262 | viewCatalogo |
+| `clientes.js` | 528 | viewClientes |
+| `compras.js` | 228 | viewCompras |
+| `configuracoes.js` | 1421 | viewConfiguracoes |
+| `estoque.js` | 343 | abrirEtiquetas, ean13Svg, viewEstoque |
+| `estoques.js` | 607 | viewEstoques |
 | `etiquetas.js` | 146 | abrirEtiquetasLote |
-| `financeiro.js` | 260 | viewFinanceiro |
-| `mensagens.js` | 613 | abrirBalao, encerrarTelaMensagens, iniciarMensagens, pararMensagens, viewMensagens |
+| `financeiro.js` | 261 | viewFinanceiro |
+| `mensagens.js` | 758 | abrirBalao, encerrarTelaMensagens, iniciarMensagens, pararMensagens, viewMensagens |
 | `neutralino.js` | 2 | — |
-| `novidades.js` | 331 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
-| `pdv.js` | 1621 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
+| `novidades.js` | 618 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
+| `pdv.js` | 1889 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
 | `ranking.js` | 361 | viewRanking |
-| `relatorios.js` | 1081 | viewRelatorios |
+| `relatorios.js` | 1690 | viewRelatorios |
 
 ---
 
-## 7. Rotas da API (143)
+## 7. Rotas da API (149)
 
 Toda comunicação tela ↔ backend passa por `api('canal:acao', payload)`.
 A coluna **Permissão** vem de `PERMISSAO_ROTA` em `servidor.js` — sem entrada ali,
@@ -151,7 +153,7 @@ a rota exige apenas sessão válida.
 | `auth:listarUsuarios` | `usuarios.gerenciar` | `auth.listarUsuarios(db)` |
 | `auth:salvarUsuario` | `usuarios.gerenciar` | `auth.salvarUsuario(db, p, sessao.usuario)` |
 | `auth:trocarSenha` | — | `auth.trocarSenha(db, p, sessao.usuario)` |
-| `auth:autorizarDesconto` | — | `auth.verificarOperador(db, sessao.usuario, p.senha)` |
+| `auth:autorizarDesconto` | — | `{` |
 
 ### `avisos:*`
 
@@ -172,6 +174,13 @@ a rota exige apenas sessão válida.
 | `backup:listarLocais` | `config.gerenciar` | `{` |
 | `backup:preAtualizacao` | `config.gerenciar` | `{` |
 | `backup:salvarAgora` | `config.gerenciar` | `{ await db.salvarAgora(); return { ok: true }; }` |
+
+### `catalogo:*`
+
+| Canal | Permissão | Destino |
+|---|---|---|
+| `catalogo:categorias` | `produtos.ver` | `{` |
+| `catalogo:gerar` | `produtos.ver` | `{` |
 
 ### `categorias:*`
 
@@ -400,12 +409,16 @@ a rota exige apenas sessão válida.
 | `relatorios:receitaPorLoja` | `dashboard.financeiro` | `relatorios.receitaPorLoja(db, p \|\| {})` |
 | `relatorios:consignados` | `relatorios.ver` | `relatorios.consignadosMensal(db, p \|\| {})` |
 | `relatorios:evento` | `relatorios.ver` | `relatorios.relatorioEvento(db, p \|\| {})` |
+| `relatorios:acompanhadas` | `relatorios.ver` | `relatorios.comprasAcompanhadas(db, p \|\| {})` |
+| `relatorios:acompanhadasXlsx` | `relatorios.ver` | `{` |
 | `relatorios:ranking` | `relatorios.ver` | `relatorios.ranking(db, p \|\| {})` |
 | `relatorios:eventos` | `relatorios.ver` | `relatorios.eventosVenda(db, p \|\| {})` |
 | `relatorios:rankingPeriodo` | `relatorios.ver` | `relatorios.rankingPeriodo(db, p \|\| {})` |
 | `relatorios:rankingPeriodoXlsx` | `relatorios.ver` | `{` |
 | `relatorios:rankingXlsx` | `relatorios.ver` | `{` |
 | `relatorios:eventoXlsx` | `relatorios.ver` | `{` |
+| `relatorios:listarVendasFornecedor` | `relatorios.ver` | `{` |
+| `relatorios:reciboConsignado` | `relatorios.ver` | `{` |
 
 ### `trocas:*`
 

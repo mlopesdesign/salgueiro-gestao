@@ -21,7 +21,20 @@ const PADRAO = {
   desconto_avista_ativo: '0', // '1' = desconto automático dinheiro/PIX habilitado
   desconto_avista_percent: '5',   // percentual de desconto (ex: '5' = 5%)
   desconto_avista_minimo: '100',  // valor mínimo da venda para o desconto se aplicar
-  vale_validade_dias: '90'        // validade do vale-troca em dias ('0' = sem vencimento)
+  vale_validade_dias: '90',       // validade do vale-troca em dias ('0' = sem vencimento)
+
+  // Taxas da maquininha, em % (v3.12.0). Nascem com os valores da Mercado Pago
+  // Smart 2, que eram fixos no código até aqui — quem já usa o sistema não vê
+  // diferença nenhuma. Ficam editáveis para o dia em que a operadora reajustar
+  // ou a loja trocar de maquininha, sem depender de uma versão nova do app.
+  taxa_pix_chave: '0',            // Pix direto na chave — normalmente sem taxa
+  taxa_pix_maquina: '0.49',       // Pix lido na maquininha
+  taxa_debito: '0.99',
+  taxa_credito_vista: '3.05',
+  taxa_credito_parcelado: '3.25', // 2x a 6x
+
+  // Relatórios (v3.25.0)
+  relatorio_cards_detalhe: '1'   // '1' = exibe subtexto nos cards (qtd peças · tabela)
 };
 
 function obter(db) {

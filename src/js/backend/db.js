@@ -373,6 +373,28 @@ function migrar(db) {
     } catch (e) { console.error('[migração] variacoes.foto:', e.message); }
   }
 
+  // v3.15.0 — função/cargo do cliente.
+  // Nasceu da importação dos funcionários do barracão: a planilha trazia a
+  // função de cada um e não havia onde guardar. Vale para qualquer cliente
+  // (fornecedor, sócio, parceiro) — é a ocupação da pessoa, não o segmento.
+  if (tabelaExiste('clientes') && !temColuna('clientes', 'funcao')) {
+    try {
+      db.exec('ALTER TABLE clientes ADD COLUMN funcao TEXT');
+      console.log('[migração] clientes.funcao adicionado');
+    } catch (e) { console.error('[migração] clientes.funcao:', e.message); }
+  }
+
+  // v3.10.0 — categoria de cliente sob acompanhamento.
+  // Marca as categorias cujas compras entram no relatório de acompanhamento
+  // (funcionários, sócios, quem compra com desconto). Nasce 0: nenhuma
+  // categoria passa a ser acompanhada sem alguém marcar na tela.
+  if (tabelaExiste('categorias_clientes') && !temColuna('categorias_clientes', 'monitorar')) {
+    try {
+      db.exec('ALTER TABLE categorias_clientes ADD COLUMN monitorar INTEGER NOT NULL DEFAULT 0');
+      console.log('[migração] categorias_clientes.monitorar adicionado');
+    } catch (e) { console.error('[migração] categorias_clientes.monitorar:', e.message); }
+  }
+
   // ── v3.2.0 — Troca no PDV ──────────────────────────────────────────────────
   // O crédito da troca entra como pagamento da nova venda com forma 'troca'.
   // O CHECK de `forma` não aceita ALTER: reconstruir a tabela (mesmo rito da
@@ -424,6 +446,31 @@ function migrar(db) {
   }
   if (!temColuna('vendas', 'desconto_motivo')) {
     try { db.exec('ALTER TABLE vendas ADD COLUMN desconto_motivo TEXT'); } catch {}
+  }
+
+  // ── v3.19.0 — venda a preço de custo ──────────────────────────────────────
+  // Marca a venda inteira. Coluna simples com DEFAULT: toda venda antiga
+  // continua 'normal' sem precisar de UPDATE. Quem autorizou e o motivo
+  // reaproveitam desconto_autorizado_por / desconto_motivo — é a mesma
+  // natureza (alguém liberou abrir mão de margem, com justificativa) e
+  // evita duas colunas que diriam a mesma coisa.
+  if (!temColuna('vendas', 'tipo_venda')) {
+    try {
+      db.exec("ALTER TABLE vendas ADD COLUMN tipo_venda TEXT NOT NULL DEFAULT 'normal'");
+      console.log('[migração] vendas.tipo_venda adicionado');
+    } catch (e) { console.error('[migração] vendas.tipo_venda:', e.message); }
+  }
+
+  // ── v3.20.0 — acréscimo de taxa na venda a preço de custo ─────────────────
+  // Quanto foi somado ao preço para cobrir a taxa da maquininha. Fica em
+  // coluna própria porque NÃO é preço de peça: a soma dos itens continua
+  // valendo o custo, e o total da venda passa a ser subtotal + acrescimo.
+  // Sem separar, a conciliação do relatório (v3.9.0) deixaria de fechar.
+  if (!temColuna('vendas', 'acrescimo')) {
+    try {
+      db.exec('ALTER TABLE vendas ADD COLUMN acrescimo REAL NOT NULL DEFAULT 0');
+      console.log('[migração] vendas.acrescimo adicionado');
+    } catch (e) { console.error('[migração] vendas.acrescimo:', e.message); }
   }
 
   // ── v3.3.0 — Consumidor final vira cliente de verdade ─────────────────────

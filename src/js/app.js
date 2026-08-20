@@ -15,7 +15,7 @@ import { viewCatalogo } from './catalogo.js';
 const $app = document.getElementById('app');
 let usuario = null;
 let categoriasCache = [];
-let APP_VERSION = '3.25.12'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
+let APP_VERSION = '3.25.19'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
 
 // API dupla: no aplicativo usa IPC (preload); num terminal em rede (navegador),
 // conversa com o servidor do computador principal via HTTP com token de sessão.
@@ -1656,7 +1656,6 @@ function iniciarLightbox() {
     api('app:garantirExtensao').catch(() => {});
     // Abertura maximizada garantida por "maximized":true no neutralino.config.json.
     // Foco no startup via AppActivate no PS1 da extensão (~2s após iniciar).
-    // Nenhuma chamada JS de janela aqui — evita corromper WINDOWPLACEMENT do Windows.
   }
   telaLogin();
 })();

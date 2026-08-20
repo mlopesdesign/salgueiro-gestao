@@ -24,6 +24,7 @@ export async function viewConfiguracoes(alvo) {
         <button data-aba="backup">💾 Backup</button>
         ${setorAtivo('rede') ? '<button data-aba="rede">🌐 Rede</button>' : ''}
         <button data-aba="pdv">🛒 PDV</button>
+        <button data-aba="relatorios">📊 Relatórios</button>
         <button data-aba="impressoras">🖨️ Impressoras</button>
         <button data-aba="licenca">📜 Licença</button>
         <button data-aba="atualizacao">🔄 Atualização</button>
@@ -33,7 +34,7 @@ export async function viewConfiguracoes(alvo) {
       <div id="aba-conteudo"></div>
     </div>`);
   const corpo = tela.querySelector('#aba-conteudo');
-  const abas = { aparencia: abaAparencia, loja: abaLoja, lojas: abaLojas, pontos: abaPontos, usuarios: abaUsuarios, nuvem: abaNuvem, backup: abaBackup, rede: abaRede, licenca: abaLicenca, pdv: abaPdv, impressoras: abaImpressoras, atualizacao: abaAtualizacao, clientes: abaCategoriaClientes };
+  const abas = { aparencia: abaAparencia, loja: abaLoja, lojas: abaLojas, pontos: abaPontos, usuarios: abaUsuarios, nuvem: abaNuvem, backup: abaBackup, rede: abaRede, licenca: abaLicenca, pdv: abaPdv, relatorios: abaRelatorios, impressoras: abaImpressoras, atualizacao: abaAtualizacao, clientes: abaCategoriaClientes };
   tela.querySelectorAll('.abas button').forEach(b => {
     b.onclick = () => {
       tela.querySelectorAll('.abas button').forEach(x => x.classList.toggle('ativa', x === b));
@@ -325,7 +326,79 @@ function abaPdv(corpo) {
         A mudança vale para os vales emitidos <b>daqui em diante</b>. Vales já
         emitidos mantêm a data que receberam.
       </p>
+
+      <hr style="border:none;border-top:1px solid var(--borda);margin:22px 0">
+
+      <h3 style="margin:0 0 10px;font-size:15px">Taxas da maquininha</h3>
+      <p style="color:var(--texto-suave);font-size:13px;margin:0 0 14px">
+        São os percentuais que a operadora cobra em cada forma de pagamento.
+        O sistema usa estes valores para calcular o <b>líquido a receber</b> no
+        relatório de evento. Já vêm preenchidos com as taxas da Mercado Pago
+        Smart 2 — só mexa se a operadora reajustar ou se você trocar de máquina.
+      </p>
+      <div class="linha-3">
+        <div class="campo"><label>Pix na chave (%)</label>
+          <input id="tx-pix-chave" type="number" min="0" max="100" step="0.01"
+            value="${esc(cfg.taxa_pix_chave ?? '0')}" placeholder="0"></div>
+        <div class="campo"><label>Pix na maquininha (%)</label>
+          <input id="tx-pix-maq" type="number" min="0" max="100" step="0.01"
+            value="${esc(cfg.taxa_pix_maquina ?? '0.49')}" placeholder="0,49"></div>
+        <div class="campo"><label>Débito (%)</label>
+          <input id="tx-debito" type="number" min="0" max="100" step="0.01"
+            value="${esc(cfg.taxa_debito ?? '0.99')}" placeholder="0,99"></div>
+      </div>
+      <div class="linha-2">
+        <div class="campo"><label>Crédito à vista (%)</label>
+          <input id="tx-cred-vista" type="number" min="0" max="100" step="0.01"
+            value="${esc(cfg.taxa_credito_vista ?? '3.05')}" placeholder="3,05"></div>
+        <div class="campo"><label>Crédito parcelado 2x a 6x (%)</label>
+          <input id="tx-cred-parc" type="number" min="0" max="100" step="0.01"
+            value="${esc(cfg.taxa_credito_parcelado ?? '3.25')}" placeholder="3,25"></div>
+      </div>
+      <div class="erro" id="tx-erro"></div>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:6px">
+        <button class="btn btn-primario" id="tx-salvar">Salvar taxas</button>
+        <button class="btn btn-suave" id="tx-padrao">Restaurar padrão</button>
+      </div>
+      <p style="color:var(--texto-suave);font-size:12px;margin-top:10px">
+        A taxa é calculada <b>por transação</b> e arredondada em cada uma, como a
+        operadora cobra. Mudar aqui vale para <b>todo relatório gerado a partir
+        de agora</b>, inclusive de eventos passados — o sistema não guarda a taxa
+        junto da venda, ele recalcula na hora.
+      </p>
     </div>`);
+
+  // ---- Taxas da maquininha (v3.12.0) ----
+  const TX_PADRAO = { 'tx-pix-chave': '0', 'tx-pix-maq': '0.49', 'tx-debito': '0.99',
+                      'tx-cred-vista': '3.05', 'tx-cred-parc': '3.25' };
+  painel.querySelector('#tx-padrao').onclick = () => {
+    for (const [id, v] of Object.entries(TX_PADRAO)) painel.querySelector('#' + id).value = v;
+    painel.querySelector('#tx-erro').textContent = '';
+    toast('Valores da Mercado Pago Smart 2 preenchidos. Clique em Salvar taxas para gravar.');
+  };
+  painel.querySelector('#tx-salvar').onclick = async () => {
+    const $e = painel.querySelector('#tx-erro');
+    const campos = {
+      taxa_pix_chave: painel.querySelector('#tx-pix-chave').value,
+      taxa_pix_maquina: painel.querySelector('#tx-pix-maq').value,
+      taxa_debito: painel.querySelector('#tx-debito').value,
+      taxa_credito_vista: painel.querySelector('#tx-cred-vista').value,
+      taxa_credito_parcelado: painel.querySelector('#tx-cred-parc').value
+    };
+    for (const [k, v] of Object.entries(campos)) {
+      const n = Number(String(v).replace(',', '.'));
+      if (!Number.isFinite(n) || n < 0 || n > 100) {
+        $e.textContent = 'Informe um percentual entre 0 e 100 em todos os campos.';
+        return;
+      }
+      campos[k] = String(n);
+    }
+    const r = await api('config:salvar', campos);
+    if (!r.ok) { $e.textContent = r.erro; return; }
+    $e.textContent = '';
+    await recarregarConfig();
+    toast('Taxas salvas. Gere o relatório de evento de novo para ver o efeito.');
+  };
 
   const $cb = painel.querySelector('#pdv-avista-ativo');
   const $campos = painel.querySelector('#pdv-avista-campos');
@@ -369,6 +442,37 @@ function abaPdv(corpo) {
     toast(dias === 0
       ? 'Vales-troca passam a ser emitidos sem vencimento.'
       : `✅ Vales-troca passam a valer por ${dias} dias.`);
+  };
+
+  corpo.appendChild(painel);
+}
+
+// ---------- Relatórios ----------
+function abaRelatorios(corpo) {
+  const cfg = getConfig();
+  const painel = el(`
+    <div class="painel" style="padding:22px;max-width:600px">
+      <h3 style="margin:0 0 18px;font-size:15px">Cards do relatório de evento</h3>
+      <p style="color:var(--texto-suave);font-size:13px;margin:0 0 18px">
+        Controla se os cards de resumo exibem a linha de detalhe abaixo do valor —
+        a quantidade de peças e o valor de tabela (bruto, sem descontos).
+      </p>
+      <div class="campo" style="margin:0 0 18px">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+          <input id="rel-cards-detalhe" type="checkbox" style="width:18px;height:18px;cursor:pointer"
+            ${cfg.relatorio_cards_detalhe !== '0' ? 'checked' : ''}>
+          <span>Exibir detalhe nos cards (qtd de peças · valor de tabela)</span>
+        </label>
+      </div>
+      <div class="erro" id="rel-erro"></div>
+      <button class="btn btn-primario" id="rel-salvar">Salvar</button>
+    </div>`);
+
+  painel.querySelector('#rel-salvar').onclick = async () => {
+    const ativo = painel.querySelector('#rel-cards-detalhe').checked ? '1' : '0';
+    const r = await api('config:salvar', { relatorio_cards_detalhe: ativo });
+    if (!r.ok) { painel.querySelector('#rel-erro').textContent = r.erro; return; }
+    toast('Configuração salva. ✔');
   };
 
   corpo.appendChild(painel);
@@ -1264,6 +1368,7 @@ async function abaCategoriaClientes(corpo) {
         <h3 style="margin:0 0 4px">Categorias de clientes</h3>
         <p style="color:var(--texto-suave);margin:0;font-size:13px">
           Cada categoria pode ter um desconto automático (%). Quando um cliente identificado pertence a uma categoria com desconto, o PDV aplica o desconto sozinho.
+          <br>Marque <b>👁️ Acompanhar compras</b> nas categorias que você quer vigiar (funcionários, sócios) — elas aparecem no relatório de acompanhamento.
         </p>
       </div>
       <button class="btn btn-primario" id="cat-nova" style="white-space:nowrap;margin-left:16px">+ Nova categoria</button>
@@ -1281,10 +1386,13 @@ async function abaCategoriaClientes(corpo) {
       return;
     }
     lista.innerHTML = `<table>
-      <thead><tr><th>Categoria</th><th class="num">Desconto</th><th style="width:130px"></th></tr></thead>
+      <thead><tr><th>Categoria</th><th class="num">Desconto</th><th>Acompanhar</th><th style="width:130px"></th></tr></thead>
       <tbody>${r.categorias.map(c => `<tr data-id="${c.id}">
         <td><b>${esc(c.nome)}</b></td>
         <td class="num">${c.desconto_percent > 0 ? `<span style="color:var(--vinho);font-weight:700">${c.desconto_percent}%</span>` : '<span style="color:var(--texto-suave)">—</span>'}</td>
+        <td>${c.monitorar
+          ? '<span style="background:rgba(184,135,59,.18);color:#7a5716;font-size:11.5px;padding:2px 8px;border-radius:10px;white-space:nowrap">👁️ Acompanhada</span>'
+          : '<span style="color:var(--texto-suave)">—</span>'}</td>
         <td class="acoes-linha"><button data-a="editar">Editar</button> <button data-a="excluir" style="color:var(--vermelho)">Excluir</button></td>
       </tr>`).join('')}</tbody>
     </table>`;
@@ -1318,12 +1426,24 @@ function modalCategoria(cat, aoSalvar) {
       <input id="mc-desc" type="number" min="0" max="100" step="0.5" value="${cat ? cat.desconto_percent : 0}"
         style="max-width:120px">
       <small style="color:var(--texto-suave);display:block;margin-top:4px">0 = sem desconto automático. Ex: 10 = 10% de desconto ao identificar o cliente no PDV.</small></div>
+    <div class="campo" style="background:rgba(184,135,59,.08);border:1px solid rgba(184,135,59,.35);border-radius:8px;padding:12px 14px">
+      <label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer;margin:0">
+        <input type="checkbox" id="mc-monit" ${cat && cat.monitorar ? 'checked' : ''} style="margin-top:3px;width:16px;height:16px">
+        <span><b>👁️ Acompanhar as compras desta categoria</b>
+          <small style="color:var(--texto-suave);display:block;margin-top:3px;font-weight:400">
+            Use em funcionários, sócios e quem compra com desconto. As compras passam a aparecer
+            em Relatórios → 👁️ Compras acompanhadas, com o que cada pessoa levou, quantas peças e
+            quanto pagou — para perceber quem está comprando em quantidade de revenda.
+          </small></span>
+      </label>
+    </div>
     <div class="erro" id="mc-erro"></div>
   `, async (mm, fechar) => {
     const nome = mm.querySelector('#mc-nome').value.trim();
     const desc = Number(mm.querySelector('#mc-desc').value) || 0;
     if (!nome) { mm.querySelector('#mc-erro').textContent = 'Informe o nome.'; return; }
-    const r = await api('clientes:salvarCategoria', { id: cat ? cat.id : undefined, nome, desconto_percent: desc });
+    const monitorar = mm.querySelector('#mc-monit').checked ? 1 : 0;
+    const r = await api('clientes:salvarCategoria', { id: cat ? cat.id : undefined, nome, desconto_percent: desc, monitorar });
     if (!r.ok) { mm.querySelector('#mc-erro').textContent = r.erro; return; }
     toast(cat ? 'Categoria atualizada.' : 'Categoria criada.');
     fechar(); aoSalvar();

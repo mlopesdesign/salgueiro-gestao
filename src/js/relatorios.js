@@ -1,5 +1,5 @@
 // Relatórios — vendas, curva ABC, peças paradas, exportação CSV/PDF/impressão
-import { api, el, esc, moeda, toast, getConfig, pode } from './app.js';
+import { api, el, esc, moeda, toast, modal, getConfig, pode } from './app.js';
 
 // Impressão / PDF: monta uma folha limpa e chama a impressão do sistema
 // (no destino, o usuário escolhe a impressora ou "Salvar como PDF"). Funciona
@@ -39,6 +39,19 @@ const hoje = () => new Date().toISOString().slice(0, 10);
 const inicioMes = () => hoje().slice(0, 8) + '01';
 const dataBr = (d) => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '—';
 
+// Baixa um arquivo que veio do backend em base64 (Excel gerado pelo XLSX).
+function baixarBase64(base64, nome) {
+  const bin = atob(base64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([bytes],
+    { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+  a.download = nome;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+
 function baixarCsv(nome, cabecalho, linhas) {
   const escCsv = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const csv = '﻿' + [cabecalho, ...linhas].map(l => l.map(escCsv).join(';')).join('\r\n');
@@ -70,12 +83,13 @@ export async function viewRelatorios(alvo) {
         <button data-aba="abc">Curva ABC</button>
         <button data-aba="paradas">Peças paradas</button>
         ${pode('estoque.ver') ? '<button data-aba="estoque">📦 Estoque</button>' : ''}
+        <button data-aba="acompanhadas">👁️ Compras acompanhadas</button>
       </div>
       <div id="aba-conteudo"></div>
     </div>`);
   const corpo = tela.querySelector('#aba-conteudo');
   const periodo = () => ({ de: tela.querySelector('#r-de').value, ate: tela.querySelector('#r-ate').value });
-  const abas = { vendas: abaVendas, evento: abaEvento, lojas: abaPorLoja, consignados: abaConsignados, abc: abaAbc, paradas: abaParadas, estoque: abaEstoque };
+  const abas = { vendas: abaVendas, evento: abaEvento, lojas: abaPorLoja, consignados: abaConsignados, abc: abaAbc, paradas: abaParadas, estoque: abaEstoque, acompanhadas: abaAcompanhadas };
   const rotuloAba = () => (tela.querySelector('.abas button.ativa')?.textContent || 'Relatório').trim();
   tela.querySelector('#r-imprimir').onclick = () => imprimirRelatorio(
     `${rotuloAba()} — ${tela.querySelector('#r-de').value} a ${tela.querySelector('#r-ate').value}`, corpo.innerHTML);
@@ -102,6 +116,7 @@ export async function viewRelatorios(alvo) {
 async function abaVendas(corpo, per) {
   const r = await api('relatorios:vendas', per);
   if (!r.ok) { toast(r.erro, true); return; }
+  const _subCard = (getConfig && getConfig() || {}).relatorio_cards_detalhe !== '0';
   const linhasDia = r.por_dia.map(d => `<tr><td>${dataBr(d.dia)}</td>
     <td class="num">${d.qtd}</td><td class="num"><b>${moeda(d.total)}</b></td></tr>`).join('');
   const linhasVend = r.por_vendedor.map(v => `<tr><td>${esc(v.vendedor || '—')}</td>
@@ -115,6 +130,12 @@ async function abaVendas(corpo, per) {
         <div class="card"><div class="rotulo">Vendas</div><div class="valor">${r.resumo.qtd}</div></div>
         <div class="card"><div class="rotulo">Faturamento</div><div class="valor">${moeda(r.resumo.total)}</div></div>
         <div class="card"><div class="rotulo">Ticket médio</div><div class="valor">${moeda(r.resumo.ticket)}</div></div>
+        <div class="card ev-card-salgueiro"><div class="rotulo">Vendas do Salgueiro</div>
+          <div class="valor">${moeda((r.resumo.origem || {}).proprio?.total || 0)}</div>
+          ${_subCard ? `<div class="ev-card-sub">${(r.resumo.origem || {}).proprio?.pecas || 0} peça(s) próprias · tabela ${moeda((r.resumo.origem || {}).proprio?.tabela || 0)}</div>` : ''}</div>
+        <div class="card ev-card-consig"><div class="rotulo">Vendas de consignados</div>
+          <div class="valor">${moeda((r.resumo.origem || {}).consignado?.total || 0)}</div>
+          ${_subCard ? `<div class="ev-card-sub">${(r.resumo.origem || {}).consignado?.pecas || 0} peça(s) de fornecedor · tabela ${moeda((r.resumo.origem || {}).consignado?.tabela || 0)}</div>` : ''}</div>
       </div>
       <div class="linha-2" style="align-items:start">
         <div class="painel"><div class="barra"><b>Por dia</b>
@@ -160,7 +181,8 @@ const _SECOES = [
   ['pagamentos', 'Formas de pagamento e taxas', true],
   ['consignado', 'Comissão de consignados', true],
   ['cortesias', 'Cortesias (brindes)', true],
-  ['descontos', 'Descontos autorizados', true],
+  ['descontos', 'Descontos no fechamento', true],
+  ['vendas_custo', 'Vendas a preço de custo', true],
   ['vendedor', 'Por vendedor(a)', false],
   ['categoria', 'Por categoria', false]
 ];
@@ -182,6 +204,30 @@ function _estiloEvento() {
     .ev-tot .num { text-align:right; }
     .ev-neg td { color:#b45309; }
     .ev-final td { border-top:2px solid var(--borda); font-size:15px; }
+    .ev-orig { font-size:11px; padding:2px 7px; border-radius:10px; white-space:nowrap; }
+    .ev-orig-aut { background:rgba(184,135,59,.18); color:#7a5716; }
+    .ev-orig-auto { background:rgba(0,0,0,.07); color:#555; }
+    /* Vendido por origem da peça (v3.11.0) */
+    .ev-card-salgueiro { border-left:3px solid var(--vinho); }
+    .ev-card-consig { border-left:3px solid #1D9E75; }
+    .ev-card-consig .valor { color:#0F6E56; }
+    /* Cartões de desconto e cortesia — o que sai do faturamento (v3.9.0) */
+    .ev-card-abate { border-left:3px solid var(--dourado); }
+    .ev-card-abate .valor { color:#b45309; }
+    .ev-card-sub { font-size:11px; opacity:.7; margin-top:3px; }
+    /* Peça consignada sem repasse: o que explica o cartão não bater com a
+       seção de comissão. Fica em vermelho porque é cadastro para arrumar. */
+    .ev-card-alerta { font-size:11px; margin-top:5px; color:#b3261e; font-weight:600; line-height:1.4; }
+    .ev-sem-repasse { background:#FFF4F3; border:1px solid #f0c4c0; border-radius:8px;
+      padding:10px 12px; margin:10px 0; font-size:12.5px; line-height:1.55; }
+    .ev-sem-repasse b { color:#b3261e; }
+    .ev-sem-repasse table { width:100%; margin-top:7px; border-collapse:collapse; font-size:12px; }
+    .ev-sem-repasse td { padding:3px 6px; border-top:1px solid #f2d6d3; }
+    /* Conciliação da lista de produtos com o faturamento (v3.9.0) */
+    .ev-conc td { background:rgba(0,0,0,.03); font-size:13px; padding:7px 8px; }
+    .ev-conc td:last-child { text-align:right; font-variant-numeric:tabular-nums; }
+    .ev-conc-fim td { background:rgba(184,135,59,.14); font-size:15px;
+      border-top:2px solid var(--dourado); border-bottom:2px solid var(--dourado); }
     .ev-vendas .ev-linha { cursor:pointer; }
     .ev-vendas .ev-linha:hover { background:rgba(0,0,0,.04); }
     .ev-seta { display:inline-block; width:14px; opacity:.6; }
@@ -189,12 +235,23 @@ function _estiloEvento() {
     .ev-sub th, .ev-sub td { padding:3px 6px; border-bottom:1px solid var(--borda); }
     .ev-itens > td { background:rgba(0,0,0,.03); padding:6px 12px !important; }
     .ev-consig { font-size:12px; margin-top:4px; opacity:.85; }
-    .num { text-align:right; }`;
+    .num { text-align:right; }
+    /* Menu suspenso de navegação por seção (v3.23.0) */
+    .ev-nav { position:sticky; top:0; z-index:20; background:var(--fundo);
+      border-bottom:1px solid var(--borda); padding:6px 0 5px; margin:0 0 12px; }
+    .ev-nav-sel { font-size:13px; padding:5px 10px; border:1px solid var(--borda);
+      border-radius:8px; background:var(--fundo); color:var(--texto); cursor:pointer;
+      min-width:220px; max-width:320px; }
+    .ev-nav-sel:focus { outline:2px solid var(--primaria); }
+    @media print { .ev-nav { display:none } }
+    /* scroll-margin para o dropdown não cobrir o topo da seção */
+    .painel[id^="ev-s-"] { scroll-margin-top:44px }`;
   document.head.appendChild(st);
 }
 
 async function abaEvento(corpo) {
   _estiloEvento();
+  const _subCard = (getConfig && getConfig() || {}).relatorio_cards_detalhe !== '0';
   const ini = _inicioEventoPadrao();
   const fim = new Date(ini.getTime() + 8 * 3600 * 1000);
   const chks = _SECOES.map(([k, rot, on]) =>
@@ -240,8 +297,8 @@ async function abaEvento(corpo) {
   });
   let dados = null;
 
-  const tabela = (titulo, cabs, linhas, extra, cls) => linhas
-    ? `<div class="painel" style="margin-bottom:14px">
+  const tabela = (titulo, cabs, linhas, extra, cls, id) => linhas
+    ? `<div class="painel"${id ? ` id="${id}"` : ''} style="margin-bottom:14px">
          <div class="barra"><b>${esc(titulo)}</b>${extra || ''}</div>
          <table${cls ? ` class="${cls}"` : ''}><thead><tr>${cabs}</tr></thead>
          <tbody>${linhas}</tbody></table></div>`
@@ -249,22 +306,56 @@ async function abaEvento(corpo) {
 
   function render(r, s) {
     const t = r.resumo;
-    let h = '';
+    let topH = '', secH = '', _nav = [];
+    const _addNav = (id, label) => _nav.push({ id, label });
 
     if (s.resumo) {
-      h += `<div class="cards">
+      // Cartões do topo. Descontos e cortesias ganharam cartão próprio (v3.9.0)
+      // por pedido do Marcio: são exatamente os dois valores que separam o
+      // faturamento bruto do total das peças no fim do relatório, então ficam
+      // à vista desde o começo em vez de aparecerem só lá embaixo.
+      const _cortesia = t.cortesias || { qtd: 0, pecas: 0, valor: 0, custo: 0 };
+      const _desc = t.descontos || { qtd: 0, valor: 0 };
+      const _custo = t.vendas_custo || { qtd: 0, pecas: 0, cobrado: 0, tabela: 0, margem_aberta: 0 };
+      // Vendido por origem da peça (v3.11.0): os dois somam o valor de tabela
+      // da conciliação no fim do relatório.
+      const _orig = t.origem || { proprio: { pecas: 0, total: 0, tabela: 0 }, consignado: { pecas: 0, total: 0, tabela: 0 } };
+      topH += `<div class="cards">
         <div class="card"><div class="rotulo">Vendas</div><div class="valor">${t.vendas}</div></div>
         <div class="card"><div class="rotulo">Peças</div><div class="valor">${t.pecas}</div></div>
         <div class="card"><div class="rotulo">Faturamento bruto</div><div class="valor">${moeda(t.bruto)}</div></div>
         <div class="card"><div class="rotulo">Ticket médio</div><div class="valor">${moeda(t.ticket)}</div></div>
-      </div>
-      <div class="painel" style="margin-bottom:14px">
+        <div class="card ev-card-abate"><div class="rotulo">Total em descontos</div>
+          <div class="valor">${moeda(_desc.valor)}</div>
+          ${_subCard ? `<div class="ev-card-sub">${_desc.qtd} venda(s) com desconto no fechamento</div>` : ''}</div>
+        <div class="card ev-card-abate"><div class="rotulo">Total em cortesias</div>
+          <div class="valor">${moeda(_cortesia.valor)}</div>
+          ${_subCard ? `<div class="ev-card-sub">${_cortesia.pecas} peça(s) · custo ${moeda(_cortesia.custo)}</div>` : ''}</div>
+        ${_custo.qtd ? `
+        <div class="card ev-card-abate"><div class="rotulo">Vendido a preço de custo</div>
+          <div class="valor">${moeda(_custo.cobrado)}</div>
+          ${_subCard ? `<div class="ev-card-sub">${_custo.pecas} peça(s) · margem aberta ${moeda(_custo.margem_aberta)}</div>` : ''}</div>` : ''}
+        <div class="card ev-card-salgueiro"><div class="rotulo">Vendas do Salgueiro</div>
+          <div class="valor">${moeda(_orig.proprio.total)}</div>
+          ${_subCard ? `<div class="ev-card-sub">${_orig.proprio.pecas} peça(s) próprias · tabela ${moeda(_orig.proprio.tabela)}</div>` : ''}</div>
+        <div class="card ev-card-consig"><div class="rotulo">Vendas de consignados</div>
+          <div class="valor">${moeda(_orig.consignado.total)}</div>
+          ${_subCard ? `<div class="ev-card-sub">${_orig.consignado.pecas} peça(s) de fornecedor · tabela ${moeda(_orig.consignado.tabela)}</div>` : ''}
+          ${(_orig.consignado.sem_repasse || {}).pecas
+            ? `<div class="ev-card-alerta">⚠️ ${_orig.consignado.sem_repasse.pecas} peça(s)
+                 (${moeda(_orig.consignado.sem_repasse.tabela)}) sem repasse — veja a seção de consignados</div>`
+            : ''}</div>
+      </div>`;
+      _addNav('ev-s-fechamento', '📋 Fechamento');
+      topH += `<div class="painel" id="ev-s-fechamento" style="margin-bottom:14px">
         <div class="barra"><b>Fechamento do evento</b>
           <span class="ev-dica">${_dtBr(r.inicio)} até ${_dtBr(r.fim)}</span></div>
         <table class="ev-tot"><tbody>
           <tr><td>Faturamento bruto</td><td class="num">${moeda(t.bruto)}</td></tr>
-          ${t.devolucoes ? `<tr class="ev-neg"><td>(–) Devoluções</td><td class="num">${moeda(t.devolucoes)}</td></tr>` : ''}
-          <tr><td>Faturamento líquido</td><td class="num"><b>${moeda(t.liquido)}</b></td></tr>
+          <tr class="ev-neg"><td>(–) Devoluções${t.devolucoes ? '' : '<small style="display:block;opacity:.75">nenhuma peça foi devolvida neste período</small>'}</td>
+            <td class="num">${moeda(t.devolucoes)}</td></tr>
+          <tr><td>Faturamento líquido${t.devolucoes ? '' : '<small style="display:block;opacity:.75">igual ao bruto porque não houve devolução</small>'}</td>
+            <td class="num"><b>${moeda(t.liquido)}</b></td></tr>
           <tr class="ev-neg"><td>(–) Taxas da maquininha</td><td class="num">${moeda(t.taxas)}</td></tr>
           ${t.comissao ? `<tr class="ev-neg"><td>(–) Comissão de consignados</td><td class="num">${moeda(t.comissao)}</td></tr>` : ''}
           <tr class="ev-final"><td><b>Líquido a receber</b></td><td class="num"><b>${moeda(t.receber)}</b></td></tr>
@@ -277,18 +368,48 @@ async function abaEvento(corpo) {
     if (s.vendas) {
       const linhas = r.vendas.map(v => {
         const temItens = s.itens && v.itens.length;
+        // Cada linha mostra o desconto que coube ÀQUELA peça — o lançado nela
+        // mais a parte do desconto do fechamento. Antes o desconto da venda não
+        // aparecia em item nenhum e a soma das linhas não batia com o total
+        // cobrado (v3.14.0).
+        const somaTabela = v.itens.reduce((a, i) => a + (i.tabela ?? i.total), 0);
+        const somaDesc = v.itens.reduce((a, i) => a + (i.desconto_total ?? i.desconto ?? 0), 0);
+        const somaRec = v.itens.reduce((a, i) => a + (i.recebido ?? i.total), 0);
         const sub = temItens ? `<tr class="ev-itens" data-de="${v.id}"><td colspan="8">
           <table class="ev-sub"><thead><tr>
             <th>Produto</th><th>Ref.</th><th>Cor / Tam.</th><th class="num">Qtd</th>
-            <th class="num">Unit.</th><th class="num">Desc.</th><th class="num">Total</th></tr></thead>
-          <tbody>${v.itens.map(it => `<tr>
+            <th class="num">Unit.</th><th class="num">Valor de tabela</th>
+            <th class="num">Desconto</th><th class="num">Pagou</th></tr></thead>
+          <tbody>${v.itens.map(it => {
+            const tab = it.tabela ?? it.total;
+            const dTot = it.desconto_total ?? it.desconto ?? 0;
+            const dItem = it.desconto || 0;
+            const dVenda = it.desconto_venda || 0;
+            // Quando o abatimento veio dos dois lados, a origem aparece embaixo
+            // do valor — senão o operador não sabe de onde saiu.
+            const detalhe = (dItem > 0.005 && dVenda > 0.005)
+              ? `<small style="display:block;opacity:.7">${moeda(dItem)} no item + ${moeda(dVenda)} da venda</small>`
+              : (dVenda > 0.005 ? '<small style="display:block;opacity:.7">desconto da venda</small>' : '');
+            return `<tr>
             <td>${esc(it.produto)}</td><td>${esc(it.referencia || '—')}</td>
             <td>${esc([it.cor, it.tamanho].filter(x => x && x !== 'Única' && x !== 'U').join(' · ') || '—')}</td>
             <td class="num">${it.qtd}</td><td class="num">${moeda(it.preco_unit)}</td>
-            <td class="num">${it.desconto ? moeda(it.desconto) : '—'}</td>
-            <td class="num"><b>${moeda(it.total)}</b></td></tr>`).join('')}</tbody></table>
+            <td class="num">${moeda(tab)}</td>
+            <td class="num">${dTot > 0.005 ? `<b style="color:var(--vermelho)">−${moeda(dTot)}</b>${detalhe}` : '—'}</td>
+            <td class="num"><b>${moeda(it.recebido ?? it.total)}</b></td></tr>`;
+          }).join('')}
+          <tr class="ev-final"><td colspan="5"><b>Total da venda</b></td>
+            <td class="num"><b>${moeda(somaTabela)}</b></td>
+            <td class="num"><b style="color:var(--vermelho)">${somaDesc > 0.005 ? '−' + moeda(somaDesc) : '—'}</b></td>
+            <td class="num"><b>${moeda(somaRec)}</b></td></tr>
+          </tbody></table>
           ${v.consignados.length ? `<div class="ev-consig"><b>Consignado:</b> ${v.consignados.map(c =>
-            `${esc(c.produto)} — ${esc(c.fornecedor)} (${c.pct_fornecedor}% = ${moeda(c.valor_fornecedor)})`).join(' · ')}</div>` : ''}
+            // Antes saía "(65% = R$ 63,55)", que lia-se como 65% do preço de
+            // venda — e não fecha. O repasse é custo + 65% do LUCRO; agora a
+            // conta aparece inteira (v3.8.0).
+            `${esc(c.produto)} — ${esc(c.fornecedor)}: repassar ${moeda(c.valor_fornecedor)} `
+            + `<small>(custo ${moeda(c.valor_custo)} + ${c.pct_fornecedor}% do lucro `
+            + `${moeda(c.valor_venda - c.valor_custo)})</small>`).join(' · ')}</div>` : ''}
         </td></tr>` : '';
         return `<tr class="ev-linha" data-venda="${v.id}">
           <td>${temItens ? '<span class="ev-seta">▾</span>' : ''}#${v.id}</td>
@@ -299,16 +420,18 @@ async function abaEvento(corpo) {
           <td class="num">${v.taxa_valor ? moeda(v.taxa_valor) : '—'}</td>
           <td class="num"><b>${moeda(v.liquido)}</b></td></tr>${sub}`;
       }).join('');
-      h += tabela('Vendas do período',
+      _addNav('ev-s-vendas', '🧾 Vendas');
+      secH += tabela('Vendas do período',
         `<th>Venda</th><th>Data / hora</th><th>Cliente</th><th>Vendedor(a)</th>
          <th class="num">Peças</th><th>Pagamento</th><th class="num">Taxa</th><th class="num">Líquido</th>`,
         linhas || '<tr><td colspan="8" class="vazio">Nenhuma venda nesse período.</td></tr>',
         s.itens ? '<span class="ev-dica" style="margin-left:auto">Clique numa venda para recolher/abrir os itens</span>' : '',
-        'ev-vendas');
+        'ev-vendas', 'ev-s-vendas');
     }
 
     if (s.pagamentos) {
-      h += tabela('Formas de pagamento e taxas',
+      _addNav('ev-s-pagamentos', '💳 Pagamentos');
+      secH += tabela('Formas de pagamento e taxas',
         `<th>Forma</th><th class="num">Qtd</th><th class="num">Valor</th>
          <th class="num">Taxa %</th><th class="num">Taxa R$</th><th class="num">Líquido</th>`,
         r.por_forma.map(g => `<tr><td>${esc(g.forma)}</td><td class="num">${g.qtd}</td>
@@ -316,21 +439,82 @@ async function abaEvento(corpo) {
           <td class="num">${String(g.taxa_pct).replace('.', ',')}%</td>
           <td class="num">${moeda(g.taxa_valor)}</td>
           <td class="num"><b>${moeda(g.valor - g.taxa_valor)}</b></td></tr>`).join('')
-        || '<tr><td colspan="6" class="vazio">—</td></tr>');
+        || '<tr><td colspan="6" class="vazio">—</td></tr>', '', '', 'ev-s-pagamentos');
     }
 
     if (s.consignado && r.por_fornecedor.length) {
-      h += tabela('Comissão de consignados',
-        `<th>Fornecedor</th><th class="num">Peças</th><th class="num">Vendido</th>
-         <th class="num">Comissão</th><th class="num">Fica com a loja</th><th class="num">A pagar</th>`,
+      // O repasse NÃO é uma porcentagem do preço de venda: o fornecedor recebe
+      // o custo da peça de volta MAIS a fatia dele no lucro. As colunas de
+      // custo e lucro existem para que a conta feche à vista (v3.8.0).
+      _addNav('ev-s-consignados', '🤝 Consignados');
+      const _temDescCons = r.por_fornecedor.some(g => (g.desconto || 0) > 0.005);
+      secH += tabela('Comissão de consignados',
+        `<th>Fornecedor</th><th class="num">Peças</th><th class="num">Valor de tabela</th>
+         <th class="num">Desconto</th><th class="num">Recebido</th>
+         <th class="num">Custo das peças</th><th class="num">+ Fatia do lucro</th>
+         <th class="num">= Repasse</th><th class="num">Sobra p/ a loja</th><th class="num">A pagar</th><th></th>`,
         r.por_fornecedor.map(g => `<tr><td>${esc(g.fornecedor)}</td><td class="num">${g.pecas}</td>
-          <td class="num">${moeda(g.venda)}</td><td class="num"><b>${moeda(g.comissao)}</b></td>
-          <td class="num">${moeda(g.parte_loja)}</td><td class="num">${moeda(g.pendente)}</td></tr>`).join(''));
+          <td class="num">${moeda(g.venda)}</td>
+          <td class="num">${(g.desconto || 0) > 0.005 ? `<b style="color:var(--vermelho)">−${moeda(g.desconto)}</b>` : '—'}</td>
+          <td class="num"><b>${moeda(g.recebido ?? g.venda)}</b></td>
+          <td class="num">${moeda(g.custo)}</td>
+          <td class="num">${moeda(g.lucro_fornecedor)}</td>
+          <td class="num"><b>${moeda(g.comissao_ajustada)}</b></td>
+          <td class="num">${moeda(g.loja_real ?? g.parte_loja)}</td>
+          <td class="num">${moeda(g.pendente)}</td>
+          <td><button class="btn-recibo-forn" data-fid="${g.fornecedor_id}"
+            data-fnome="${esc(g.fornecedor)}"
+            title="Imprimir recibo de prestação de contas"
+            style="font-size:15px;padding:2px 7px;cursor:pointer;background:none;border:1px solid var(--borda);border-radius:6px;line-height:1">🖨️</button></td></tr>`).join('') +
+        `<tr><td colspan="11" style="font-size:11.5px;color:var(--texto-suave);padding-top:8px;line-height:1.5">
+          O fornecedor recebe o <b>custo da peça de volta</b> mais a fatia combinada
+          <b>do lucro</b> (venda − custo) — não uma porcentagem do preço de venda.
+          Por isso o repasse costuma ser maior que a porcentagem combinada.</td></tr>` +
+        // Desde a 3.14.0 o desconto entra na base do repasse, então os dois
+        // lados o dividem. Vendas gravadas ANTES disso ficaram com a base cheia
+        // — a diferença aparece aqui em vez de passar despercebida.
+        (r.por_fornecedor.some(g => (g.dif_desconto || 0) > 0.005)
+          ? `<tr><td colspan="11" style="font-size:11.5px;padding-top:6px;line-height:1.5;
+              background:rgba(184,135,59,.12)">
+          ℹ️ <b>Período inclui vendas anteriores à v3.14.0.</b>
+          Nelas o repasse foi originalmente gravado sobre o valor de tabela — o coluna
+          "Repasse" já foi recalculada sobre o valor <b>recebido</b> (v3.21.1), igualando
+          o critério das vendas novas.
+          ${r.por_fornecedor.filter(g => (g.dif_desconto || 0) > 0.005).map(g =>
+            `<br>${esc(g.fornecedor)}: gravado ${moeda(g.comissao)}; recalculado ${moeda(g.comissao_ajustada)}
+             — ajuste de <b>${moeda(g.dif_desconto)}</b> a favor da loja.`).join('')}
+          </td></tr>`
+          : (_temDescCons ? `<tr><td colspan="11" style="font-size:11.5px;color:var(--texto-suave);padding-top:6px">
+              Houve desconto em vendas com peça consignada. Desde a versão 3.14.0 o abatimento
+              é dividido entre a loja e o fornecedor, na mesma proporção do acerto.</td></tr>` : '')),
+        '', '', 'ev-s-consignados');
+
+      // Peça consignada que não entrou em nenhum repasse (v3.20.1).
+      // É o que explica o cartão do topo somar mais que esta tabela.
+      const _sr = ((r.resumo.origem || {}).consignado || {}).sem_repasse;
+      if (_sr && _sr.pecas) {
+        secH += `<div class="ev-sem-repasse">
+          <b>⚠️ ${_sr.pecas} peça(s) consignada(s) ficaram fora do repasse</b> —
+          ${moeda(_sr.tabela)} de tabela, ${moeda(_sr.recebido)} recebidos.
+          Elas estão marcadas como consignadas no cadastro, mas <b>sem fornecedor
+          ou com percentual zerado</b>, então o sistema não teve como calcular o
+          acerto. É por isso que o cartão “Vendas de consignados” soma mais do
+          que esta tabela.
+          <table>${_sr.itens.map(x => `<tr>
+            <td>${esc(x.nome)}</td>
+            <td style="color:#b3261e">${esc(x.motivo)}</td>
+            <td class="num">${x.pecas} peça(s)</td>
+            <td class="num">${moeda(x.tabela)}</td></tr>`).join('')}</table>
+          <small>Arrume em 👗 Produtos (fornecedor e % do fornecedor) e gere o
+          relatório de novo — os valores passados não mudam sozinhos.</small>
+        </div>`;
+      }
     }
 
     if (s.cortesias && r.cortesias.length) {
+      _addNav('ev-s-cortesias', '🎁 Cortesias');
       const c = r.resumo.cortesias;
-      h += tabela('🎁 Cortesias (brindes)',
+      secH += tabela('🎁 Cortesias (brindes)',
         `<th>Venda</th><th>Data / hora</th><th>Produto</th><th>Para quem</th>
          <th>Autorizado por</th><th class="num">Peças</th>
          <th class="num">Valor de tabela</th><th class="num">Custo p/ loja</th>`,
@@ -345,65 +529,177 @@ async function abaEvento(corpo) {
         + `<tr class="ev-final"><td colspan="5"><b>Total (${c.qtd} cortesia${c.qtd > 1 ? 's' : ''})</b></td>
            <td class="num"><b>${c.pecas}</b></td><td class="num"><b>${moeda(c.valor)}</b></td>
            <td class="num"><b>${moeda(c.custo)}</b></td></tr>`,
-        '<span class="ev-dica" style="margin-left:auto">Saíram do estoque · não entram no faturamento</span>');
+        '<span class="ev-dica" style="margin-left:auto">Saíram do estoque · não entram no faturamento</span>',
+        '', 'ev-s-cortesias');
     }
 
+    // Todo desconto dado no FECHAMENTO da venda, autorizado ou não (v3.9.0).
+    // Antes só apareciam os autorizados na mão; os automáticos (categoria do
+    // cliente, à vista) reduziam o faturamento sem constar em lugar nenhum.
     if (s.descontos && r.descontos && r.descontos.length) {
+      _addNav('ev-s-descontos', '🏷️ Descontos');
       const d = r.resumo.descontos;
-      h += tabela('🏷️ Descontos autorizados',
+      secH += tabela('🏷️ Descontos no fechamento das vendas',
         `<th>Venda</th><th>Data / hora</th><th>Cliente</th><th>Quem lançou</th>
-         <th>Autorizado por</th><th>Motivo</th>
+         <th>Origem</th><th>Autorizado por</th><th>Motivo</th>
          <th class="num">Tabela</th><th class="num">Desconto</th><th class="num">Pago</th>`,
         r.descontos.map(x => `<tr><td>#${x.venda_id}</td>
           <td>${dataBr(x.data)} <small>${esc(x.hora)}</small></td>
           <td>${esc(x.cliente || '—')}</td>
           <td>${esc(x.operador || '—')}</td>
+          <td><span class="ev-orig ${x.autorizado ? 'ev-orig-aut' : 'ev-orig-auto'}">${esc(x.origem)}</span></td>
           <td><b>${esc(x.autorizado_por || '—')}</b></td>
           <td>${esc(x.motivo || '—')}</td>
           <td class="num">${moeda(x.subtotal)}</td>
           <td class="num"><b style="color:var(--vermelho)">−${moeda(x.desconto)}</b>
             <small>(${x.percent}%)</small></td>
           <td class="num">${moeda(x.total)}</td></tr>`).join('')
-        + `<tr class="ev-final"><td colspan="7"><b>Total (${d.qtd} desconto${d.qtd > 1 ? 's' : ''})</b></td>
+        + (d.autorizados > 0.005 && d.automaticos > 0.005 ? `
+          <tr class="ev-conc"><td colspan="8">Autorizados na mão</td>
+            <td class="num">−${moeda(d.autorizados)}</td><td></td></tr>
+          <tr class="ev-conc"><td colspan="8">Automáticos ou de tabela (categoria, à vista)</td>
+            <td class="num">−${moeda(d.automaticos)}</td><td></td></tr>` : '')
+        + `<tr class="ev-final"><td colspan="8"><b>Total (${d.qtd} desconto${d.qtd > 1 ? 's' : ''})</b></td>
            <td class="num"><b>−${moeda(d.valor)}</b></td><td></td></tr>`,
-        '<span class="ev-dica" style="margin-left:auto">Só os lançados na mão · categoria e pontos não entram</span>');
+        '<span class="ev-dica" style="margin-left:auto">É este valor que separa o total das peças do faturamento</span>',
+        '', 'ev-s-descontos');
+    }
+
+    // Vendas a PREÇO DE CUSTO (v3.19.0). Seção própria, como as cortesias:
+    // é margem que a loja abriu mão por decisão de alguém, então precisa de
+    // nome, motivo e valor para poder ser auditada depois.
+    if (s.vendas_custo && r.vendas_custo && r.vendas_custo.length) {
+      _addNav('ev-s-custo', '💰 Custo');
+      const c = r.resumo.vendas_custo;
+      secH += tabela('🏷️ Vendas a preço de custo',
+        `<th>Venda</th><th>Data / hora</th><th>Cliente</th><th>Quem lançou</th>
+         <th>Autorizado por</th><th>Motivo</th><th class="num">Peças</th>
+         <th class="num">Tabela</th><th class="num">Cobrado</th><th class="num">Margem aberta</th>`,
+        r.vendas_custo.map(x => `<tr><td>#${x.venda_id}</td>
+          <td>${dataBr(x.data)} <small>${esc(x.hora)}</small></td>
+          <td>${esc(x.cliente || '—')}</td>
+          <td>${esc(x.operador || '—')}</td>
+          <td><b>${esc(x.autorizado_por || '—')}</b></td>
+          <td>${esc(x.motivo || '—')}</td>
+          <td class="num">${x.pecas}</td>
+          <td class="num">${moeda(x.tabela)}</td>
+          <td class="num"><b>${moeda(x.total)}</b></td>
+          <td class="num"><b style="color:var(--vermelho)">−${moeda(x.margem_aberta)}</b>
+            <small>(${x.percent}%)</small></td></tr>`).join('')
+        + `<tr class="ev-final"><td colspan="6"><b>Total (${c.qtd} venda${c.qtd > 1 ? 's' : ''})</b></td>
+           <td class="num"><b>${c.pecas}</b></td>
+           <td class="num"><b>${moeda(c.tabela)}</b></td>
+           <td class="num"><b>${moeda(c.cobrado)}</b></td>
+           <td class="num"><b style="color:var(--vermelho)">−${moeda(c.margem_aberta)}</b></td></tr>`,
+        '<span class="ev-dica" style="margin-left:auto">A peça saiu pelo custo cadastrado; a margem foi aberta mão com autorização</span>',
+        '', 'ev-s-custo');
     }
 
     if (s.vendedor) {
-      h += tabela('Por vendedor(a)',
+      _addNav('ev-s-vendedor', '👤 Vendedor');
+      secH += tabela('Por vendedor(a)',
         `<th>Vendedor(a)</th><th class="num">Vendas</th><th class="num">Peças</th><th class="num">Total</th>`,
         r.por_vendedor.map(g => `<tr><td>${esc(g.vendedor)}</td><td class="num">${g.qtd}</td>
           <td class="num">${g.pecas}</td><td class="num"><b>${moeda(g.total)}</b></td></tr>`).join('')
-        || '<tr><td colspan="4" class="vazio">—</td></tr>');
+        || '<tr><td colspan="4" class="vazio">—</td></tr>', '', '', 'ev-s-vendedor');
     }
 
     if (s.categoria) {
-      h += tabela('Por categoria',
+      _addNav('ev-s-categoria', '🏪 Categoria');
+      secH += tabela('Por categoria',
         `<th>Categoria</th><th class="num">Peças</th><th class="num">Total</th>`,
         r.por_categoria.map(c => `<tr><td>${esc(c.categoria)}</td><td class="num">${c.pecas}</td>
           <td class="num"><b>${moeda(c.total)}</b></td></tr>`).join('')
-        || '<tr><td colspan="3" class="vazio">—</td></tr>');
+        || '<tr><td colspan="3" class="vazio">—</td></tr>', '', '', 'ev-s-categoria');
     }
 
     // No fim: lista consolidada do que saiu no evento, com a quantidade de cada produto
     if (s.produtos) {
+      _addNav('ev-s-produtos', '📦 Produtos');
       const tp = r.por_produto.reduce((a, x) => ({ qtd: a.qtd + x.qtd, total: a.total + x.total }),
         { qtd: 0, total: 0 });
-      h += tabela('📦 Produtos vendidos no evento',
+      secH += tabela('📦 Produtos vendidos no evento',
         `<th>Produto</th><th>Ref.</th><th>Cor / Tam.</th><th class="num">Qtd vendida</th>
-         <th class="num">Preço unit.</th><th class="num">Total</th>`,
-        (r.por_produto.map(x => `<tr><td>${esc(x.produto)}</td><td>${esc(x.referencia || '—')}</td>
+         <th class="num">Preço unit.</th><th class="num">Valor de tabela</th>
+         <th class="num">Desconto</th><th class="num">Recebido</th>`,
+        (r.por_produto.map(x => `<tr><td>${esc(x.produto)}${
+          // Peça de fornecedor: mostra de quem é e a fatia combinada, para
+          // conferir o acerto sem sair da lista (v3.11.0).
+          x.consignado ? `<br><small style="color:var(--dourado)">🤝 ${esc(x.fornecedor || 'consignado')}${
+            x.pct_fornecedor ? ` · ${x.pct_fornecedor}% do lucro` : ''}</small>` : ''
+        }</td><td>${esc(x.referencia || '—')}</td>
           <td>${esc([x.cor, x.tamanho].filter(y => y && y !== 'Única' && y !== 'U').join(' · ') || '—')}</td>
           <td class="num"><b>${x.qtd}</b></td>
-          <td class="num">${moeda(x.qtd ? x.total / x.qtd : 0)}</td>
-          <td class="num"><b>${moeda(x.total)}</b></td></tr>`).join('')
+          <td class="num">${moeda(x.qtd ? (x.tabela ?? x.total) / x.qtd : 0)}</td>
+          <td class="num">${moeda(x.tabela ?? x.total)}</td>
+          <td class="num">${(x.desconto || 0) > 0.005 ? `<b style="color:var(--vermelho)">−${moeda(x.desconto)}</b>` : '—'}</td>
+          <td class="num"><b>${moeda(x.recebido ?? x.total)}</b></td></tr>`).join('')
           + (r.por_produto.length ? `<tr class="ev-final"><td colspan="3"><b>Total de peças</b></td>
              <td class="num"><b>${tp.qtd}</b></td><td></td>
-             <td class="num"><b>${moeda(tp.total)}</b></td></tr>` : ''))
-        || '<tr><td colspan="6" class="vazio">Nenhum produto vendido no período.</td></tr>');
+             <td class="num"><b>${moeda(r.por_produto.reduce((a, x) => a + (x.tabela ?? x.total), 0))}</b></td>
+             <td class="num"><b style="color:var(--vermelho)">${
+               r.por_produto.reduce((a, x) => a + (x.desconto || 0), 0) > 0.005
+                 ? '−' + moeda(r.por_produto.reduce((a, x) => a + (x.desconto || 0), 0)) : '—'}</b></td>
+             <td class="num"><b>${moeda(r.por_produto.reduce((a, x) => a + (x.recebido ?? x.total), 0))}</b></td></tr>` : '')
+          // Fechamento da seção (v3.9.0): a lista termina no MESMO valor do
+          // faturamento bruto do topo. O que separa os dois números aparece
+          // nomeado no meio do caminho, nunca como diferença silenciosa.
+          + (() => {
+            const c = r.resumo.conciliacao;
+            if (!r.por_produto.length || !c) return '';
+            const linha = (rot, val, sub) => `<tr class="ev-conc">
+              <td colspan="7">${rot}${sub ? `<small style="display:block;color:var(--texto-suave);font-size:11px;margin-top:1px">${sub}</small>` : ''}</td>
+              <td class="num">${val}</td></tr>`;
+            let h = linha('Valor de tabela das peças', moeda(c.tabela),
+                          'preço cheio de tudo que saiu da loja');
+            if ((c.desc_itens || 0) > 0.005) {
+              h += linha('(–) Descontos lançados nos itens', moeda(c.desc_itens),
+                'abatimento dado peça a peça, na linha do produto');
+            }
+            if (c.cortesias > 0.005) {
+              h += linha('(–) Cortesias', moeda(c.cortesias),
+                `${r.resumo.cortesias.pecas} peça(s) em ${r.resumo.cortesias.qtd} venda(s) — saíram do estoque, a venda vale zero`);
+            }
+            if (c.descontos > 0.005) {
+              const d = r.resumo.descontos;
+              const detalhe = [
+                d.autorizados > 0.005 ? `${moeda(d.autorizados)} autorizado` : '',
+                d.automaticos > 0.005 ? `${moeda(d.automaticos)} automático ou de tabela` : ''
+              ].filter(Boolean).join(' + ');
+              h += linha('(–) Descontos no fechamento', moeda(c.descontos),
+                `${d.qtd} venda(s)${detalhe ? ' — ' + detalhe : ''} · discriminadas na seção 🏷️ Descontos`);
+            }
+            h += `<tr class="ev-final ev-conc-fim"><td colspan="7"><b>= Faturamento bruto</b>
+                    <small style="display:block;color:var(--texto-suave);font-size:11px;margin-top:1px">
+                      o mesmo valor do cartão no topo deste relatório</small></td>
+                  <td class="num"><b>${moeda(c.bruto)}</b></td></tr>`;
+            if (!c.confere) {
+              h += `<tr><td colspan="8" style="color:var(--vermelho);font-size:12px;padding-top:6px">
+                ⚠️ Sobraram ${moeda(c.sobra)} sem explicação nesta conta. Avise o suporte:
+                há um lançamento mexendo no total da venda que este relatório ainda não conhece.</td></tr>`;
+            }
+            return h;
+          })()
+          )
+        || '<tr><td colspan="8" class="vazio">Nenhum produto vendido no período.</td></tr>',
+        '', '', 'ev-s-produtos');
     }
 
+    // Monta o menu suspenso de navegação entre topo e seções
+    const _navBar = _nav.length > 1 ? `<div class="ev-nav"><select class="ev-nav-sel">
+      <option value="">▾ Ir para seção…</option>${
+      _nav.map(n => `<option value="${n.id}">${n.label}</option>`).join('')
+    }</select></div>` : '';
+
+    const h = topH + _navBar + secH;
     res.innerHTML = h || '<div class="painel"><div class="vazio">Nenhuma seção selecionada.</div></div>';
+
+    // scroll suave via dropdown de navegação
+    const navSel = res.querySelector('.ev-nav-sel');
+    if (navSel) navSel.onchange = () => {
+      const alvo = navSel.value && res.querySelector('#' + navSel.value);
+      if (alvo) { alvo.scrollIntoView({ behavior: 'smooth', block: 'start' }); navSel.value = ''; }
+    };
     res.querySelectorAll('.ev-linha').forEach(tr => {
       tr.onclick = () => {
         const alvo = res.querySelector(`.ev-itens[data-de="${tr.dataset.venda}"]`);
@@ -414,6 +710,147 @@ async function abaEvento(corpo) {
         if (seta) seta.textContent = abrir ? '▾' : '▸';
       };
     });
+
+    // Botão 🖨️ por fornecedor — modal de modo do recibo (v3.21.0)
+    res.querySelectorAll('.btn-recibo-forn').forEach(btn => {
+      btn.onclick = () => _modalRecibo(Number(btn.dataset.fid), btn.dataset.fnome || 'fornecedor');
+    });
+
+    function _modalRecibo(fornecedor_id, fnome) {
+      const agora = new Date();
+      const anoAtual = agora.getFullYear(); const mesAtual = agora.getMonth() + 1;
+      const p = params();
+      const _br = s => s ? String(s).slice(0,10).split('-').reverse().join('/') : '—';
+      const _moeda = v => 'R$ ' + Number(v||0).toFixed(2).replace('.',',');
+
+      const m = modal('Gerar recibo de consignado', `
+        <style>
+          .rec-modos { display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap }
+          .rec-modo  { flex:1; min-width:100px; border:2px solid var(--borda); border-radius:8px;
+                       padding:10px 8px; text-align:center; cursor:pointer; font-size:13px;
+                       transition:.15s; user-select:none }
+          .rec-modo.ativo { border-color:var(--primaria); background:var(--primaria-fundo); font-weight:700 }
+          .rec-campo { margin-top:8px }
+          .rec-campo label { font-size:12px; color:var(--texto-leve); display:block; margin-bottom:4px }
+          .rec-campo select { width:100%; padding:7px 10px; border:1px solid var(--borda); border-radius:6px; font-size:14px }
+          #rec-info-evento { font-size:12px; color:var(--texto-leve); margin-top:6px; line-height:1.4 }
+          #rec-lista-vendas { max-height:240px; overflow-y:auto; border:1px solid var(--borda); border-radius:6px; margin-top:8px }
+          .rec-venda-item { display:flex; align-items:center; gap:8px; padding:8px 10px;
+                            border-bottom:1px solid var(--borda-leve); cursor:pointer }
+          .rec-venda-item:last-child { border-bottom:none }
+          .rec-venda-item:hover { background:var(--primaria-fundo) }
+          .rec-venda-item input[type=checkbox] { flex-shrink:0; width:16px; height:16px; cursor:pointer }
+          .rec-venda-meta { flex:1; font-size:13px; line-height:1.4 }
+          .rec-venda-meta b { display:block }
+          .rec-venda-meta span { color:var(--texto-leve); font-size:11px }
+          .rec-venda-val { font-size:13px; font-weight:700; white-space:nowrap }
+          #rec-sel-info { font-size:12px; color:var(--texto-leve); margin-top:6px; text-align:right }
+          .rec-seltodos { font-size:12px; padding:6px 10px; cursor:pointer; color:var(--primaria);
+                          display:block; text-align:right; border-bottom:1px solid var(--borda-leve) }
+        </style>
+        <div style="font-size:13px;margin-bottom:12px">Fornecedor: <b>${esc(fnome)}</b></div>
+        <div class="rec-modos">
+          <div class="rec-modo ativo" data-modo="evento">📅<br>Este evento</div>
+          <div class="rec-modo" data-modo="mes">🗓️<br>Por mês</div>
+          <div class="rec-modo" data-modo="venda">🧾<br>Por venda</div>
+        </div>
+        <div id="rec-painel-evento">
+          <div id="rec-info-evento">
+            Período atual:<br><b>${p.inicio || '—'}</b> até <b>${p.fim || '—'}</b>
+          </div>
+        </div>
+        <div id="rec-painel-mes" style="display:none">
+          <div class="rec-campo">
+            <label>Mês</label>
+            <select id="rec-mes">
+              ${['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+                .map((n,i) => `<option value="${i+1}"${i+1===mesAtual?' selected':''}>${n}</option>`).join('')}
+            </select>
+          </div>
+          <div class="rec-campo" style="margin-top:8px">
+            <label>Ano</label>
+            <select id="rec-ano">
+              ${[0,1,2].map(d => `<option value="${anoAtual-d}"${d===0?' selected':''}>${anoAtual-d}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div id="rec-painel-venda" style="display:none">
+          <div id="rec-lista-vendas"><div style="padding:12px;color:var(--texto-leve);font-size:13px">Carregando vendas…</div></div>
+          <div id="rec-sel-info"></div>
+        </div>
+      `, async (_, fechar) => {
+        const modoEl = m.querySelector('.rec-modo.ativo');
+        const modoSel = modoEl?.dataset.modo || 'evento';
+        const payload = { fornecedor_id, modo: modoSel };
+        if (modoSel === 'evento') {
+          if (!p.inicio || !p.fim) { toast('Gere o relatório do evento primeiro.', true); return; }
+          payload.de = p.inicio; payload.ate = p.fim;
+        } else if (modoSel === 'mes') {
+          payload.mes = m.querySelector('#rec-mes').value;
+          payload.ano = m.querySelector('#rec-ano').value;
+        } else {
+          const sels = [...m.querySelectorAll('#rec-lista-vendas input[type=checkbox]:checked')].map(cb => Number(cb.value));
+          if (!sels.length) { toast('Selecione ao menos uma venda.', true); return; }
+          payload.venda_ids = sels;
+        }
+        fechar();
+        const r = await api('relatorios:reciboConsignado', payload);
+        if (!r.ok) { toast(r.erro || 'Erro ao gerar recibo.', true); return; }
+        const bin = atob(r.buffer);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+        a.download = `recibo-${fnome.replace(/[^a-z0-9]/gi, '-')}-${modoSel}.pdf`;
+        document.body.appendChild(a); a.click();
+        setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+        toast('Recibo gerado — pronto para imprimir ou enviar!');
+      }, 'Gerar PDF');
+
+      // função para carregar lista de vendas do fornecedor
+      async function _carregarVendas() {
+        const painel = m.querySelector('#rec-lista-vendas');
+        painel.innerHTML = '<div style="padding:12px;color:var(--texto-leve);font-size:13px">Carregando vendas…</div>';
+        const r = await api('relatorios:listarVendasFornecedor', { fornecedor_id });
+        if (!r.ok || !r.vendas?.length) {
+          painel.innerHTML = '<div style="padding:12px;color:var(--texto-leve);font-size:13px">Nenhuma venda encontrada para este fornecedor.</div>';
+          return;
+        }
+        const atualizarInfo = () => {
+          const n = painel.querySelectorAll('input:checked').length;
+          m.querySelector('#rec-sel-info').textContent = n ? `${n} venda(s) selecionada(s)` : '';
+        };
+        painel.innerHTML = `<span class="rec-seltodos" id="rec-sel-todas">Selecionar todas</span>` +
+          r.vendas.map(v => `
+            <label class="rec-venda-item">
+              <input type="checkbox" value="${v.id}">
+              <div class="rec-venda-meta">
+                <b>Venda #${v.id} — ${_br(v.criado_em)}</b>
+                <span>${esc(v.cliente)} · ${v.pecas} peça(s)</span>
+              </div>
+              <div class="rec-venda-val">${_moeda(v.valor_tabela)}</div>
+            </label>`).join('');
+        painel.querySelectorAll('input[type=checkbox]').forEach(cb => cb.addEventListener('change', atualizarInfo));
+        painel.querySelector('#rec-sel-todas').onclick = () => {
+          const cbs = [...painel.querySelectorAll('input[type=checkbox]')];
+          const todas = cbs.every(c => c.checked);
+          cbs.forEach(c => { c.checked = !todas; });
+          atualizarInfo();
+        };
+      }
+
+      // troca de modo — carrega vendas ao entrar no painel
+      m.querySelectorAll('.rec-modo').forEach(el => {
+        el.onclick = () => {
+          m.querySelectorAll('.rec-modo').forEach(x => x.classList.remove('ativo'));
+          el.classList.add('ativo');
+          m.querySelector('#rec-painel-evento').style.display = el.dataset.modo === 'evento' ? '' : 'none';
+          m.querySelector('#rec-painel-mes').style.display    = el.dataset.modo === 'mes'    ? '' : 'none';
+          m.querySelector('#rec-painel-venda').style.display  = el.dataset.modo === 'venda'  ? '' : 'none';
+          if (el.dataset.modo === 'venda') _carregarVendas();
+        };
+      });
+    }
   }
 
   async function gerar() {
@@ -1077,4 +1514,178 @@ function _estiloEstoqueRel() {
       .est-subtotal td,.est-resumo{background:#F6E9E9 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     }`;
   document.head.appendChild(st);
+}
+
+// ---------- Aba: Compras acompanhadas (v3.10.0) ----------
+// Mostra o que as pessoas de categorias marcadas com 👁️ levaram no período:
+// tipo de peça, quantidade e valor. Serve para perceber quem está usando o
+// desconto de funcionário para comprar em quantidade de revenda.
+function _estiloAcomp() {
+  if (document.getElementById('estilo-acomp-rel')) return;
+  const st = document.createElement('style');
+  st.id = 'estilo-acomp-rel';
+  st.textContent = `
+    .ac-filtros { display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end; }
+    .ac-filtros label { display:flex; flex-direction:column; gap:4px; font-weight:600; font-size:13px; }
+    .ac-filtros input, .ac-filtros select { padding:7px 10px; border:1px solid var(--borda); border-radius:8px; font-weight:400; }
+    .ac-pessoa { border:1px solid var(--borda); border-radius:10px; margin-bottom:12px; overflow:hidden; }
+    .ac-cab { display:flex; align-items:center; gap:10px; padding:10px 14px; background:rgba(0,0,0,.03); cursor:pointer; }
+    .ac-cab:hover { background:rgba(0,0,0,.05); }
+    .ac-nome { font-weight:700; font-size:14.5px; }
+    .ac-tag { font-size:11px; padding:2px 8px; border-radius:10px; background:rgba(184,135,59,.18); color:#7a5716; white-space:nowrap; }
+    .ac-num { margin-left:auto; display:flex; gap:18px; text-align:right; font-size:12.5px; }
+    .ac-num b { display:block; font-size:15px; }
+    .ac-alerta { background:rgba(196,60,60,.12); }
+    .ac-alerta .ac-nome::after { content:' ⚠️'; }
+    .ac-itens table { width:100%; border-collapse:collapse; font-size:12.5px; }
+    .ac-itens th, .ac-itens td { padding:5px 14px; border-bottom:1px solid var(--borda); text-align:left; }
+    .ac-itens th { background:rgba(0,0,0,.02); font-size:11.5px; text-transform:uppercase; letter-spacing:.03em; }
+    .ac-itens .num { text-align:right; }
+    .ac-vazio { padding:28px; text-align:center; color:var(--texto-suave); }
+    @media print { .ac-nao-imprime { display:none !important; } .ac-itens { display:block !important; } }
+  `;
+  document.head.appendChild(st);
+}
+
+async function abaAcompanhadas(corpo, per) {
+  _estiloAcomp();
+  const tabela = (titulo, cabs, linhas) => linhas
+    ? `<div class="painel" style="margin-bottom:14px">
+         <div class="barra"><b>${esc(titulo)}</b></div>
+         <table><thead><tr>${cabs}</tr></thead><tbody>${linhas}</tbody></table></div>`
+    : '';
+  const painel = el(`
+    <div>
+      <div class="painel ac-nao-imprime" style="margin-bottom:14px">
+        <div class="barra"><b>👁️ Compras acompanhadas</b>
+          <span class="ev-dica">Categorias marcadas em Configurações → Categorias de clientes</span>
+        </div>
+        <div style="padding:12px 14px">
+          <div class="ac-filtros">
+            <label>De<input type="date" id="ac-de" value="${esc((per && per.de) || '')}"></label>
+            <label>até<input type="date" id="ac-ate" value="${esc((per && per.ate) || '')}"></label>
+            <label>Categoria<select id="ac-cat"><option value="">Todas as acompanhadas</option></select></label>
+            <label>A partir de<input type="number" id="ac-min" min="0" step="1" placeholder="0" style="width:110px"> </label>
+            <span style="font-size:12px;color:var(--texto-suave);margin-bottom:9px">peça(s) no período</span>
+            <button class="btn btn-primario" id="ac-gerar">Gerar</button>
+            <button class="btn btn-suave" id="ac-xlsx">📊 Excel</button>
+          </div>
+        </div>
+      </div>
+      <div id="ac-res"><div class="painel"><div class="ac-vazio">Escolha o período e clique em <b>Gerar</b>.</div></div></div>
+    </div>`);
+  corpo.appendChild(painel);
+
+  const $res = painel.querySelector('#ac-res');
+  const $cat = painel.querySelector('#ac-cat');
+  const filtros = () => ({
+    de: painel.querySelector('#ac-de').value,
+    ate: painel.querySelector('#ac-ate').value,
+    categoria_id: Number($cat.value) || null,
+    min_pecas: Number(painel.querySelector('#ac-min').value) || 0
+  });
+
+  async function gerar() {
+    $res.innerHTML = '<div class="painel"><div class="ac-vazio">Carregando…</div></div>';
+    const r = await api('relatorios:acompanhadas', filtros());
+    if (!r.ok) { $res.innerHTML = `<div class="painel"><div class="ac-vazio">${esc(r.erro)}</div></div>`; return; }
+
+    // combo de categorias (só as marcadas)
+    if ($cat.options.length <= 1 && r.categorias.length) {
+      for (const c of r.categorias) {
+        const o = document.createElement('option');
+        o.value = c.id; o.textContent = c.desconto_percent > 0 ? `${c.nome} (${c.desconto_percent}%)` : c.nome;
+        $cat.appendChild(o);
+      }
+    }
+
+    if (r.sem_categoria_marcada) {
+      $res.innerHTML = `<div class="painel"><div class="ac-vazio">
+        Nenhuma categoria está sendo acompanhada ainda.<br><br>
+        Vá em <b>Configurações → 👥 Categorias de clientes</b>, edite a categoria
+        (por exemplo <b>Funcionários</b>) e marque <b>👁️ Acompanhar as compras desta categoria</b>.
+      </div></div>`;
+      return;
+    }
+    if (!r.clientes.length) {
+      $res.innerHTML = `<div class="painel"><div class="ac-vazio">
+        Ninguém das categorias acompanhadas comprou neste período${filtros().min_pecas ? ' com esse mínimo de peças' : ''}.
+      </div></div>`;
+      return;
+    }
+
+    const t = r.resumo;
+    // "Compra grande" = o dobro da média de peças por compra do grupo. Não é
+    // acusação, é o que merece um olhar — por isso a marca é discreta.
+    const mediaGrupo = t.compras ? t.pecas / t.compras : 0;
+    const corte = Math.max(5, mediaGrupo * 2);
+
+    let h = `<div class="cards">
+      <div class="card"><div class="rotulo">Pessoas</div><div class="valor">${t.clientes}</div></div>
+      <div class="card"><div class="rotulo">Compras</div><div class="valor">${t.compras}</div></div>
+      <div class="card"><div class="rotulo">Peças levadas</div><div class="valor">${t.pecas}</div></div>
+      <div class="card"><div class="rotulo">Valor pago</div><div class="valor">${moeda(t.pago)}</div></div>
+      <div class="card ev-card-abate"><div class="rotulo">Desconto concedido</div>
+        <div class="valor">${moeda(t.desconto)}</div>
+        <div class="ev-card-sub">sobre ${moeda(t.tabela)} de tabela</div></div>
+    </div>`;
+
+    h += '<div class="painel" style="margin-bottom:14px"><div class="barra"><b>Quem comprou</b>' +
+      `<span class="ev-dica" style="margin-left:auto">${dataBr(r.de)} a ${dataBr(r.ate)} · clique na pessoa para ver as peças</span></div>` +
+      '<div style="padding:12px 14px">';
+
+    for (const c of r.clientes) {
+      const grande = c.media_pecas >= corte;
+      h += `<div class="ac-pessoa">
+        <div class="ac-cab ${grande ? 'ac-alerta' : ''}" data-p="${c.cliente_id}">
+          <span class="ac-nome">${esc(c.cliente)}</span>
+          <span class="ac-tag">${esc(c.categoria)}${c.pct > 0 ? ` · ${c.pct}%` : ''}</span>
+          <span class="ac-num">
+            <span>compras<b>${c.compras}</b></span>
+            <span>peças<b>${c.pecas}</b></span>
+            <span>média/compra<b>${c.media_pecas}</b></span>
+            <span>desconto<b>${moeda(c.desconto)}</b></span>
+            <span>pagou<b>${moeda(c.pago)}</b></span>
+          </span>
+        </div>
+        <div class="ac-itens" data-de="${c.cliente_id}">
+          <table><thead><tr><th>Tipo de peça</th><th>Ref.</th><th>Cor / Tam.</th>
+            <th class="num">Quantidade</th><th class="num">Total</th></tr></thead>
+          <tbody>${c.produtos.map(x => `<tr>
+            <td>${esc(x.produto)}</td><td>${esc(x.referencia || '—')}</td>
+            <td>${esc([x.cor, x.tamanho].filter(y => y && y !== 'Única' && y !== 'U').join(' · ') || '—')}</td>
+            <td class="num"><b>${x.qtd}</b></td><td class="num">${moeda(x.total)}</td></tr>`).join('')}
+            <tr><td colspan="3"><b>Total de ${c.pecas} peça(s) em ${c.compras} compra(s)</b>
+              <small style="color:var(--texto-suave)"> · de ${dataBr(c.primeira)} a ${dataBr(c.ultima)}</small></td>
+              <td class="num"><b>${c.pecas}</b></td><td class="num"><b>${moeda(c.tabela)}</b></td></tr>
+          </tbody></table>
+        </div>
+      </div>`;
+    }
+    h += '</div></div>';
+
+    h += tabela('Peças mais levadas no período',
+      `<th>Tipo de peça</th><th>Ref.</th><th>Cor / Tam.</th>
+       <th class="num">Quantidade</th><th class="num">Total</th><th class="num">Pessoas</th>`,
+      r.por_produto.map(x => `<tr><td>${esc(x.produto)}</td><td>${esc(x.referencia || '—')}</td>
+        <td>${esc([x.cor, x.tamanho].filter(y => y && y !== 'Única' && y !== 'U').join(' · ') || '—')}</td>
+        <td class="num"><b>${x.qtd}</b></td><td class="num">${moeda(x.total)}</td>
+        <td class="num">${x.clientes}</td></tr>`).join(''));
+
+    $res.innerHTML = h;
+    // abre e fecha a lista de peças de cada pessoa
+    $res.querySelectorAll('.ac-cab').forEach(cab => {
+      const alvo = $res.querySelector(`.ac-itens[data-de="${cab.dataset.p}"]`);
+      alvo.style.display = 'none';
+      cab.onclick = () => { alvo.style.display = alvo.style.display === 'none' ? '' : 'none'; };
+    });
+  }
+
+  painel.querySelector('#ac-gerar').onclick = gerar;
+  painel.querySelector('#ac-xlsx').onclick = async () => {
+    const r = await api('relatorios:acompanhadasXlsx', filtros());
+    if (!r.ok) { toast(r.erro, true); return; }
+    baixarBase64(r.buffer, `compras-acompanhadas-${filtros().de}-a-${filtros().ate}.xlsx`);
+  };
+  gerar();
 }

@@ -199,3 +199,5 @@ Configure um remote. Repositório só local não é backup.
      agente de repetir um erro já pago. -->
 
 - v1.0.0 (aaaa-mm-dd): release inicial
+
+## Imported Claude Cowork project instructions

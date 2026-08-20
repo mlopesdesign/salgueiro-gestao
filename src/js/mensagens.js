@@ -2,7 +2,7 @@
 // Não existe servidor de chat: tudo é lido e gravado no banco central do
 // computador principal, e a interface pergunta "tem novidade?" de tempos em
 // tempos (polling). Funciona igual no app e nos terminais em rede.
-import { api, el, esc, toast, EM_REDE } from './app.js';
+import { api, el, esc, toast, EM_REDE, ehAdmin } from './app.js';
 
 const INTERVALO_PARADO = 12000;   // sem o painel aberto
 const INTERVALO_ABERTO = 4000;    // conversando: resposta quase imediata
@@ -72,6 +72,8 @@ export function iniciarMensagens(usuario) {
 export function pararMensagens() {
   document.getElementById('msg-etiqueta')?.remove();
   document.getElementById('msg-toast')?.remove();
+  document.body.classList.remove('com-chat', 'msg-arrastando');
+  window.removeEventListener('resize', _aoRedimensionar);
   if (_timer) { clearInterval(_timer); _timer = null; }
   if (_balao) { _balao.remove(); _balao = null; }
   if (_painel) { _painel.remove(); _painel = null; }
@@ -121,12 +123,149 @@ async function tick() {
   }
 }
 
+// ── posição do balão (arrastável) ────────────────────────────────────────────
+// O balão fica no canto inferior direito e, em tela de relatório, tapava a
+// última linha. Em vez de escondê-lo — o que faria o aviso de mensagem nova
+// sumir justamente para quem está fechando o caixa — ele passou a ser
+// arrastável: o operador põe onde não atrapalha e ali fica.
+// A posição é de CADA MÁQUINA, então mora no localStorage e não no banco.
+const POS_CHAVE = 'salg_balao_pos';
+const MARGEM = 6;   // folga mínima da borda da janela
+
+function lerPos() {
+  try {
+    const p = JSON.parse(localStorage.getItem(POS_CHAVE) || 'null');
+    return (p && Number.isFinite(p.left) && Number.isFinite(p.top)) ? p : null;
+  } catch { return null; }
+}
+
+// Mantém o balão dentro da janela: a posição salva pode ter vindo de um monitor
+// maior, ou a janela pode ter sido reduzida depois.
+function limitar(left, top) {
+  const l = _balao ? _balao.offsetWidth || 56 : 56;
+  const a = _balao ? _balao.offsetHeight || 56 : 56;
+  return {
+    left: Math.max(MARGEM, Math.min(left, window.innerWidth - l - MARGEM)),
+    top: Math.max(MARGEM, Math.min(top, window.innerHeight - a - MARGEM))
+  };
+}
+
+// Aplica a posição no balão e leva junto a etiqueta e o aviso rápido, que são
+// desenhados em relação a ele.
+function aplicarPos(pos) {
+  if (!_balao) return;
+  if (!pos) {
+    _balao.style.left = ''; _balao.style.top = '';
+    _balao.style.right = ''; _balao.style.bottom = '';
+  } else {
+    const p = limitar(pos.left, pos.top);
+    _balao.style.left = p.left + 'px';
+    _balao.style.top = p.top + 'px';
+    _balao.style.right = 'auto';
+    _balao.style.bottom = 'auto';
+  }
+  posicionarSatelites();
+}
+
+// Etiqueta (fica à esquerda do balão) e aviso rápido (fica acima dele).
+function posicionarSatelites() {
+  if (!_balao) return;
+  const r = _balao.getBoundingClientRect();
+  const custom = !!_balao.style.left;
+  const et = document.getElementById('msg-etiqueta');
+  if (et) {
+    if (custom) {
+      et.style.right = 'auto'; et.style.bottom = 'auto';
+      et.style.top = (r.top + (r.height - (et.offsetHeight || 34)) / 2) + 'px';
+      // se não couber à esquerda, desenha à direita do balão
+      const larg = et.offsetWidth || 150;
+      const cabeEsquerda = r.left - larg - 10 > MARGEM;
+      et.style.left = (cabeEsquerda ? r.left - larg - 10 : r.right + 10) + 'px';
+    } else { et.style.left = ''; et.style.top = ''; et.style.right = ''; et.style.bottom = ''; }
+  }
+  const tt = document.getElementById('msg-toast');
+  if (tt) {
+    if (custom) {
+      tt.style.right = 'auto'; tt.style.bottom = 'auto';
+      const larg = tt.offsetWidth || 300;
+      tt.style.left = Math.max(MARGEM, Math.min(r.right - larg, window.innerWidth - larg - MARGEM)) + 'px';
+      tt.style.top = Math.max(MARGEM, r.top - (tt.offsetHeight || 80) - 12) + 'px';
+    } else { tt.style.left = ''; tt.style.top = ''; tt.style.right = ''; tt.style.bottom = ''; }
+  }
+}
+
+// Arrasto com pointer events (serve para mouse e para toque com a mesma conta).
+// O clique só acontece se o ponteiro NÃO andou: sem isso, largar o balão em
+// cima do lugar novo abriria o painel de mensagens junto.
+function ligarArrasto() {
+  let arrastando = false, moveu = false, dx = 0, dy = 0;
+
+  _balao.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    const r = _balao.getBoundingClientRect();
+    dx = e.clientX - r.left; dy = e.clientY - r.top;
+    arrastando = true; moveu = false;
+    _balao.setPointerCapture(e.pointerId);
+  });
+
+  _balao.addEventListener('pointermove', (e) => {
+    if (!arrastando) return;
+    const andou = Math.abs(e.clientX - (_balao.getBoundingClientRect().left + dx)) +
+                  Math.abs(e.clientY - (_balao.getBoundingClientRect().top + dy));
+    // 4px de tolerância: tremida da mão ao clicar não vira arrasto
+    if (!moveu && andou < 4) return;
+    if (!moveu) {
+      moveu = true;
+      _balao.classList.add('arrastando');
+      document.body.classList.add('msg-arrastando');
+    }
+    aplicarPos({ left: e.clientX - dx, top: e.clientY - dy });
+  });
+
+  const soltar = (e) => {
+    if (!arrastando) return;
+    arrastando = false;
+    try { _balao.releasePointerCapture(e.pointerId); } catch {}
+    _balao.classList.remove('arrastando');
+    document.body.classList.remove('msg-arrastando');
+    if (moveu) {
+      const r = _balao.getBoundingClientRect();
+      try { localStorage.setItem(POS_CHAVE, JSON.stringify({ left: r.left, top: r.top })); } catch {}
+    }
+  };
+  _balao.addEventListener('pointerup', soltar);
+  _balao.addEventListener('pointercancel', soltar);
+
+  // O clique abre o painel — menos quando acabou de ser arrastado.
+  _balao.addEventListener('click', (e) => {
+    if (moveu) { moveu = false; e.preventDefault(); e.stopPropagation(); return; }
+    alternarPainel();
+  });
+
+  // Duplo clique devolve o balão ao canto de origem.
+  _balao.addEventListener('dblclick', (e) => {
+    e.preventDefault();
+    try { localStorage.removeItem(POS_CHAVE); } catch {}
+    aplicarPos(null);
+  });
+
+  window.addEventListener('resize', _aoRedimensionar);
+}
+
+function _aoRedimensionar() {
+  if (!_balao) return;
+  const pos = lerPos();
+  if (pos) aplicarPos(pos); else posicionarSatelites();
+}
+
 // ── balão flutuante ──────────────────────────────────────────────────────────
 function montarBalao() {
-  _balao = el(`<button class="msg-balao" title="Mensagens internas">💬<span class="badge">0</span></button>`);
+  _balao = el(`<button class="msg-balao" title="Mensagens internas — arraste para mover, dois cliques volta ao canto">💬<span class="badge">0</span></button>`);
   _balao.style.display = 'none';
-  _balao.onclick = () => alternarPainel();
   document.body.appendChild(_balao);
+  document.body.classList.add('com-chat');
+  aplicarPos(lerPos());
+  ligarArrasto();
 
   _painel = el(`
     <div class="msg-painel">
@@ -357,6 +496,8 @@ function atualizarEtiqueta(n) {
     document.body.appendChild(et);
   }
   et.innerHTML = `<b>${n}</b> ${n === 1 ? 'nova mensagem' : 'novas mensagens'}`;
+  // A etiqueta é desenhada em relação ao balão, que pode ter sido arrastado.
+  posicionarSatelites();
 }
 
 // Toast de mensagem nova: aparece por alguns segundos com quem mandou e o começo
@@ -387,6 +528,7 @@ function avisarNova(resumo, quantasNovas) {
     setTimeout(() => { try { abrirConversa(alvo, c.nome); } catch {} }, 120);
   };
   document.body.appendChild(t);
+  posicionarSatelites();   // segue o balão quando ele foi arrastado
   setTimeout(() => { t.classList.add('saindo'); setTimeout(() => t.remove(), 400); }, 7000);
 }
 
@@ -425,7 +567,7 @@ export async function viewMensagens(alvo) {
       <div class="pagina-topo">
         <h1>💬 Mensagens</h1>
         <div style="display:flex;gap:8px">
-          <button class="btn btn-suave" id="ms-terminais">🖥️ Quem está online</button>
+          ${ehAdmin() ? '<button class="btn btn-suave" id="ms-terminais">🖥️ Quem está online</button>' : ''}
           <button class="btn btn-primario" id="ms-aviso" style="display:none">📢 Enviar aviso</button>
         </div>
       </div>
@@ -459,7 +601,10 @@ export async function viewMensagens(alvo) {
   if (_resumo.podeAvisar) btAviso.style.display = '';
   btAviso.onclick = () => formAviso(() => { aba = 'avisos'; marcarAba(); desenhar(); });
 
-  pagina.querySelector('#ms-terminais').onclick = async () => {
+  // "Quem está online" é exclusivo do administrador (v3.8.0) — o botão só
+  // existe para ele, então o querySelector devolve null para os demais.
+  const btTerminais = pagina.querySelector('#ms-terminais');
+  if (btTerminais) btTerminais.onclick = async () => {
     const r = await api('mensagens:terminais');
     if (!r.ok) { toast(r.erro, true); return; }
     const linhas = r.terminais.length
