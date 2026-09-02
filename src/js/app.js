@@ -15,7 +15,7 @@ import { viewCatalogo } from './catalogo.js';
 const $app = document.getElementById('app');
 let usuario = null;
 let categoriasCache = [];
-let APP_VERSION = '3.25.36'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
+let APP_VERSION = '3.25.37'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
 
 // API dupla: no aplicativo usa IPC (preload); num terminal em rede (navegador),
 // conversa com o servidor do computador principal via HTTP com token de sessão.
@@ -1144,6 +1144,7 @@ async function viewProdutos(alvo) {
             <option value="sim">🤝 Somente consignados</option>
             <option value="nao">🏪 Somente da loja</option>
           </select>
+          <select id="f-forn" style="display:none" title="Filtrar por fornecedor consignado"><option value="">Todos os fornecedores</option></select>
         </div>
         <table>
           <thead><tr>
@@ -1156,15 +1157,41 @@ async function viewProdutos(alvo) {
     </div>`);
 
   const tbody = tela.querySelector('tbody');
+  const fCons = tela.querySelector('#f-cons');
+  const fForn = tela.querySelector('#f-forn');
+
+  function popularFornecedores(lista) {
+    const fMap = new Map();
+    for (const p of lista) {
+      if (p.consignado && p.fornecedor_id && !fMap.has(p.fornecedor_id))
+        fMap.set(p.fornecedor_id, p.fornecedor || 'Sem nome');
+    }
+    const prev = fForn.value;
+    fForn.innerHTML = '<option value="">Todos os fornecedores</option>';
+    for (const [fid, nome] of [...fMap.entries()].sort((a,b) => a[1].localeCompare(b[1]))) {
+      const o = document.createElement('option');
+      o.value = fid; o.textContent = nome;
+      if (String(fid) === prev) o.selected = true;
+      fForn.appendChild(o);
+    }
+    fForn.style.display = (fMap.size > 0 && fCons.value === 'sim') ? '' : 'none';
+  }
+
   async function carregar() {
-    const consignado = tela.querySelector('#f-cons').value;
+    const consignado = fCons.value;
     const r = await api('produtos:listar', {
       busca: tela.querySelector('#busca').value,
       categoria_id: Number(tela.querySelector('#f-cat').value) || null,
       consignado
     });
     tbody.innerHTML = '';
-    const lista = r.ok ? r.produtos : [];
+    let lista = r.ok ? r.produtos : [];
+    // Filtro client-side por fornecedor (cascata)
+    const fidFiltro = Number(fForn.value) || 0;
+    if (consignado === 'sim' && fidFiltro) {
+      lista = lista.filter(p => p.fornecedor_id === fidFiltro);
+    }
+    if (consignado === 'sim') popularFornecedores(r.ok ? r.produtos : []);
     if (!lista.length) {
       tbody.appendChild(el(`<tr><td colspan="8" class="vazio">${
         consignado === 'sim' ? 'Nenhum produto consignado encontrado.'
@@ -1239,7 +1266,11 @@ async function viewProdutos(alvo) {
     clearTimeout(debounce); debounce = setTimeout(async () => { await carregar(); atualizarBotao(); }, 250);
   });
   tela.querySelector('#f-cat').addEventListener('change', async () => { await carregar(); atualizarBotao(); });
-  tela.querySelector('#f-cons').addEventListener('change', async () => { await carregar(); atualizarBotao(); });
+  tela.querySelector('#f-cons').addEventListener('change', async () => {
+    fForn.style.display = 'none'; fForn.value = '';
+    await carregar(); atualizarBotao();
+  });
+  fForn.addEventListener('change', async () => { await carregar(); atualizarBotao(); });
   // ----- lista de produtos (modal de opções) -----
   tela.querySelector('#lista-exportar').onclick = () => modalExportarLista();
 

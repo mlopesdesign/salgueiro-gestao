@@ -174,13 +174,8 @@ function abaMovimentar(corpo) {
     <div class="painel">
       <div class="barra">
         <input type="text" id="mov-busca" placeholder="${admin ? 'Bipe o código de barras ou digite nome/referência…' : 'Bipe o código de barras ou digite nome/referência para consultar o saldo…'}">
-        <select id="est-f-tipo">
-          <option value="todos">Consignados e próprios</option>
-          <option value="proprios">🏪 Somente da loja</option>
-          <option value="cons">🤝 Somente consignados</option>
-        </select>
-        <select id="est-f-forn" style="display:none"><option value="">Todos os fornecedores</option></select>
       </div>
+      <div id="est-filtros" style="display:flex;flex-wrap:wrap;gap:6px;padding:0 12px 10px"></div>
       ${admin ? '' : `<p style="margin:0 12px 10px;font-size:12.5px;color:var(--texto-suave)">
         🔒 Só o administrador altera a quantidade em estoque. Aqui você consulta o saldo.</p>`}
       <table>
@@ -191,12 +186,13 @@ function abaMovimentar(corpo) {
     </div>`);
   const tbody   = painel.querySelector('tbody');
   const busca   = painel.querySelector('#mov-busca');
-  const fTipo   = painel.querySelector('#est-f-tipo');
-  const fForn   = painel.querySelector('#est-f-forn');
+  const filtros = painel.querySelector('#est-filtros');
   const COLSPAN = admin ? 6 : 5;
 
-  let _todosItens = [];   // lista completa carregada do backend
-  let _emBusca    = false;
+  // Estado do filtro: 'todos' | 'proprios' | 'cons:<fornecedor_id>'
+  let _filtroAtual = 'todos';
+  let _todosItens  = [];   // lista completa carregada do backend (sem busca)
+  let _emBusca     = false; // true enquanto o campo de busca tem texto
 
   // Carrega miniaturas sob demanda: a lista completa traz o NOME do arquivo da
   // foto; só busca a imagem (fotos:obter) quando a linha entra na tela. Assim a
@@ -263,16 +259,14 @@ function abaMovimentar(corpo) {
     }
   }
 
-  // Filtra _todosItens conforme os selects e redesenha a tabela.
+  // Filtra _todosItens conforme _filtroAtual e redesenha a tabela.
   function aplicarFiltro() {
-    const tipo = fTipo.value;
-    const fid  = Number(fForn.value) || 0;
     let lista = _todosItens;
-    if (tipo === 'proprios') {
+    if (_filtroAtual === 'proprios') {
       lista = lista.filter(v => !v.consignado);
-    } else if (tipo === 'cons') {
-      lista = lista.filter(v => v.consignado);
-      if (fid) lista = lista.filter(v => v.fornecedor_id === fid);
+    } else if (_filtroAtual.startsWith('cons:')) {
+      const fid = Number(_filtroAtual.slice(5));
+      lista = lista.filter(v => v.consignado && v.fornecedor_id === fid);
     }
     const termo = busca.value.trim().toLowerCase();
     if (termo) {
@@ -282,26 +276,55 @@ function abaMovimentar(corpo) {
         (v.codigo_barras || '').includes(busca.value.trim())
       );
     }
-    const msg = tipo === 'proprios' ? 'Nenhum produto próprio no estoque.'
-      : tipo === 'cons' ? 'Nenhum produto consignado no estoque.'
-      : 'Nenhum produto cadastrado no estoque.';
+    const msg = _filtroAtual === 'todos' ? 'Nenhum produto cadastrado no estoque.'
+      : _filtroAtual === 'proprios'      ? 'Nenhum produto próprio no estoque.'
+      : `Nenhum produto deste fornecedor no estoque.`;
     desenhar(lista, msg);
   }
 
-  // Popula o select de fornecedores e controla visibilidade.
+  // Reconstrói os pills de filtro a partir da lista carregada.
   function renderFiltros(lista) {
-    const fMap = new Map();
+    // Deriva fornecedores únicos com produtos consignados
+    const fMap = new Map(); // fornecedor_id → { nome, count }
+    let nProprios = 0, nCons = 0;
     for (const v of lista) {
-      if (v.consignado && v.fornecedor_id && !fMap.has(v.fornecedor_id))
-        fMap.set(v.fornecedor_id, v.fornecedor || 'Sem nome');
+      if (v.consignado && v.fornecedor_id) {
+        const entry = fMap.get(v.fornecedor_id);
+        if (entry) entry.count++; else fMap.set(v.fornecedor_id, { nome: v.fornecedor, count: 1 });
+        nCons++;
+      } else {
+        nProprios++;
+      }
     }
-    const prevForn = fForn.value;
-    fForn.innerHTML = '<option value="">Todos os fornecedores</option>';
-    for (const [fid, nome] of [...fMap.entries()].sort((a,b) => a[1].localeCompare(b[1]))) {
-      const o = document.createElement('option');
-      o.value = fid; o.textContent = nome;
-      if (String(fid) === prevForn) o.selected = true;
-      fForn.appendChild(o);
+    // Só mostra a barra de filtros se houver consignados
+    if (!nCons) { filtros.style.display = 'none'; return; }
+    filtros.style.display = 'flex';
+
+    const pill = (chave, label, ativo) => {
+      const b = document.createElement('button');
+      b.textContent = label;
+      b.className = 'btn-pill' + (ativo ? ' ativo' : '');
+      b.style.cssText = [
+        'border:1px solid var(--borda,#d1d5db)',
+        'border-radius:20px',
+        'padding:3px 12px',
+        'font-size:12px',
+        'cursor:pointer',
+        'white-space:nowrap',
+        ativo
+          ? 'background:var(--primario,#2563eb);color:#fff;border-color:var(--primario,#2563eb)'
+          : 'background:var(--fundo-card,#fff);color:var(--texto,#111)',
+      ].join(';');
+      b.onclick = () => { _filtroAtual = chave; renderFiltros(_todosItens); aplicarFiltro(); };
+      return b;
+    };
+
+    filtros.innerHTML = '';
+    filtros.appendChild(pill('todos', `Todos (${lista.length})`, _filtroAtual === 'todos'));
+    if (nProprios) filtros.appendChild(pill('proprios', `🏪 Próprios (${nProprios})`, _filtroAtual === 'proprios'));
+    for (const [fid, { nome, count }] of [...fMap.entries()].sort((a, b) => a[1].nome.localeCompare(b[1].nome))) {
+      const chave = `cons:${fid}`;
+      filtros.appendChild(pill(chave, `🤝 ${nome} (${count})`, _filtroAtual === chave));
     }
   }
 
@@ -320,7 +343,7 @@ function abaMovimentar(corpo) {
     }));
     _emBusca = false;
     renderFiltros(_todosItens);
-    fTipo.dispatchEvent(new Event('change'));
+    aplicarFiltro();
   }
 
   // Depois de uma movimentação: recarrega tudo preservando o filtro ativo.
@@ -362,11 +385,6 @@ function abaMovimentar(corpo) {
   let debounce;
   busca.addEventListener('input', () => { clearTimeout(debounce); debounce = setTimeout(pesquisar, 300); });
   busca.addEventListener('keydown', e => { if (e.key === 'Enter') { clearTimeout(debounce); pesquisar(); } });
-  fTipo.addEventListener('change', () => {
-    fForn.style.display = fTipo.value === 'cons' ? '' : 'none';
-    aplicarFiltro();
-  });
-  fForn.addEventListener('change', () => aplicarFiltro());
   corpo.appendChild(painel);
   carregarTudo();
   busca.focus();
