@@ -7,9 +7,9 @@ git push origin --tags
 
 echo.
 echo Criando release no GitHub...
-gh release create v3.25.37 "instalador\Salgueiro Gestao Setup v3.25.37.exe" ^
+gh release create v3.25.37 "Portable\resources.neu" ^
   --title "v3.25.37 — filtro cascata consignado/fornecedor em Produtos e Estoque" ^
-  --notes "## v3.25.37 — 2026-09-02^^- Estoque: SELECT cascata — escolha Consignados e depois filtra por fornecedor^^- Produtos: mesma cascata de filtros (prorio / consignado / fornecedor)^^- Remove arquivos soltos da raiz (estoque.js, README.md)"
+  --notes "## v3.25.37 — 2026-09-02^^- Estoque: filtro cascata — proprio / consignado / por fornecedor^^- Produtos: mesmo filtro cascata"
 
 echo.
 echo Pronto!
