@@ -3,6 +3,14 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.25.38',
+    data: '2026-09-02',
+    itens: [
+      '🔍 Estoques (locais): filtro cascata — próprios / consignados / por fornecedor',
+      '🐛 Fix: filtro por fornecedor em Produtos agora funciona corretamente (fornecedor_id estava ausente na resposta da API)',
+    ],
+  },
+  {
     versao: '3.25.37',
     data: '2026-09-02',
     itens: [

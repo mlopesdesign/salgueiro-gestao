@@ -709,13 +709,7 @@ export async function viewEstoques(alvo) {
                   src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E"></td>`;
       return `<td class="es-td-foto"><span class="es-thumb es-thumb-vazio">👗</span></td>`;
     };
-    const linhas = r.itens.map(i => `<tr>
-      ${celFoto(i.foto)}
-      <td>${esc(i.produto)}<br><small style="opacity:.6">${esc(i.categoria)}${i.referencia ? ' · ' + esc(i.referencia) : ''}</small></td>
-      <td>${esc([i.cor, i.tamanho].filter(x => x && x !== 'Única' && x !== 'U').join(' · ') || '—')}</td>
-      <td class="num"><b>${i.qtd}</b></td>
-      <td class="num" style="opacity:.6">${i.total_geral}</td>
-      <td class="num">${moeda(i.qtd * (i.preco_venda || 0))}</td></tr>`).join('');
+    const todosItens = r.itens;
     const bloco = el(`<div class="painel">
       <div class="barra"><b>${esc(r.estoque.nome)}</b>
         <span style="font-size:12px;opacity:.65">${r.totais.itens} tipo(s) · ${r.totais.pecas} peça(s) ·
@@ -723,14 +717,81 @@ export async function viewEstoques(alvo) {
         <button class="btn btn-suave es-nao-imprime" id="es-print" style="margin-left:auto">🖨️ Imprimir balanço</button>
         <button class="btn btn-suave es-nao-imprime" id="es-xlsx">📊 Excel</button>
       </div>
+      <div class="barra es-nao-imprime" style="gap:6px;padding:8px 0 4px">
+        <select id="esl-f-tipo" style="min-width:180px">
+          <option value="todos">Consignados e próprios</option>
+          <option value="proprios">🏪 Somente da loja</option>
+          <option value="cons">🤝 Somente consignados</option>
+        </select>
+        <select id="esl-f-forn" style="display:none"><option value="">Todos os fornecedores</option></select>
+      </div>
       <table class="es-tab"><thead><tr>
         <th class="es-td-foto">Foto</th>
         <th>Produto</th><th>Cor / Tam.</th><th class="num">Neste estoque</th>
         <th class="num">Total Salgueiro</th><th class="num">Valor de venda</th>
-      </tr></thead><tbody>${linhas || '<tr><td colspan="6" class="vazio">Este estoque está vazio.</td></tr>'}</tbody></table>
+      </tr></thead><tbody id="esl-tbody"></tbody></table>
     </div>`);
-    // liga o carregamento sob demanda nas miniaturas recém-desenhadas
-    if (_obsFoto) bloco.querySelectorAll('img[data-foto]').forEach(img => _obsFoto.observe(img));
+
+    const fTipoEl = bloco.querySelector('#esl-f-tipo');
+    const fFornEl = bloco.querySelector('#esl-f-forn');
+    const tbodyEl = bloco.querySelector('#esl-tbody');
+
+    function renderFiltrosForn(lista) {
+      const fMap = new Map();
+      for (const v of lista) {
+        if (v.consignado && v.fornecedor_id && !fMap.has(v.fornecedor_id))
+          fMap.set(v.fornecedor_id, v.fornecedor || 'Sem nome');
+      }
+      const prev = fFornEl.value;
+      fFornEl.innerHTML = '<option value="">Todos os fornecedores</option>';
+      for (const [fid, nome] of [...fMap.entries()].sort((a,b) => a[1].localeCompare(b[1]))) {
+        const o = document.createElement('option');
+        o.value = fid; o.textContent = nome;
+        if (String(fid) === prev) o.selected = true;
+        fFornEl.appendChild(o);
+      }
+      fFornEl.style.display = (fMap.size > 0 && fTipoEl.value === 'cons') ? '' : 'none';
+    }
+
+    function aplicarFiltroEsl() {
+      const tipo = fTipoEl.value;
+      const fid  = Number(fFornEl.value) || 0;
+      let lista = todosItens;
+      if (tipo === 'proprios') lista = lista.filter(v => !v.consignado);
+      else if (tipo === 'cons') {
+        lista = lista.filter(v => v.consignado);
+        if (fid) lista = lista.filter(v => v.fornecedor_id === fid);
+      }
+      const linhas = lista.map(i => {
+        const tr = el(`<tr>
+          ${celFoto(i.foto)}
+          <td>${esc(i.produto)}<br><small style="opacity:.6">${esc(i.categoria)}${i.referencia ? ' · ' + esc(i.referencia) : ''}</small>
+          ${i.consignado ? `<br><small style="color:#d97706;font-size:11px">🤝 ${esc(i.fornecedor||'')}</small>` : ''}</td>
+          <td>${esc([i.cor, i.tamanho].filter(x => x && x !== 'Única' && x !== 'U').join(' · ') || '—')}</td>
+          <td class="num"><b>${i.qtd}</b></td>
+          <td class="num" style="opacity:.6">${i.total_geral}</td>
+          <td class="num">${moeda(i.qtd * (i.preco_venda || 0))}</td></tr>`);
+        if (_obsFoto) tr.querySelectorAll('img[data-foto]').forEach(img => _obsFoto.observe(img));
+        return tr;
+      });
+      tbodyEl.innerHTML = '';
+      if (linhas.length) linhas.forEach(tr => tbodyEl.appendChild(tr));
+      else tbodyEl.innerHTML = `<tr><td colspan="6" class="vazio">${
+        tipo === 'proprios' ? 'Nenhum produto próprio neste estoque.' :
+        tipo === 'cons' ? 'Nenhum produto consignado neste estoque.' :
+        'Este estoque está vazio.'}</td></tr>`;
+    }
+
+    renderFiltrosForn(todosItens);
+    aplicarFiltroEsl();
+
+    fTipoEl.addEventListener('change', () => {
+      fFornEl.style.display = 'none'; fFornEl.value = '';
+      renderFiltrosForn(todosItens);
+      aplicarFiltroEsl();
+    });
+    fFornEl.addEventListener('change', () => aplicarFiltroEsl());
+
     bloco.querySelector('#es-print').onclick = () => {
       toast('Para enviar por WhatsApp ou e-mail, escolha "Salvar como PDF".');
       window.print();

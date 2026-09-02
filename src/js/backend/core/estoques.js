@@ -149,11 +149,15 @@ function conteudo(db, p) {
            COALESCE(c.nome,'Sem categoria') categoria,
            va.cor, va.tamanho, COALESCE(va.codigo_barras,'') codigo_barras,
            pr.preco_custo, pr.preco_venda, va.estoque AS total_geral,
-           COALESCE(va.foto, pr.foto) AS foto
+           COALESCE(va.foto, pr.foto) AS foto,
+           COALESCE(pr.consignado,0) AS consignado,
+           pr.fornecedor_id,
+           COALESCE(fo.nome,'') AS fornecedor
     FROM estoque_saldos s
     JOIN variacoes va ON va.id = s.variacao_id
     JOIN produtos pr ON pr.id = va.produto_id
     LEFT JOIN categorias c ON c.id = pr.categoria_id
+    LEFT JOIN fornecedores fo ON fo.id = pr.fornecedor_id
     WHERE s.estoque_id = ? AND s.qtd <> 0
     ORDER BY pr.nome, va.cor, va.tamanho
   `).all(id);

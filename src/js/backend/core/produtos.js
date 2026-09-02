@@ -66,6 +66,7 @@ function listarProdutos(db, filtro) {
     SELECT p.id, p.referencia, p.nome, p.preco_custo, p.preco_venda, p.estoque_minimo, p.foto,
            COALESCE(p.consignado,0) AS consignado,
            COALESCE(p.pct_fornecedor,0) AS pct_fornecedor,
+           p.fornecedor_id,
            COALESCE(fo.nome,'') AS fornecedor,
            c.nome AS categoria,
            COALESCE((SELECT SUM(v.estoque) FROM variacoes v WHERE v.produto_id = p.id AND v.ativo = 1), 0) AS estoque_total,
