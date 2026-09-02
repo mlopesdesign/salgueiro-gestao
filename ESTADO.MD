@@ -9,12 +9,12 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.25.36 |
+| **Versão atual** | 3.25.37 |
 | **Data do último build** | 2026-09-02 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.25.36 em 2026-09-02 ✓ |
-| **5 lugares da versão** | todos em 3.25.36 ✓ (config, app.js, ambiente.js, .nsi, novidades.js) |
+| **GRAPHIFY** | atualizado para 3.25.37 em 2026-09-02 ✓ |
+| **5 lugares da versão** | todos em 3.25.37 ✓ (config, app.js, ambiente.js, .nsi, novidades.js) |
 
 ---
 
@@ -54,6 +54,8 @@ Quando for commitar, agrupar em blocos temáticos:
 | 3.25.34 | 2026-08-26 | Miniaturas de fotos na listagem do estoque por local (lazy-load) |
 | 3.25.35 | 2026-08-31 | Fix OOM migração/reparo fotos; desconto à vista bloqueado com taxa; venda a custo bloqueia categoria; scroll PDV; variação excluída pode ser re-adicionada |
 | 3.25.36 | 2026-09-02 | Filtros por fornecedor consignado no Estoque; badge de fornecedor na lista |
+| 3.25.37 | 2026-09-02 | Filtro cascata consignado/fornecedor em Produtos e Estoque (SELECT dropdowns) |
+| 3.25.37 | 2026-09-02 | Filtro cascata consignado/fornecedor em Produtos e Estoque (SELECT dropdowns) |
 
 ---
 
@@ -68,9 +70,9 @@ Quando for commitar, agrupar em blocos temáticos:
 - [x] Variação excluída (soft-delete) bloqueava re-inserção com mesmo nome
 
 **Próximos passos:**
-- [ ] `neu build --release` + gerar instalador
+- [x] `neu build --release` + gerar instalador v3.25.37
 - [x] `node tools/graphify.js` para atualizar GRAPHIFY.md
-- [ ] git pull (sincronizar com GitHub v3.25.33) e depois commit da v3.25.35
+- [x] git commitado até v3.25.37 (commits 4c0c499, 7f3f3c1, a16ef85)
 
 ---
 
