@@ -129,7 +129,6 @@ async function abaVendas(corpo, per) {
       <div class="cards">
         <div class="card"><div class="rotulo">Vendas</div><div class="valor">${r.resumo.qtd}</div></div>
         <div class="card"><div class="rotulo">Faturamento</div><div class="valor">${moeda(r.resumo.total)}</div></div>
-        <div class="card"><div class="rotulo">Ticket médio</div><div class="valor">${moeda(r.resumo.ticket)}</div></div>
         <div class="card ev-card-salgueiro"><div class="rotulo">Vendas do Salgueiro</div>
           <div class="valor">${moeda((r.resumo.origem || {}).proprio?.total || 0)}</div>
           ${_subCard ? `<div class="ev-card-sub">${(r.resumo.origem || {}).proprio?.pecas || 0} peça(s) próprias · tabela ${moeda((r.resumo.origem || {}).proprio?.tabela || 0)}</div>` : ''}</div>
@@ -322,9 +321,8 @@ async function abaEvento(corpo) {
       const _orig = t.origem || { proprio: { pecas: 0, total: 0, tabela: 0 }, consignado: { pecas: 0, total: 0, tabela: 0 } };
       topH += `<div class="cards">
         <div class="card"><div class="rotulo">Vendas</div><div class="valor">${t.vendas}</div></div>
-        <div class="card"><div class="rotulo">Peças</div><div class="valor">${t.pecas}</div></div>
+        <div class="card"><div class="rotulo">Peças vendidas</div><div class="valor">${t.pecas}</div></div>
         <div class="card"><div class="rotulo">Faturamento bruto</div><div class="valor">${moeda(t.bruto)}</div></div>
-        <div class="card"><div class="rotulo">Ticket médio</div><div class="valor">${moeda(t.ticket)}</div></div>
         <div class="card ev-card-abate"><div class="rotulo">Total em descontos</div>
           <div class="valor">${moeda(_desc.valor)}</div>
           ${_subCard ? `<div class="ev-card-sub">${_desc.qtd} venda(s) com desconto no fechamento</div>` : ''}</div>

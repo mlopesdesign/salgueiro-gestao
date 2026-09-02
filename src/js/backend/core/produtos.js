@@ -102,10 +102,14 @@ function salvarProduto(db, p, quem) {
   if (!nome) return { ok: false, erro: 'Informe o nome do produto.' };
   const precoVenda = Number(p.preco_venda) || 0;
   if (precoVenda <= 0) return { ok: false, erro: 'Informe o preço de venda.' };
+  // A rota grava a foto em arquivo ANTES de chamar aqui e passa o NOME do arquivo.
+  // Aceitamos também data URI (compatibilidade: banco antigo / caminho de teste).
   let foto = p.foto == null ? null : String(p.foto);
   if (foto) {
-    if (!foto.startsWith('data:image/')) return { ok: false, erro: 'Formato de foto inválido.' };
-    if (foto.length > 1.6e6) return { ok: false, erro: 'Foto muito grande. Use uma imagem menor.' };
+    const ehArquivo = /^[\w.\-]+\.(jpe?g|png|webp|gif)$/i.test(foto);
+    const ehDataUri = foto.startsWith('data:image/');
+    if (!ehArquivo && !ehDataUri) return { ok: false, erro: 'Formato de foto inválido.' };
+    if (ehDataUri && foto.length > 1.6e6) return { ok: false, erro: 'Foto muito grande. Use uma imagem menor.' };
   }
   // Consignação: fornecedor + percentual do fornecedor (a loja fica com o resto)
   const consignado = p.consignado ? 1 : 0;
@@ -163,7 +167,9 @@ function salvarProduto(db, p, quem) {
       // foto da variação: valida e normaliza igual à foto do produto
       let vfoto = v.foto == null ? undefined : String(v.foto);
       if (vfoto) {
-        if (!vfoto.startsWith('data:image/') || vfoto.length > 1.6e6) vfoto = undefined;
+        const vArq = /^[\w.\-]+\.(jpe?g|png|webp|gif)$/i.test(vfoto);
+        const vData = vfoto.startsWith('data:image/');
+        if ((!vArq && !vData) || (vData && vfoto.length > 1.6e6)) vfoto = undefined;
       }
       if (v.id) {
         const upd = vfoto !== undefined
@@ -174,10 +180,27 @@ function salvarProduto(db, p, quem) {
           : db.prepare(upd).run(cor, tamanho, minVar, v.id, produtoId);
         idsEnviados.push(v.id);
       } else {
-        const r = db.prepare(
-          'INSERT INTO variacoes (produto_id, cor, tamanho, estoque, estoque_minimo, foto) VALUES (?,?,?,0,?,?)'
-        ).run(produtoId, cor, tamanho, minVar, vfoto || null);
-        const varId = Number(r.lastInsertRowid);
+        // Se a variação foi excluída antes (ativo=0), reativa em vez de inserir — evita
+        // violar o UNIQUE (produto_id, cor, tamanho) que permanece mesmo em soft-delete.
+        const inativa = db.prepare(
+          'SELECT id FROM variacoes WHERE produto_id=? AND cor=? AND tamanho=? AND ativo=0'
+        ).get(produtoId, cor, tamanho);
+        let varId;
+        if (inativa) {
+          if (vfoto !== undefined) {
+            db.prepare('UPDATE variacoes SET ativo=1, estoque=0, estoque_minimo=?, foto=? WHERE id=?')
+              .run(minVar, vfoto || null, inativa.id);
+          } else {
+            db.prepare('UPDATE variacoes SET ativo=1, estoque=0, estoque_minimo=? WHERE id=?')
+              .run(minVar, inativa.id);
+          }
+          varId = inativa.id;
+        } else {
+          const r = db.prepare(
+            'INSERT INTO variacoes (produto_id, cor, tamanho, estoque, estoque_minimo, foto) VALUES (?,?,?,0,?,?)'
+          ).run(produtoId, cor, tamanho, minVar, vfoto || null);
+          varId = Number(r.lastInsertRowid);
+        }
         // código de barras: informado ou gerado internamente (EAN-13 iniciado em 2)
         const codigo = String(v.codigo_barras || '').trim() || codigoInterno(varId);
         db.prepare('UPDATE variacoes SET codigo_barras=? WHERE id=?').run(codigo, varId);

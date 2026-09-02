@@ -30,6 +30,73 @@ export async function arquivoBanco() {
   return `${await dirDados()}/salgueiro.db`;
 }
 
+// ── Fotos em disco (v3.25.22) ────────────────────────────────────────────────
+// As fotos de produto/variação passaram a ficar como ARQUIVOS em dados/fotos,
+// e o banco guarda só o nome do arquivo. Antes iam como base64 dentro do banco,
+// o que inflava o .db a dezenas de MB — e o export() de cada gravação estourava
+// a memória do SQLite em WebAssembly (Aborted OOM) no Windows.
+//
+// A pasta fica DENTRO de dados/ (perfil Roaming), o mesmo cofre do banco e dos
+// backups: nenhuma atualização ou desinstalação toca ali.
+let _dirFotos = null;
+export async function dirFotos() {
+  if (_dirFotos) return _dirFotos;
+  _dirFotos = `${await dirDados()}/fotos`;
+  await _garantirDir(_dirFotos);
+  return _dirFotos;
+}
+
+function _tokenFoto() {
+  try { if (globalThis.crypto?.randomUUID) return crypto.randomUUID().replace(/-/g, ''); } catch {}
+  return 'f' + Date.now().toString(36) + Math.floor(Math.random() * 1e9).toString(36);
+}
+function _extDataUri(dataUri) {
+  const m = /^data:image\/([a-z0-9.+-]+);base64,/i.exec(dataUri || '');
+  const t = (m && m[1] || 'jpeg').toLowerCase();
+  return t === 'jpeg' ? 'jpg' : (t.replace(/[^a-z0-9]/g, '') || 'jpg');
+}
+function _mimeDeNome(nome) {
+  const ext = String(nome).split('.').pop().toLowerCase();
+  return ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp'
+       : ext === 'gif' ? 'image/gif' : 'image/jpeg';
+}
+
+// Grava um data URI como arquivo e devolve o NOME do arquivo (para o banco).
+// Devolve null se não for um data URI de imagem (nesse caso o chamador mantém
+// o valor que já tinha — pode já ser um nome de arquivo).
+export async function salvarFotoArquivo(dataUri) {
+  const s = dataUri == null ? '' : String(dataUri);
+  if (!s.startsWith('data:image/')) return null;
+  const b64 = s.slice(s.indexOf(',') + 1);
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const nome = `${_tokenFoto()}.${_extDataUri(s)}`;
+  const dir = await dirFotos();
+  await Neutralino.filesystem.writeBinaryFile(`${dir}/${nome}`, bytes.buffer);
+  return nome;
+}
+
+// Resolve o valor guardado no banco para algo que o <img src> aceita.
+// Aceita os DOIS formatos, para nunca quebrar durante/antes da migração:
+//   - já é data URI (legado, ainda inline)  → devolve como está
+//   - é nome de arquivo                      → lê o arquivo e devolve data URI
+export async function lerFotoArquivo(valor) {
+  const s = valor == null ? '' : String(valor);
+  if (!s) return null;
+  if (s.startsWith('data:image/')) return s;
+  try {
+    const dir = await dirFotos();
+    const buf = await Neutralino.filesystem.readBinaryFile(`${dir}/${s}`);
+    const bytes = new Uint8Array(buf);
+    let bin = ''; const CHUNK = 8192;
+    for (let i = 0; i < bytes.length; i += CHUNK) {
+      bin += String.fromCharCode(...bytes.subarray(i, Math.min(i + CHUNK, bytes.length)));
+    }
+    return `data:${_mimeDeNome(s)};base64,${btoa(bin)}`;
+  } catch { return null; } // arquivo sumiu: trata como sem foto
+}
+
 // ── Banco de dados (bytes) ───────────────────────────────────────────────────
 export let RECUPERADO_DE = null; // preenchido por lerBanco() quando houve resgate
 
@@ -183,6 +250,18 @@ export async function listarBackupsLocais() {
   } catch { return { backups: [], pasta: dir.replace(/\//g, '\\') }; }
 }
 
+// Nomes dos arquivos de foto que existem em dados/fotos (v3.25.32).
+// Usado pelo reparo automático de vínculo foto↔produto no boot.
+export async function listarArquivosFotos() {
+  try {
+    const dir = await dirFotos();
+    const itens = await Neutralino.filesystem.readDirectory(dir);
+    return itens
+      .filter(e => e.type !== 'DIRECTORY' && /\.(jpe?g|png|webp|gif)$/i.test(e.entry))
+      .map(e => e.entry);
+  } catch { return []; }
+}
+
 // ── Diálogos nativos ─────────────────────────────────────────────────────────
 export async function dialogoSalvar(titulo, nomePadrao) {
   const r = await Neutralino.os.showSaveDialog(titulo, {
@@ -219,7 +298,7 @@ export async function garantirExtensaoRede() {
 
 // ── App ──────────────────────────────────────────────────────────────────────
 export function versaoApp() {
-  try { return NL_APPVERSION; } catch { return '3.25.19'; }
+  try { return NL_APPVERSION; } catch { return '3.25.36'; }
 }
 
 export async function reiniciarApp() {

@@ -3,6 +3,139 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.25.36',
+    data: '2026-09-02',
+    itens: [
+      '📦 Estoque: filtros por fornecedor consignado — veja só os produtos de cada fornecedor',
+      '🏷️ Badge do fornecedor visível em cada produto consignado na lista de estoque',
+    ],
+  },
+  {
+    versao: '3.25.35',
+    data: '2026-08-31',
+    titulo: 'Correções de estabilidade e PDV',
+    itens: [
+      '🛠 OOM corrigido: migração de fotos e reparo de vínculos não travam mais o app ao gravar',
+      '💳 Desconto à vista não é mais oferecido quando a forma de pagamento tem taxa (ex.: PIX com custo)',
+      '🏷️ Venda a preço de custo: desconto de categoria não é mais aplicado automaticamente',
+      '🔍 PDV: lista de sugestões de produto agora tem scroll (não cresce sem limite)',
+      '↩️ Variação excluída pode ser re-adicionada com o mesmo nome sem erro',
+    ],
+  },
+  {
+    versao: '3.25.34', data: '2026-08-26',
+    titulo: 'Fotos também na listagem do estoque por local',
+    itens: [
+      'Em Estoques (locais), a lista de peças de cada local agora mostra a miniatura da foto ao lado do produto — igual à tela de Estoque, para identificar a peça de bate-pronto.',
+      'As fotos carregam conforme você rola a lista, então um local com centenas de peças abre na mesma velocidade de antes.',
+      'No balanço impresso a foto não sai: a folha de conferência continua enxuta, sem gastar tinta nem empurrar linhas para outra página.'
+    ]
+  },
+  {
+    versao: '3.25.33', data: '2026-08-26',
+    titulo: 'Atualização automática agora COLA de verdade',
+    itens: [
+      'CORRIGIDO: ao atualizar, o sistema voltava para a versão anterior depois de reiniciar. A causa: ele tentava trocar o arquivo do programa com o próprio programa ainda aberto — e o Windows mantém esse arquivo travado enquanto o app roda, então a troca não pegava.',
+      'Agora a atualização baixa, o sistema fecha, a troca acontece com o arquivo livre e o programa reabre sozinho já na versão nova.',
+      'Se a internet cair no meio do download, a atualização é cancelada e a versão atual continua intacta — nunca fica pela metade.'
+    ]
+  },
+  {
+    versao: '3.25.32', data: '2026-08-26',
+    titulo: 'Fotos: reparo automático do vínculo com os produtos',
+    itens: [
+      'CORRIGIDO o problema que fez as fotos sumirem de todos os produtos de uma vez. As imagens nunca foram perdidas — o que quebrou foi a ligação entre o produto e o arquivo da foto, o que acontecia depois de restaurar um backup do banco (o backup traz os nomes das fotos, mas os arquivos de imagem não vêm junto).',
+      'Agora, ao abrir, o sistema confere sozinho se cada foto ainda aponta para um arquivo existente. Achando alguma solta, ele refaz a ligação usando os backups — sem inventar nada: só religa o que consegue comprovar.',
+      'Se você restaurar um backup antigo, as fotos voltam sozinhas no próximo boot.'
+    ]
+  },
+  {
+    versao: '3.25.31', data: '2026-08-25',
+    titulo: 'Catálogo volta a sair com as fotos',
+    itens: [
+      'Corrigido: o Catálogo em PDF voltou a sair com a foto de cada peça. Depois que as imagens passaram a ser guardadas em arquivo, o gerador do catálogo não conseguia embutir fotos grandes — agora ele lê a imagem do jeito certo e ela aparece, em qualquer tamanho.'
+    ]
+  },
+  {
+    versao: '3.25.30', data: '2026-08-25',
+    titulo: 'Consignado: fim do desconto contado duas vezes',
+    itens: [
+      'CORRIGIDO um erro sério no relatório de comissão e no recibo de consignados: o desconto da venda estava sendo descontado DUAS vezes. Ex.: peça de tabela R$170 vendida por R$144,50 aparecia como recebido R$122,83 (descontava os 15% de novo) e pagava R$88,27 ao fornecedor, quando o certo é R$98,03.',
+      'Agora "Valor de tabela" é o preço cheio do cadastro, "Desconto" é o desconto dado no PDV, "Recebido" é o que a loja recebeu, e o repasse usa exatamente o valor calculado na venda. Relatório e recibo batem com o cupom, no centavo.'
+    ]
+  },
+  {
+    versao: '3.25.28', data: '2026-08-25',
+    titulo: 'Fotos no catálogo + botão cancelar venda + trocas para todos',
+    itens: [
+      'Corrigido: o catálogo em PDF voltou a sair com as fotos das peças. Elas tinham parado de aparecer depois que as imagens passaram a ser guardadas em arquivo (mais leve) — agora o catálogo lê a imagem certinho.',
+      'Novo botão "✕ Cancelar venda" na tela do PDV: esvazia o carrinho e zera cliente e desconto de uma vez, sem gravar nada. Bom para recomeçar quando o cliente desiste.',
+      'Trocas liberadas para qualquer usuário do PDV — o botão "🔄 Troca" aparece em toda venda que ainda pode ser trocada, sem depender de permissão extra.'
+    ]
+  },
+  {
+    versao: '3.25.27', data: '2026-08-25',
+    titulo: 'Foto opcional também no Relatório de Estoque',
+    itens: [
+      'No Estoque, ao clicar em "📄 Exportar PDF", agora aparece a opção "📷 Incluir a foto de cada peça". Marque para o relatório sair com a miniatura ao lado de cada produto.',
+      'Continua desmarcada por padrão — quem quer a lista enxuta e mais rápida não muda nada. Com foto, o PDF fica mais bonito para conferência, mas gera mais páginas.'
+    ]
+  },
+  {
+    versao: '3.25.26', data: '2026-08-25',
+    titulo: 'Foto opcional na Lista de Produtos e Preços',
+    itens: [
+      'Na tela de Produtos → "Exportar lista", agora existe a opção "Foto". Marque-a para sair a miniatura de cada peça ao lado do nome na lista impressa.',
+      'A foto é opcional: continua desmarcada por padrão, então quem prefere a lista enxuta (sem imagem) não precisa mudar nada.',
+      'A foto sai só no PDF (para imprimir/enviar ao cliente). O Excel continua sem imagem, como antes.'
+    ]
+  },
+  {
+    versao: '3.25.25', data: '2026-08-22',
+    titulo: 'Transferir tudo agora zera a origem + quantidade na lista',
+    itens: [
+      'Corrigido: ao usar "Levar tudo da origem", o local de origem agora fica ZERADO de verdade. Antes, peças com saldo negativo ficavam para trás e a origem terminava negativa.',
+      'Peças com saldo negativo na origem (erro de estoque antigo) também são movidas, para a origem poder zerar — o sistema avisa quando isso acontece.',
+      'Na opção "Selecionar da lista", agora dá para editar a quantidade de cada produto antes de transferir, em vez de mandar sempre o saldo cheio.'
+    ]
+  },
+  {
+    versao: '3.25.23', data: '2026-08-22',
+    titulo: 'Transferência: levar tudo e selecionar vários de uma vez',
+    itens: [
+      'Novo botão "Levar tudo da origem": coloca no romaneio todas as peças do local de origem, no saldo cheio, de uma vez — é só revisar e confirmar.',
+      'Novo botão "Selecionar da lista": mostra tudo o que há na origem com caixas de marcar (com "marcar todos" e filtro por nome/referência). Marque os produtos que quer e adicione todos juntos.',
+      'Continua funcionando escolher produto por produto na busca, como antes.'
+    ]
+  },
+  {
+    versao: '3.25.22', data: '2026-08-20',
+    titulo: 'Fim do erro ao ajustar estoque + fotos no estoque',
+    itens: [
+      'Corrigido o erro "Aborted(OOM)" que impedia ajustar o estoque em lojas com muitas fotos. As fotos saíram de dentro do banco e agora ficam guardadas como arquivos, num local seguro que nenhuma atualização apaga.',
+      'A conversão das fotos existentes é automática na primeira abertura, com backup do banco antes — nada se perde.',
+      'A tela de Estoque agora mostra a miniatura da foto ao lado de cada peça, para identificar mais rápido.'
+    ]
+  },
+  {
+    versao: '3.25.21', data: '2026-08-20',
+    titulo: 'Estoque abre com a lista completa em ordem alfabética',
+    itens: [
+      'Ao abrir o Estoque, a tela já mostra todos os produtos em ordem alfabética — com os botões de Entrada, Saída e Ajustar em cada linha, prontos para usar sem precisar buscar antes.',
+      'A busca continua funcionando: digite nome, referência ou bipe o código para filtrar. Apagar a busca volta a mostrar a lista inteira.'
+    ]
+  },
+  {
+    versao: '3.25.20', data: '2026-08-20',
+    titulo: 'Recibo do consignado igual ao relatório + ajustes no estoque',
+    itens: [
+      'Recibo/prestação de contas: os valores agora batem exatamente com o relatório de comissão de consignados. O repasse é calculado sobre o valor recebido (após desconto), com as colunas de Desconto, Recebido e Fatia do lucro.',
+      'Relatório: o card "Peças" virou "Peças vendidas" e o card de "Ticket médio" foi removido.',
+      'Estoque: os campos de entrada, saída e ajuste não vêm mais com número pré-preenchido — acabou o erro de digitar 20 e virar 120.',
+      'Lista de produtos: a marcação de % do consignado passou de amarelo para cinza escuro, mais legível.'
+    ]
+  },
+  {
     versao: '3.25.19', data: '2026-08-20',
     titulo: 'Botão do meio removido e janela travada em tela cheia',
     itens: [

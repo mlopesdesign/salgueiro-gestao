@@ -361,6 +361,7 @@ function relatorioEvento(db, p) {
   const consig = db.prepare(`
     SELECT cg.venda_id, cg.qtd, cg.valor_venda, cg.valor_custo, cg.pct_fornecedor,
            cg.valor_fornecedor, cg.valor_loja, cg.status,
+           pr.preco_venda,
            f.id fornecedor_id, f.nome fornecedor, pr.nome produto
     FROM consignacoes cg
     JOIN vendas v ON v.id = cg.venda_id
@@ -465,19 +466,27 @@ function relatorioEvento(db, p) {
     // seria o repasse se a base fosse o recebido. A REGRA NÃO MUDOU — o valor
     // a pagar continua sendo `valor_fornecedor`. O relatório só passou a
     // mostrar a diferença para o dono decidir.
-    const fatorV = (v && v.subtotal > 0) ? v.total / v.subtotal : 1;
-    cg.recebido = arred(cg.valor_venda * fatorV);
-    cg.desconto = arred(cg.valor_venda - cg.recebido);
-    const lucroReal = arred(cg.recebido - cg.valor_custo);
-    cg.fornecedor_ajustado = arred(cg.valor_custo + lucroReal * (Number(cg.pct_fornecedor) || 0) / 100);
-    cg.dif_desconto = arred(cg.valor_fornecedor - cg.fornecedor_ajustado);
+    // NÃO reaplicar o fator do desconto aqui (v3.25.30): o `valor_venda` gravado
+    // na consignação JÁ é o valor PAGO, líquido de todo desconto — pdv.js grava
+    // `i.total × fator` no ato da venda. Multiplicar por outro fator aqui
+    // descontava o MESMO desconto duas vezes (na compra e no relatório).
+    //   • Valor de tabela = preço CHEIO do cadastro × qtd (sem desconto)
+    //   • Recebido        = valor_venda (o que a loja recebeu de fato)
+    //   • Desconto        = tabela − recebido
+    //   • Repasse/Sobra   = valores JÁ calculados certo na venda (valor_fornecedor,
+    //                       valor_loja) — usados como estão, sem recalcular.
+    cg.tabela   = arred((Number(cg.qtd) || 0) * (Number(cg.preco_venda) || 0));
+    cg.recebido = arred(cg.valor_venda);
+    cg.desconto = arred(cg.tabela - cg.recebido);
+    cg.fornecedor_ajustado = arred(cg.valor_fornecedor);
+    cg.dif_desconto = 0;
     if (v) { v.consignados.push(cg); v.comissao = arred(v.comissao + cg.valor_fornecedor); }
     const g = porFornecedor.get(cg.fornecedor_id) ||
       { fornecedor_id: cg.fornecedor_id, fornecedor: cg.fornecedor,
         pecas: 0, venda: 0, custo: 0, comissao: 0, parte_loja: 0, pendente: 0,
         desconto: 0, recebido: 0, comissao_ajustada: 0 };
     g.pecas += Number(cg.qtd) || 0;
-    g.venda = arred(g.venda + cg.valor_venda);
+    g.venda = arred(g.venda + cg.tabela);   // "Valor de tabela" = preço cheio do cadastro
     g.custo = arred(g.custo + cg.valor_custo);
     g.comissao = arred(g.comissao + cg.valor_fornecedor);
     g.parte_loja = arred(g.parte_loja + cg.valor_loja);

@@ -1321,37 +1321,111 @@ async function abaAtualizacao(corpo) {
           <p style="color:var(--texto-suave)">Baixando atualização — aguarde…</p>`;
 
         btn.textContent = '⏳ Baixando…';
-        // Usa curl.exe (nativo no Windows 10+) via Neutralino.os.execCommand
-        // evita CORS do WebView2 ao baixar de github.com/objetos CDN
+        // ── DOWNLOAD + TROCA ADIADA (v3.25.33) ──────────────────────────────
+        //
+        // POR QUE MUDOU: a versão anterior baixava e tentava mover o arquivo
+        // POR CIMA do resources.neu com o app AINDA RODANDO. No Windows esse
+        // arquivo fica TRAVADO pelo próprio processo (o Neutralino o mantém
+        // aberto para ler as telas), então o `move` falhava — às vezes em
+        // silêncio — e no reinício o app subia com a versão ANTIGA. Era o
+        // clássico "atualizei e voltou pra versão de antes".
+        //
+        // AGORA: baixa para resources.neu.new, deixa um script que ESPERA o
+        // app fechar (o arquivo destrava), aí troca e reabre o app sozinho.
+        // A troca acontece com o arquivo livre — é isso que faz colar.
         // eslint-disable-next-line no-undef
         const basePath = NL_PATH.replace(/\//g, '\\');
-        const tmpFile  = basePath + '\\resources.neu.tmp';
+        const novoFile = basePath + '\\resources.neu.new';
         const destFile = basePath + '\\resources.neu';
+        const bkpFile  = basePath + '\\resources.neu.bak';
+        const exeFile  = basePath + '\\Salgueiro Gestao.exe';
+        const ps1File  = basePath + '\\aplicar-atualizacao.ps1';
+        const logFile  = basePath + '\\atualizacao.log';
         const url = r.downloadUrl;
+
         // eslint-disable-next-line no-undef
         const dl = await Neutralino.os.execCommand(
-          `curl.exe -L -s -o "${tmpFile}" "${url}"`,
+          `curl.exe -L -s -o "${novoFile}" "${url}"`,
           { background: false }
         );
         if (dl.exitCode !== 0) throw new Error('curl falhou (código ' + dl.exitCode + '): ' + (dl.stdErr || '').slice(0, 200));
-        prog.innerHTML = '<p style="color:var(--texto-suave)">📦 Aplicando…</p>';
-        // eslint-disable-next-line no-undef
-        const mv = await Neutralino.os.execCommand(
-          `cmd /c move /Y "${tmpFile}" "${destFile}"`,
-          { background: false }
-        );
-        if (mv.exitCode !== 0) throw new Error('Falha ao mover arquivo: ' + (mv.stdErr || ''));
 
-        // ── 2. GRAVAR O BANCO ANTES DE REINICIAR (v2.9.0) ───────────────────
-        // restartProcess() mata o processo. Se houvesse escrita pendente no
-        // debounce de 300 ms, ela se perdia; pior, se o kill caísse dentro de
-        // uma gravação, o arquivo do banco ficava incompleto.
+        // Confere que o download veio inteiro ANTES de agendar a troca.
+        // Arquivo truncado (queda de rede) deixaria o cliente sem app.
+        let tamanhoBaixado = 0;
+        try {
+          // eslint-disable-next-line no-undef
+          const st = await Neutralino.filesystem.getStats(novoFile);
+          tamanhoBaixado = st.size || 0;
+        } catch { tamanhoBaixado = 0; }
+        const esperado = Number(r.tamanho) || 0;
+        if (tamanhoBaixado < 1024 * 1024 || (esperado && Math.abs(tamanhoBaixado - esperado) > esperado * 0.02)) {
+          try { await Neutralino.filesystem.remove(novoFile); } catch {}
+          throw new Error(`download incompleto (${tamanhoBaixado} bytes de ${esperado || '?'}). Verifique a internet e tente de novo.`);
+        }
+
+        prog.innerHTML = '<p style="color:var(--texto-suave)">📦 Preparando a troca…</p>';
+
+        // Script que faz a troca DEPOIS que este processo morrer.
+        // Tenta por até 60s: enquanto o app estiver vivo, o move falha e ele
+        // repete. Guarda a versão antiga em .bak e, se a troca falhar, devolve
+        // o .bak — o cliente nunca fica sem app.
+        const ps1 = [
+          '$ErrorActionPreference = "SilentlyContinue"',
+          `$novo = '${novoFile.replace(/'/g, "''")}'`,
+          `$dest = '${destFile.replace(/'/g, "''")}'`,
+          `$bkp  = '${bkpFile.replace(/'/g, "''")}'`,
+          `$exe  = '${exeFile.replace(/'/g, "''")}'`,
+          `$log  = '${logFile.replace(/'/g, "''")}'`,
+          '"[{0}] iniciando troca" -f (Get-Date) | Out-File $log -Append',
+          'Start-Sleep -Milliseconds 1500',
+          '$ok = $false',
+          'for ($i = 0; $i -lt 60; $i++) {',
+          '  try {',
+          '    Remove-Item $bkp -Force -EA 0',
+          '    if (Test-Path $dest) { Move-Item $dest $bkp -Force -EA Stop }',
+          '    Move-Item $novo $dest -Force -EA Stop',
+          '    $ok = $true; break',
+          '  } catch {',
+          '    if (Test-Path $bkp) { Move-Item $bkp $dest -Force -EA 0 }',
+          '    Start-Sleep -Seconds 1',
+          '  }',
+          '}',
+          'if ($ok) {',
+          '  "[{0}] troca OK" -f (Get-Date) | Out-File $log -Append',
+          '  Remove-Item $bkp -Force -EA 0',
+          '} else {',
+          '  "[{0}] FALHOU - versao anterior mantida" -f (Get-Date) | Out-File $log -Append',
+          '  if ((Test-Path $bkp) -and !(Test-Path $dest)) { Move-Item $bkp $dest -Force -EA 0 }',
+          '  Remove-Item $novo -Force -EA 0',
+          '}',
+          'Start-Sleep -Milliseconds 500',
+          'Start-Process -FilePath $exe',
+          'Remove-Item $PSCommandPath -Force -EA 0'
+        ].join('\r\n');
+        // eslint-disable-next-line no-undef
+        await Neutralino.filesystem.writeFile(ps1File, ps1);
+
+        // ── GRAVAR O BANCO ANTES DE SAIR ────────────────────────────────────
+        // Sair mata o processo. Sem isto, uma escrita pendente no debounce de
+        // 300 ms se perderia — ou pior, o kill cairia no meio de uma gravação.
         prog.innerHTML = '<p style="color:var(--texto-suave)">💾 Gravando dados antes de reiniciar…</p>';
         await api('backup:salvarAgora');
 
-        prog.innerHTML = '<p style="color:var(--dourado)">✅ Atualização aplicada! Reiniciando…</p>';
+        // Dispara o aplicador SOLTO (background) e sai. Ele espera o processo
+        // morrer, troca o arquivo e reabre o app já na versão nova.
         // eslint-disable-next-line no-undef
-        setTimeout(() => Neutralino.app.restartProcess(), 1200);
+        // `cmd /c start ""` DESACOPLA de verdade: o aplicador vira processo
+        // independente e sobrevive à morte deste app. Sem isso o Windows pode
+        // derrubar o filho junto com o pai e a troca nunca acontece.
+        await Neutralino.os.execCommand(
+          `cmd /c start "" /min powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "${ps1File}"`,
+          { background: true }
+        );
+
+        prog.innerHTML = '<p style="color:var(--dourado)">✅ Atualização baixada! O sistema vai fechar e reabrir sozinho na versão nova…</p>';
+        // eslint-disable-next-line no-undef
+        setTimeout(() => Neutralino.app.exit(0), 1500);
       } catch (e) {
         btn.disabled = false; btn.textContent = '⬇️ Baixar e instalar';
         prog.innerHTML = `<p style="color:var(--vermelho)">❌ Falha: ${esc(e.message)}</p>`;

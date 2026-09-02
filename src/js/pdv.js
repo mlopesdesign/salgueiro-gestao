@@ -146,7 +146,7 @@ function telaVenda(alvo, caixa) {
           <div class="barra">
             <input type="text" id="pdv-busca" placeholder="F2 · Bipe o código ou digite o nome do produto…">
           </div>
-          <div id="pdv-sugestoes"></div>
+          <div id="pdv-sugestoes" style="max-height:42vh;overflow-y:auto;border-radius:0 0 8px 8px"></div>
           <table>
             <thead><tr><th>Item</th><th style="width:70px">Qtd</th><th class="num">Preço</th>
               ${pode('pdv.desconto') ? '<th style="width:90px">Desc. R$</th>' : ''}<th class="num">Total</th><th style="width:36px"></th></tr></thead>
@@ -172,6 +172,8 @@ function telaVenda(alvo, caixa) {
             <div class="tot-total"><span>TOTAL</span><b id="t-total">R$ 0,00</b></div>
             <button class="btn btn-primario btn-bloco" id="pdv-finalizar" style="margin-top:14px;padding:14px">
               Finalizar venda (F10)</button>
+            <button class="btn btn-suave btn-bloco" id="pdv-cancelar" style="margin-top:8px;color:var(--vermelho);font-weight:600">
+              ✕ Cancelar venda</button>
           </div>
         </div>
       </div>
@@ -379,7 +381,7 @@ function telaVenda(alvo, caixa) {
       tela.querySelector('#pdv-cliente').textContent =
         c ? `👤 ${c.nome} — trocar (F4)` : 'Consumidor final — trocar (F4)';
       // Auto-aplicar desconto de categoria
-      if (c && (c.categoria_desconto || 0) > 0 && pode('pdv.desconto')) {
+      if (c && (c.categoria_desconto || 0) > 0 && pode('pdv.desconto') && !tela._vendaCusto) {
         const $tm = tela.querySelector('#t-desc-modo');
         const $td = tela.querySelector('#t-desc');
         if ($tm) $tm.textContent = '%';
@@ -453,6 +455,17 @@ function telaVenda(alvo, caixa) {
       tela._descontoJustificativa || null);
   };
 
+  // cancelar a venda em andamento: esvazia o carrinho e zera cliente/desconto/
+  // pontos/preço de custo. Nada é gravado — a venda só existe no banco depois de
+  // "Confirmar venda" no pagamento. Reconstrói a tela (mesmo caminho do pós-venda).
+  tela.querySelector('#pdv-cancelar').onclick = () => {
+    if (!itens.length && !cliente) { toast('Não há venda para cancelar.'); return; }
+    if (!confirm('Cancelar esta venda? O carrinho será esvaziado e nada é gravado.')) return;
+    itens = []; cliente = null;
+    alvo.innerHTML = ''; viewPdv(alvo);
+    toast('Venda cancelada.');
+  };
+
   // caixa
   tela.querySelector('#b-sangria')?.addEventListener('click', () => modalMovCaixa('sangria'));
   tela.querySelector('#b-supr')?.addEventListener('click', () => modalMovCaixa('suprimento'));
@@ -493,6 +506,8 @@ function telaVenda(alvo, caixa) {
     // Desconto não convive com preço de custo: custo é o piso.
     tela.querySelector('#t-desc').value = '0.00';
     tela._pontosResgate = null;
+    tela._descontoAutorizado = false;     // garante que nenhum desconto residual passe
+    tela._descontoJustificativa = null;
     toast('Venda a preço de custo ligada. Descontos desativados.');
     refresco && refresco();
   };
@@ -786,6 +801,10 @@ function modalPagamento(total, descontoGeral, pontosResgate, aoConcluir, descont
     if (pagamentos.length === 0) return 0;
     const soAvista = pagamentos.every(p => p.forma === 'dinheiro' || p.forma === 'pix');
     if (!soAvista) return 0;
+    // Se alguma forma tem taxa (ex.: PIX com custo), o desconto à vista não se aplica:
+    // a loja já está pagando taxa — não faz sentido dar desconto em cima.
+    const nenhumComTaxa = pagamentos.every(p => taxaDe(p.forma, p.parcelas) === 0);
+    if (!nenhumComTaxa) return 0;
     return Math.round(total * pctAvista * 100) / 100;
   }
 
@@ -1226,7 +1245,7 @@ async function modalVendas() {
       <td class="acoes-linha">
         ${v.status === 'concluida' ? '<button data-a="cupom">Cupom</button>' : ''}
         ${podeDevolver && pode('pdv.devolucao') ? '<button data-a="devolver">↩ Devolver</button>' : ''}
-        ${podeDevolver && pode('pdv.ver') ? '<button data-a="trocar" style="color:var(--vinho)">🔄 Troca</button>' : ''}
+        ${podeDevolver ? '<button data-a="trocar" style="color:var(--vinho)">🔄 Troca</button>' : ''}
         ${v.status === 'concluida' && pode('pdv.cancelar') ? '<button data-a="cancelar" style="color:var(--vermelho)">Cancelar</button>' : ''}
       </td>
     </tr>`;
@@ -1830,7 +1849,7 @@ async function modalHistoricoVendas() {
         <td class="acoes-linha">
           <button data-a="cupom">🖨️ Reimprimir</button>
           ${podeDevolver && pode('pdv.devolucao') ? '<button data-a="devolver">↩️ Devolver</button>' : ''}
-          ${podeDevolver && pode('pdv.ver') ? '<button data-a="trocar" style="color:var(--vinho)">🔄 Troca</button>' : ''}
+          ${podeDevolver ? '<button data-a="trocar" style="color:var(--vinho)">🔄 Troca</button>' : ''}
         </td>
       </tr>`;
     }).join('');

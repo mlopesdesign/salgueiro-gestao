@@ -79,6 +79,19 @@ Toda comunicação tela ↔ backend passa por uma função só:
 
 ## 3. Como trabalhar — regras do Marcio
 
+### GRAPHIFY — obrigatório no início E no fim
+
+`GRAPHIFY.md` é o mapa técnico do projeto, gerado por `tools/graphify.js`.
+
+**No início da sessão, antes de ler qualquer código:** leia o `GRAPHIFY.md`. Ele
+diz onde está cada coisa — módulos, rotas, tabelas, hooks — e evita você sair
+caçando arquivo. Se não existir, gere antes de propor qualquer mudança.
+
+**No fim, antes de fechar a entrega:** rode `node tools/graphify.js` de novo. Um
+GRAPHIFY defasado é pior que nenhum, porque o próximo agente confia nele.
+
+Não é etapa opcional nem "quando sobrar tempo". É a primeira e a última coisa.
+
 ### Diagnóstico
 
 **Nunca teorizar, supor ou "achar".** Todo diagnóstico cita **arquivo e linha**.
@@ -94,6 +107,13 @@ Faltou informação para concluir? Pergunte. Não preencha a lacuna com hipótes
 - **Sem downgrade. Sem versão intermediária quebrada.**
 - **Arquivo completo**, nunca trecho solto para o usuário colar.
 - Interface **100% em português**, escrita para quem não é técnico.
+- **Toda mudança gera um instalável.** Nenhuma entrega é considerada feita sem o
+  `Setup.exe` da versão gerado e copiado para `instalador/` com o número no nome
+  (`Salgueiro Gestao Setup vX.Y.Z.exe`). Vale para correção de uma linha. O
+  `resources.neu` sozinho serve para atualizar quem já tem o app instalado, mas
+  não substitui o instalável — quem instala do zero precisa dele, e alguns
+  defeitos (limpeza de arquivos fora do pacote, registro, atalhos) só o
+  instalador corrige.
 
 ### Versão — a cada correção, sem exceção
 
@@ -105,16 +125,28 @@ Fonte de verdade única: `neutralino.config.json` → `"version"`.
 | Funcionalidade nova | minor | 2.0.5 → 2.1.0 |
 | Quebra de compatibilidade | major | 2.9.0 → 3.0.0 |
 
-A versão aparece em três lugares e os três têm que bater: o config, o fallback
-em `app.js` e o fallback em `ambiente.js`.
+A versão aparece em **cinco** lugares e os cinco têm que bater:
+
+1. `neutralino.config.json` → `"version"` (fonte de verdade)
+2. fallback `APP_VERSION` em `src/js/app.js`
+3. fallback em `src/js/backend/ambiente.js` → `versaoApp()`
+4. `salgueiro-setup.nsi` → texto do diálogo e `DisplayVersion` do registro
+5. bloco novo no topo de `src/js/novidades.js`
+
+Confira os cinco com um `grep` antes de fechar a entrega. Versão dessincronizada
+faz o instalador anunciar uma coisa e o app mostrar outra.
 
 ### Documentação — na mesma entrega, não depois
 
 1. `docs/MANUAL-DO-USUARIO.md` — completo, para leigo: o que é, para que serve,
    passo a passo numerado, e uma linha na tabela de problemas comuns
 2. `docs/GUIA-RAPIDO.md` — o do dia a dia, em uma folha
-3. Regerar os dois PDFs
-4. `node tools/graphify.js` — regera o mapa técnico
+3. Regerar os PDFs com `python3 tools/gerar-manuais.py` — são **seis** arquivos,
+   três por documento: A4 de leitura, revista A5 e o livreto A4 para imprimir
+   (`-LIVRETO-IMPRIMIR-A4`). Depende de `pandoc`, `weasyprint`, `pypdf` e
+   `pymupdf`; a VM montada na máquina do Marcio não tem rede, então rode no
+   ambiente do agente e devolva os arquivos prontos
+4. `node tools/graphify.js` — regera o mapa técnico (obrigatório, ver acima)
 5. Bloco novo no topo de `src/js/novidades.js` (o "o que mudou" que o usuário lê)
 6. Entrada nova em "Versões publicadas" neste arquivo
 
@@ -161,7 +193,102 @@ servidor de verdade — outra arquitetura.
 
 ---
 
-## 5. Build
+## 5. Janela do app — as armadilhas
+
+Cinco defeitos independentes, todos **silenciosos** (nenhum gera erro). Custaram
+sete versões em agosto/2026. Leia antes de encostar em qualquer coisa de janela.
+
+**A chave é `maximize`, não `maximized`.** O config trazia `"maximized": true` e o
+Neutralino descartava sem avisar. Chave inexistente em `modes.window` é ignorada
+em silêncio — confira a lista oficial antes de inventar nome.
+
+**`useSavedState` vem ligado e envenena a instalação.** O Neutralino grava
+tamanho, posição e estado maximizado em `<pasta do app>/.tmp/window_state.config.json`
+e recarrega no boot seguinte. Um estado ruim gravado ali **sobrevive a desinstalar
+e reinstalar**, porque nem o Setup nem o desinstalador limpavam essa pasta. Foi o
+que fez uma versão de código idêntico a uma que funcionava continuar abrindo
+minimizada. Mantenha `"useSavedState": false` e o `RMDir /r "$INSTDIR\.tmp"` no
+`.nsi`.
+
+**`"resizable": false` impede maximizar.** Remove o `WS_THICKFRAME`, e sem esse bit
+o Windows não deixa a janela ficar maximizada — ela trava na barra de tarefas e
+nunca aparece. Para tirar o botão do meio use `WS_MAXIMIZEBOX`, nunca `resizable`.
+
+**O PS1 embutido sobrescreve o PS1 do disco a cada boot.**
+`garantirExtensaoRede()` grava `src/js/backend/servidor-rede-embutido.js` por cima
+de `extensions/rede/servidor-rede.ps1` toda vez que o app sobe. Editar só o `.ps1`
+não adianta: a mudança é revertida na primeira execução. Regere a cópia embutida
+junto (escapando `\`, crase e `${`) e confirme que as duas são idênticas byte a
+byte importando o módulo no Node.
+
+**Não use `Add-Type` para declarar P/Invoke.** Ele compila C# chamando o `csc.exe`,
+que abre janelas pretas de terminal na frente do lojista. Use `Reflection.Emit`
+com `DefinePInvokeMethod` — puro .NET em memória. Em PowerShell 5.1 é
+`[AppDomain]::CurrentDomain.DefineDynamicAssembly`; no 7 é o método estático de
+`AssemblyBuilder`; tente os dois.
+
+**Achar a janela:** `MainWindowHandle` do processo pai volta **vazio** no
+Neutralino. Varra as janelas de topo por Z-order (`GetTopWindow` +
+`GetWindow(GW_HWNDNEXT)`) filtrando por PID visível e com título.
+
+**A janela some mas o ícone fica na barra de tarefas? É o `-32000`.** O WebView2
+grava a posição/tamanho da janela (no `Local State` do EBWebView e no
+`WINDOWPLACEMENT`) e, quando o monitor onde ela estava é desconectado ou a
+resolução muda, o Windows manda a janela para `(-32000,-32000)` — um valor
+**sentinela de "posição inválida"**, não minimizada. A janela existe, tem handle,
+responde a mensagem — só não está em monitor nenhum. **`IsIconic()` e `IsZoomed()`
+MENTEM** nesse estado (dizem `False`/`True` errado); só `GetWindowRect` conta a
+verdade. Diagnostique sempre por `GetWindowRect`, nunca por `IsIconic`/`IsZoomed`.
+Correção: `useSavedState:false` + `SetWindowPlacement` fixando o `rcNormalPosition`
+na área de trabalho (`SPI_GETWORKAREA`) — conserta o retângulo de restauração, não
+só a posição atual. E **nunca** salve a posição da janela à mão (localStorage): é
+onde a posição inválida gruda. Para o caso de o monitor cair com o app aberto,
+vale uma guarda em runtime que detecta `|x|>10000` e recentraliza/re-maximiza.
+(Confirmado em dois apps Neutralino/WebView2 diferentes — é da base Chromium/Edge,
+não de um projeto só.)
+
+**Bug upstream:** [neutralinojs#1281](https://github.com/neutralinojs/neutralinojs/issues/1281),
+aberto. Abrindo com `maximize:true` o `rcNormalPosition` nunca é inicializado, e
+restaurar joga a janela para um tamanho degenerado. Contorne com
+`SetWindowPlacement` amarrando o retângulo à área de trabalho lida de
+`SystemParametersInfo(SPI_GETWORKAREA)` — assim adapta a qualquer resolução.
+
+**Instalador NSIS:** não use salto relativo (`IfFileExists x 0 +2`) dentro de
+blocos `${If}` — eles se desalinham quando se acrescenta checagem e a detecção
+passa a falhar em silêncio. Use `${FileExists}` do LogicLib. A detecção de versão
+anterior tem que checar registro (HKCU e HKLM, com e sem espaço no nome) **e**
+pistas em disco; e `ExecShell` abre terminal, use `nsExec`.
+
+**Diagnóstico:** o PS1 grava `%APPDATA%/SalgueiroGestao/janela.log` com PID, HWND,
+área de trabalho lida e estilo antes/depois em hexa. Leia esse arquivo antes de
+teorizar.
+
+---
+
+## 5b. SQLite no navegador (sql.js) — NUNCA guarde binário grande no banco
+
+O app usa sql.js (SQLite compilado para o navegador). Guardar imagem/base64 nas
+colunas do banco é armadilha séria: cada gravação chama `db.export()`, que
+serializa o banco INTEIRO e precisa de um bloco de memória contíguo de ~2x o
+tamanho do arquivo. No WebView2 do Windows essa alocação enorme falha por
+fragmentação e o SQLite aborta com **"Aborted(OOM). Build with -sASSERTIONS"** —
+mesmo em máquina 64-bit e mesmo que o Node aguente o mesmo banco sem erro (o
+ambiente é que difere). Sintoma clássico: erro ao salvar/ajustar em lojas com
+muitas fotos.
+
+Regra: **binário (foto, PDF, logo do cliente) vai para ARQUIVO no disco**, na
+pasta de dados protegida; o banco guarda só o nome do arquivo. O front recebe a
+imagem resolvida pelo backend (uma função que lê o arquivo e devolve data URI),
+então as telas e os terminais de rede não mudam.
+
+Ao migrar fotos que já estão no banco: backup por CÓPIA DE ARQUIVO (não por
+export — export estoura), extrair cada foto para arquivo, trocar a coluna pelo
+nome, e por fim **`VACUUM`** — sem ele o arquivo continua do mesmo tamanho (o
+SQLite não devolve as páginas liberadas sozinho). O VACUUM depois da migração é
+barato porque os dados vivos já são pequenos. Migração idempotente (flag em
+config) e nunca apague o base64 da linha antes de o arquivo estar gravado.
+
+## 6. Build
 
 ```bash
 npm config set prefix ~/.npm-global
@@ -182,7 +309,7 @@ PDFs dos manuais: `pandoc -f gfm -t html5 -s` → **WeasyPrint**.
 
 ---
 
-## 6. Git
+## 7. Git
 
 **Commit ao fim de cada sessão de trabalho.** Fora do repositório:
 material bruto do cliente (fotos, vídeos, `.psd`), `node_modules/`, `dist/`,

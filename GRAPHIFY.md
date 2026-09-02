@@ -3,7 +3,7 @@
 > Mapa técnico gerado automaticamente por `tools/graphify.js`.
 > **Não edite à mão.** Regere com `node tools/graphify.js` a cada alteração estrutural.
 
-**Versão:** 3.25.0 · **Gerado em:** 2026-08-19
+**Versão:** 3.25.36 · **Gerado em:** 2026-09-02
 **Aplicação:** `br.com.mllopes.salgueirogestao` (Neutralino 6 + WebView2)
 **Cliente:** Boutique do Salgueiro · **Autor:** ML Lopes Design
 
@@ -73,13 +73,13 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `auth.js` | 185 | 8 | autorizarDescontoAdmin, descontoLivre, listarUsuarios, login, salvarUsuario, trocarSenha, verificarAdmin, verificarOperador |
 | `clientes.js` | 223 | 7 | excluirCategoria, exportar, importar, listar, listarCategorias, salvar, salvarCategoria |
 | `compras.js` | 157 | 8 | cancelarCompra, criarCompra, excluirFornecedor, listarCompras, listarFornecedores, obterCompra, receberCompra, salvarFornecedor |
-| `config.js` | 70 | 2 | obter, salvar |
+| `config.js` | 73 | 2 | obter, salvar |
 | `consignacao.js` | 95 | 3 | acertar, listar, resumo |
 | `crediario.js` | 108 | 5 | aniversariantes, excluirCliente, obterCliente, parcelasAbertas, receberParcela |
 | `dashboard.js` | 214 | 2 | resumo |
 | `devolucoes.js` | 127 | 3 | itensVenda, listar, registrar |
-| `estoque.js` | 143 | 5 | buscarVariacoes, kardex, listarCompleto, movimentar, reposicao |
-| `estoques.js` | 289 | 14 | aplicar, arred, conteudo, daLoja, desativar, garantirDaLoja, listar, listarTransferencias, +7 |
+| `estoque.js` | 152 | 5 | buscarVariacoes, kardex, listarCompleto, movimentar, reposicao |
+| `estoques.js` | 335 | 15 | aplicar, arred, conteudo, daLoja, desativar, garantirDaLoja, listar, listarTransferencias, +8 |
 | `financeiro.js` | 138 | 5 | baixar, excluir, fluxo, listar, salvar |
 | `licenca.js` | 288 | 25 | DEV_USUARIO, MODULOS, NOME_PLANO, PLANOS, SETORES, devAplicar, devEntrar, devRemover, +14 |
 | `logo-default.js` | 4 | 0 | LOGO_DEFAULT |
@@ -89,9 +89,9 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `pdv.js` | 548 | 12 | abrirCaixa, caixaAtual, cancelarVenda, fecharCaixa, listarVendas, listarVendasGeral, movimentoCaixa, obterVenda, +2 |
 | `permissoes.js` | 94 | 3 | CATALOGO, DEFAULTS, TODAS, efetivas, normalizar, pode |
 | `pontos.js` | 110 | 9 | ajustar, calcularGanho, calcularResgate, creditar, debitar, getConfig, historico, saldo, +1 |
-| `produtos.js` | 230 | 7 | excluirCategoria, excluirProduto, listarCategorias, listarProdutos, obterProduto, salvarCategoria, salvarProduto |
+| `produtos.js` | 253 | 7 | excluirCategoria, excluirProduto, listarCategorias, listarProdutos, obterProduto, salvarCategoria, salvarProduto |
 | `rede.js` | 150 | 3 | SOMENTE_LOCAL, imprimir, iniciar, listarImpressoras, parar, preparar, status |
-| `relatorios.js` | 1412 | 21 | TAXAS_PADRAO, comprasAcompanhadas, consignadosMensal, curvaAbc, estoqueDetalhado, eventosVenda, pecasParadas, ranking, +5 |
+| `relatorios.js` | 1419 | 21 | TAXAS_PADRAO, comprasAcompanhadas, consignadosMensal, curvaAbc, estoqueDetalhado, eventosVenda, pecasParadas, ranking, +5 |
 | `trocas.js` | 252 | 2 | DESTINOS, registrar |
 | `updater.js` | 50 | 1 | verificarAtualizacao |
 | `util.js` | 68 | 4 | auditar, codigoInterno, dvEan13, hashSenha, verificarSenha |
@@ -101,34 +101,34 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 
 | Arquivo | Linhas | Funções |
 |---|---|---|
-| `ambiente.js` | 237 | 3 |
+| `ambiente.js` | 316 | 6 |
 | `db.js` | 565 | 5 |
-| `servidor-rede-embutido.js` | 440 | 15 |
-| `servidor.js` | 2395 | 14 |
+| `servidor-rede-embutido.js` | 612 | 17 |
+| `servidor.js` | 2679 | 15 |
 
 ## 6. Telas (`src/js`)
 
 | Arquivo | Linhas | Exporta |
 |---|---|---|
-| `app.js` | 1659 | EM_REDE, api, aplicarTema, ehAdmin, el |
+| `app.js` | 1694 | EM_REDE, api, aplicarTema, ehAdmin, el |
 | `catalogo.js` | 262 | viewCatalogo |
 | `clientes.js` | 528 | viewClientes |
 | `compras.js` | 228 | viewCompras |
-| `configuracoes.js` | 1421 | viewConfiguracoes |
-| `estoque.js` | 343 | abrirEtiquetas, ean13Svg, viewEstoque |
-| `estoques.js` | 607 | viewEstoques |
+| `configuracoes.js` | 1527 | viewConfiguracoes |
+| `estoque.js` | 562 | abrirEtiquetas, ean13Svg, viewEstoque |
+| `estoques.js` | 803 | viewEstoques |
 | `etiquetas.js` | 146 | abrirEtiquetasLote |
 | `financeiro.js` | 261 | viewFinanceiro |
 | `mensagens.js` | 758 | abrirBalao, encerrarTelaMensagens, iniciarMensagens, pararMensagens, viewMensagens |
 | `neutralino.js` | 2 | — |
-| `novidades.js` | 618 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
-| `pdv.js` | 1889 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
+| `novidades.js` | 840 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
+| `pdv.js` | 1908 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
 | `ranking.js` | 361 | viewRanking |
 | `relatorios.js` | 1690 | viewRelatorios |
 
 ---
 
-## 7. Rotas da API (149)
+## 7. Rotas da API (152)
 
 Toda comunicação tela ↔ backend passa por `api('canal:acao', payload)`.
 A coluna **Permissão** vem de `PERMISSAO_ROTA` em `servidor.js` — sem entrada ali,
@@ -147,7 +147,7 @@ a rota exige apenas sessão válida.
 
 | Canal | Permissão | Destino |
 |---|---|---|
-| `auth:login` | — | `auth.login(db, p.usuario, p.senha)` |
+| `auth:login` | — | `{` |
 | `auth:logout` | — | `({ ok: true })` |
 | `auth:sessao` | — | `({ ok: true, usuario: sessao.usuario })` |
 | `auth:listarUsuarios` | `usuarios.gerenciar` | `auth.listarUsuarios(db)` |
@@ -273,7 +273,7 @@ a rota exige apenas sessão válida.
 
 | Canal | Permissão | Destino |
 |---|---|---|
-| `estoque:buscar` | `estoque.ver` | `estoque.buscarVariacoes(db, p.termo)` |
+| `estoque:buscar` | `estoque.ver` | `{` |
 | `estoque:movimentar` | `estoque.movimentar` | `estoque.movimentar(db, p, sessao.usuario)` |
 | `estoque:kardex` | `estoque.ver` | `estoque.kardex(db, p \|\| {})` |
 | `estoque:reposicao` | `estoque.ver` | `estoque.reposicao(db)` |
@@ -292,6 +292,7 @@ a rota exige apenas sessão válida.
 | `estoques:variacoesNoLocal` | `estoque.ver` | `estoques.variacoesNoLocal(db, p \|\| {})` |
 | `estoques:porVariacao` | `estoque.ver` | `({ ok: true, locais: estoques.porVariacao(db, p.variacao_id)…` |
 | `estoques:transferir` | `estoque.movimentar` | `estoques.transferir(db, p \|\| {}, sessao.usuario)` |
+| `estoques:transferirTudo` | `estoque.movimentar` | `estoques.transferirTudo(db, p \|\| {}, sessao.usuario)` |
 | `estoques:transferencias` | `estoque.ver` | `estoques.listarTransferencias(db, p \|\| {})` |
 | `estoques:romaneio` | `estoque.ver` | `estoques.obterTransferencia(db, p.id)` |
 | `estoques:conteudoXlsx` | `estoque.ver` | `{` |
@@ -313,6 +314,13 @@ a rota exige apenas sessão válida.
 | `fornecedores:listar` | `compras.ver` | `compras.listarFornecedores(db, p \|\| {})` |
 | `fornecedores:salvar` | `compras.gerenciar` | `compras.salvarFornecedor(db, p, sessao.usuario)` |
 | `fornecedores:excluir` | `compras.gerenciar` | `compras.excluirFornecedor(db, p.id, sessao.usuario)` |
+
+### `fotos:*`
+
+| Canal | Permissão | Destino |
+|---|---|---|
+| `fotos:obter` | — | `{` |
+| `fotos:obterVarias` | — | `{` |
 
 ### `licenca:*`
 
@@ -385,9 +393,9 @@ a rota exige apenas sessão válida.
 
 | Canal | Permissão | Destino |
 |---|---|---|
-| `produtos:listar` | `produtos.ver` | `produtos.listarProdutos(db, p \|\| {})` |
-| `produtos:obter` | `produtos.ver` | `produtos.obterProduto(db, p.id)` |
-| `produtos:salvar` | `produtos.editar` | `produtos.salvarProduto(db, p, sessao.usuario)` |
+| `produtos:listar` | `produtos.ver` | `{` |
+| `produtos:obter` | `produtos.ver` | `{` |
+| `produtos:salvar` | `produtos.editar` | `{` |
 | `produtos:excluir` | `produtos.excluir` | `produtos.excluirProduto(db, p.id, sessao.usuario)` |
 
 ### `rede:*`

@@ -512,6 +512,15 @@ Crédito parcelado. Salve e gere o relatório de evento de novo.
 | A comissão do consignado parece alta | Não é % do preço: é o custo da peça de volta **mais** a fatia do lucro |
 | Recibo "Este evento" mostrava vendas erradas | Corrigido na 3.24.0. Atualize o aplicativo |
 | Fatia do lucro do consignado com centavos a mais | Corrigido na 3.24.0. Atualize o aplicativo |
+| O programa abre pequeno ou some na barra de tarefas | Corrigido na 3.25.19. Ele volta a abrir sempre em tela cheia |
+| O recibo do consignado não batia com o relatório | Corrigido na 3.25.20 — os dois mostram os mesmos valores |
+| No estoque digitei 20 e virou 120 | Corrigido na 3.25.20: os campos não vêm mais com número pré-preenchido |
+| O estoque abria vazio | Desde a 3.25.21 abre com a lista completa em ordem alfabética; os botões de movimentar aparecem só para o administrador |
+| Erro "Aborted(OOM)" ao ajustar estoque | Corrigido na 3.25.22 — as fotos saíram do banco; conversão automática com backup |
+| Ver a foto da peça no estoque | Desde a 3.25.22 aparece a miniatura ao lado de cada peça |
+| Transferi tudo e a origem ficou negativa | Corrigido na 3.25.25 — "Levar tudo" zera a origem de vez; e dá para editar a quantidade na lista |
+| Transferir tudo ou vários de uma vez | Na transferência: **📦 Levar tudo da origem** ou **☑️ Selecionar da lista** (marque com caixinhas). Desde a 3.25.23 |
+| Cliquei no botão do meio da barra de título e a tela sumiu | Corrigido na 3.25.19: esse botão foi desabilitado. Use só **_** e **X** |
 | Quero tirar a qtd de peças e o valor bruto dos cards | Configurações → **📊 Relatórios** → desative **Exibir detalhe nos cards** |
 | "Produtos vendidos" soma mais que o faturamento | Desde a 3.9.0 a lista fecha no mesmo valor do topo, com cortesias e descontos abatidos |
 | Não acho o botão de preço de custo | Barra do PDV: **🏷️ Preço de custo** — ou **F8** |
@@ -534,4 +543,4 @@ lista todas as versões e o que cada uma trouxe. A sua aparece com o selo verde
 
 **Suporte:** ML Lopes Design — mlopesdesign@gmail.com
 
-*Guia referente à versão 3.19.0*
+*Guia referente à versão 3.25.25*

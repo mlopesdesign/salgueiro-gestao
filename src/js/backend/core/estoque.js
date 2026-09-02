@@ -10,9 +10,13 @@ function buscarVariacoes(db, termo) {
   const linhas = db.prepare(`
     SELECT v.id, v.cor, v.tamanho, v.codigo_barras, v.estoque,
            p.id AS produto_id, p.nome AS produto, p.referencia, p.preco_custo, p.preco_venda,
-           COALESCE(v.foto, p.foto) AS foto
+           COALESCE(v.foto, p.foto) AS foto,
+           COALESCE(p.consignado,0) AS consignado,
+           p.fornecedor_id,
+           COALESCE(fo.nome,'') AS fornecedor
     FROM variacoes v
     JOIN produtos p ON p.id = v.produto_id
+    LEFT JOIN fornecedores fo ON fo.id = p.fornecedor_id
     WHERE v.ativo = 1 AND p.ativo = 1
       AND (v.codigo_barras = ? OR p.nome LIKE ? OR p.referencia LIKE ?)
     ORDER BY p.nome, v.cor, v.tamanho
@@ -125,10 +129,15 @@ function listarCompleto(db) {
     SELECT p.id AS produto_id, p.nome, p.referencia,
            COALESCE(c.nome,'Sem categoria') AS categoria,
            v.id AS variacao_id, v.cor, v.tamanho, v.codigo_barras,
-           v.estoque, p.preco_custo, p.preco_venda
+           v.estoque, p.preco_custo, p.preco_venda,
+           COALESCE(v.foto, p.foto) AS foto,
+           COALESCE(p.consignado,0) AS consignado,
+           p.fornecedor_id,
+           COALESCE(fo.nome,'') AS fornecedor
     FROM variacoes v
     JOIN produtos p ON p.id = v.produto_id
     LEFT JOIN categorias c ON c.id = p.categoria_id
+    LEFT JOIN fornecedores fo ON fo.id = p.fornecedor_id
     WHERE v.ativo = 1 AND p.ativo = 1
     ORDER BY p.nome, v.cor, v.tamanho
   `).all();

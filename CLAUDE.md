@@ -44,6 +44,8 @@ Sistema de gestão completo para a Boutique do Salgueiro (loja física de roupas
 Migrar da V1 (Electron, build quebrava) para **Neutralino.js 6** (binário pré-compilado + WebView2), reaproveitando o HTML/CSS/JS. Entregáveis: portable (Salgueiro Gestao.exe + resources.neu) e instalador NSIS, ambos gerados pelo Claude no sandbox — zero ferramentas na máquina do Marcio.
 
 ## Regras (importantes!)
+- **GRAPHIFY é obrigatório no INÍCIO e no FIM de toda sessão.** Comece lendo o `GRAPHIFY.md` — é o mapa do projeto e evita caçar arquivo. Termine rodando `node tools/graphify.js` para regerá-lo. Mapa defasado é pior que nenhum, porque o próximo agente confia nele.
+- **Toda mudança gera um instalável.** Nenhuma entrega está feita sem o `Setup.exe` da versão em `instalador/Salgueiro Gestao Setup vX.Y.Z.exe`. Vale para correção de uma linha. O `resources.neu` atualiza quem já tem o app, mas não substitui o instalável: quem instala do zero precisa dele, e defeitos que envolvem registro, atalhos ou limpeza de arquivos fora do pacote só o instalador corrige.
 - Pasta original E:\Projetos\LF SALGUEIRO\LOJA FISICA SALGUEIRO = versão aprovada pelo cliente — NUNCA modificar.
 - Marcio NÃO executa .bat nem passos manuais. Claude entrega pronto; só pedir algo se impossível fazer sozinho.
 - SEMPRE entregar PORTABLE para validação antes do instalador.
@@ -115,6 +117,13 @@ some, e pisca o fundo ao voltar pela barra de tarefas. Contornado no PS1 com
 `SetWindowPlacement`, amarrando `rcNormalPosition` à área de trabalho real lida via
 `SystemParametersInfo(SPI_GETWORKAREA)` — adapta a qualquer resolução.
 
+**A janela some mas fica na barra de tarefas? É o `-32000`.** WebView2 grava a
+posição e, com monitor desconectado ou resolução trocada, o Windows manda a janela
+para `(-32000,-32000)` — sentinela de posição inválida, NÃO minimizada. `IsIconic`
+e `IsZoomed` mentem; só `GetWindowRect` conta a verdade. Já mitigado por
+`useSavedState:false` + `SetWindowPlacement` na área de trabalho. Confirmado em dois
+apps Neutralino/WebView2 — é da base Chromium, não de um projeto só.
+
 **Diagnóstico:** o PS1 grava `%APPDATA%\SalgueiroGestao\janela.log` com PID, HWND
 encontrado, área de trabalho lida e o estilo antes/depois em hexa. Ler esse arquivo
 ANTES de teorizar sobre problema de janela.
@@ -124,6 +133,17 @@ espaço no nome) + 10 pistas em disco, usando `${FileExists}` do LogicLib. **Nã
 saltos relativos (`IfFileExists x 0 +2`) dentro de blocos `${If}`** — eles se
 desalinham quando se acrescenta checagem e a detecção passa a falhar em silêncio.
 Validado no Wine em 7 cenários.
+
+## Banco: nunca guardar foto/binário nas colunas (causa OOM)
+
+sql.js serializa o banco inteiro em cada `db.export()` (save), pedindo ~2x o
+tamanho em memória contígua. No WebView2 isso falha e dá **"Aborted(OOM)"** —
+foi o que travava o ajuste de estoque em loja com muitas fotos (v3.25.22).
+Fotos agora vão para ARQUIVOS em `dados/fotos/` (cofre Roaming, update não
+apaga); o banco guarda só o nome, e o backend resolve nome→data URI na leitura
+(`ambiente.lerFotoArquivo`) — front e terminais inalterados. Migração one-time
+em servidor.js: backup por cópia de arquivo, extrai cada foto, e **VACUUM** no
+fim (sem VACUUM o .db não encolhe). Idempotente por flag em config.
 
 ## Pipeline de build (reconstruir a cada sessão)
 1. npm config set prefix ~/.npm-global && npm install -g @neutralinojs/neu (node não resolve DNS: baixar binários com CURL, nunca neu update).
@@ -214,6 +234,10 @@ Regra: **qualquer alteração em src/ que gere novo build = bump de versão.**
 1. `neutralino.config.json` → atualizar `"version"`
 2. `src/js/app.js` linha com `let APP_VERSION =` → mesmo valor (fallback)
 3. `src/js/backend/ambiente.js` fallback em `versaoApp()` → mesmo valor
+3b. `salgueiro-setup.nsi` → texto do diálogo e `DisplayVersion` do registro
+3c. `src/js/novidades.js` → bloco novo NO TOPO
+    (confira os cinco com um grep antes de fechar: versão dessincronizada faz o
+     instalador anunciar uma coisa e o app mostrar outra)
 4. Rebuild `resources.neu` (pipeline normal do CLAUDE.md)
 5. Copiar para `instalador/` com nome `Salgueiro Gestao Setup vX.Y.Z.exe` (Portable/ está descontinuado — não usar)
 6. Fornecer dados da GitHub Release na mesma resposta, no formato exato abaixo — OBRIGATÓRIO ao fim de todo build:

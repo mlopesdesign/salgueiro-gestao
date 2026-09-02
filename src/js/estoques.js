@@ -35,6 +35,13 @@ function estilo() {
     .es-tab th, .es-tab td { padding:6px 10px; border-bottom:1px solid var(--borda); font-size:13px }
     .es-tab th { font-size:11px; text-transform:uppercase; opacity:.7; text-align:left }
     .es-itens-tr td { padding:4px 10px }
+    /* Miniatura na listagem do local (v3.25.34) */
+    .es-td-foto { width:52px }
+    .es-tab td.es-td-foto { padding:3px 6px }
+    .es-thumb { width:42px; height:42px; object-fit:cover; border-radius:6px;
+      border:1px solid var(--borda); display:block; background:var(--creme,#faf7f2) }
+    .es-thumb-vazio { display:flex; align-items:center; justify-content:center;
+      font-size:18px; opacity:.45 }
     .num { text-align:right }
     .tr-bloco{border:1px solid var(--borda);border-radius:8px;margin-bottom:10px;overflow:hidden}
   .tr-bloco-cab{display:flex;justify-content:space-between;align-items:center;gap:10px;
@@ -50,7 +57,12 @@ function estilo() {
   .es-busca-res { border:1px solid var(--borda); border-radius:8px; max-height:200px; overflow-y:auto; margin-top:4px }
     .es-busca-res div { padding:7px 10px; cursor:pointer; font-size:13px; border-bottom:1px solid var(--borda) }
     .es-busca-res div:hover { background:rgba(0,0,0,.05) }
-    @media print { .es-nao-imprime { display:none !important } }`;
+    @media print {
+      .es-nao-imprime { display:none !important }
+      /* O balanço impresso é lista de conferência: foto só gasta tinta e
+         empurra linhas para outra folha. Fica na tela, sai da impressão. */
+      .es-td-foto { display:none !important }
+    }`;
   document.head.appendChild(st);
 }
 
@@ -247,6 +259,12 @@ function formTransferir(origemId, aoConcluir) {
         Ao escolher, aparecem todas as cores e tamanhos com o que há na origem — você digita a quantidade de cada um.
       </small>
     </div>
+    <div class="tr-atalhos" style="display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 10px">
+      <button type="button" class="btn btn-suave" id="tr-lista"
+        title="Ver tudo o que há na origem e marcar o que quer levar">☑️ Selecionar da lista</button>
+      <button type="button" class="btn btn-suave" id="tr-tudo-origem"
+        title="Colocar no romaneio TODAS as peças da origem, no saldo cheio">📦 Levar tudo da origem</button>
+    </div>
     <div id="tr-blocos"><div class="vazio">Nenhum produto escolhido ainda.</div></div>
     <div class="tr-resumo" id="tr-resumo" style="display:none"></div>
     <div class="campo" style="margin-top:10px"><label>Observação (aparece no romaneio)</label>
@@ -293,11 +311,16 @@ function formTransferir(origemId, aoConcluir) {
 
   // trocar a origem recarrega os saldos de todos os produtos já escolhidos
   m.querySelector('#tr-origem').addEventListener('change', async () => {
+    m.querySelector('.tr-checklist')?.remove(); // lista aberta ficou de outra origem
     const ids = blocos.map(b => b.produto.id);
     blocos.length = 0;
     for (const id of ids) await carregarProduto(id, true);
     desenhar();
   });
+
+  // atalhos: lista com checkbox e "levar tudo da origem"
+  m.querySelector('#tr-lista').onclick = abrirChecklist;
+  m.querySelector('#tr-tudo-origem').onclick = levarTudoOrigem;
 
   async function carregarProduto(produtoId, silencioso) {
     if (blocos.some(b => b.produto.id === produtoId)) {
@@ -312,6 +335,151 @@ function formTransferir(origemId, aoConcluir) {
       produto: r.produto,
       variacoes: r.variacoes.map(v => ({ ...v, qtd: '' }))
     });
+  }
+
+  // Agrupa o conteúdo da origem (variação a variação) em blocos por produto,
+  // já com a quantidade cheia (tudo o que há na origem).
+  function agruparConteudo(itens) {
+    const porProd = new Map();
+    for (const it of itens) {
+      if (!porProd.has(it.produto_id)) {
+        porProd.set(it.produto_id, {
+          produto: { id: it.produto_id, nome: it.produto, referencia: it.referencia },
+          variacoes: [], pecas: 0
+        });
+      }
+      const g = porProd.get(it.produto_id);
+      g.variacoes.push({
+        id: it.variacao_id, cor: it.cor, tamanho: it.tamanho,
+        disponivel: it.qtd, total_geral: it.total_geral, qtd: it.qtd
+      });
+      g.pecas += it.qtd;
+    }
+    return [...porProd.values()];
+  }
+
+  // 📦 Levar TUDO da origem: ESVAZIA a origem para o destino. A origem fica
+  // ZERADA (inclusive peças com saldo negativo, que a transferência normal
+  // deixava para trás fazendo a origem terminar negativa). Vai direto para o
+  // backend (estoques:transferirTudo), não passa pela grade item-a-item.
+  async function levarTudoOrigem() {
+    const destinoId = Number(m.querySelector('#tr-destino').value);
+    if (destinoId === origemAtual()) { toast('Origem e destino precisam ser diferentes.', true); return; }
+    const c = await api('estoques:conteudo', { estoque_id: origemAtual() });
+    if (!c.ok) { toast(c.erro, true); return; }
+    if (!c.itens || !c.itens.length) { toast(`Não há peças em ${nomeOrigem()}.`, true); return; }
+    const neg = c.itens.filter(i => i.qtd < 0).length;
+    const totPecas = c.itens.reduce((s, i) => s + i.qtd, 0);
+    const destNome = (locais.find(l => l.id === destinoId) || {}).nome || 'o destino';
+    let msg = `Isto vai ESVAZIAR "${nomeOrigem()}": todas as peças vão para "${destNome}" e a origem fica ZERADA.\n\n`
+            + `${c.itens.length} item(ns), ${totPecas} peça(s) no total.`;
+    if (neg) msg += `\n\n⚠️ ${neg} peça(s) estão com saldo NEGATIVO na origem (erro de estoque anterior). `
+                 +  `Elas também vão para o destino para a origem poder zerar — depois vale conferir o estoque dessas peças.`;
+    if (!confirm(msg + '\n\nConfirmar?')) return;
+
+    const r = await api('estoques:transferirTudo', {
+      origem_id: origemAtual(), destino_id: destinoId, obs: m.querySelector('#tr-obs').value
+    });
+    if (!r.ok) { toast(r.erro, true); return; }
+    document.querySelector('.modal-fundo')?.remove();
+    aoConcluir();
+    toast(`"${r.origem}" esvaziada — romaneio #${r.id}. Clique para ver.`, false, () => viewRomaneio(r.id));
+  }
+
+  // ☑️ Selecionar da lista: mostra tudo o que há na origem com caixas de marcar.
+  async function abrirChecklist() {
+    const r = await api('estoques:conteudo', { estoque_id: origemAtual() });
+    if (!r.ok) { toast(r.erro, true); return; }
+    if (!r.itens || !r.itens.length) { toast(`Não há peças em ${nomeOrigem()}.`, true); return; }
+    const grupos = agruparConteudo(r.itens);
+    const jaNoRomaneio = new Set(blocos.map(b => b.produto.id));
+
+    const cl = el(`<div class="tr-checklist" style="border:1px solid var(--borda,#e2ded9);border-radius:10px;padding:10px;margin:2px 0 10px;background:var(--fundo-suave,#faf8f6)">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+        <b>Peças em ${esc(nomeOrigem())}</b>
+        <input class="cl-filtro" placeholder="filtrar por nome ou referência…" style="flex:1;min-width:160px">
+        <label style="display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:13px">
+          <input type="checkbox" class="cl-todos"> Marcar todos</label>
+      </div>
+      <div class="cl-itens" style="max-height:44vh;overflow:auto"></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
+        <button type="button" class="btn btn-suave cl-cancelar">Fechar</button>
+        <button type="button" class="btn cl-add" style="background:var(--vermelho);color:#fff">Adicionar selecionados</button>
+      </div>
+    </div>`);
+
+    const wrapItens = cl.querySelector('.cl-itens');
+    const linhas = grupos.map(g => {
+      const jaTem = jaNoRomaneio.has(g.produto.id);
+      // só é transferível o que há de saldo POSITIVO na origem
+      const dispPos = g.variacoes.reduce((s, v) => s + (v.disponivel > 0 ? v.disponivel : 0), 0);
+      const bloq = jaTem || dispPos <= 0;
+      const row = el(`<div class="cl-linha" style="display:flex;align-items:center;gap:10px;padding:7px 4px;border-bottom:1px solid var(--borda,#eee);${bloq ? 'opacity:.5' : ''}">
+        <input type="checkbox" class="cl-check" ${bloq ? 'disabled' : ''}>
+        <span style="flex:1"><b>${esc(g.produto.nome)}</b>${g.produto.referencia ? ` <small style="opacity:.6">Ref. ${esc(g.produto.referencia)}</small>` : ''}
+          ${jaTem ? '<small style="opacity:.7"> · já no romaneio</small>' : dispPos <= 0 ? '<small style="opacity:.7"> · sem saldo positivo</small>' : ''}
+          <small style="opacity:.6"> · ${g.variacoes.length} var.</small></span>
+        <span style="display:flex;align-items:center;gap:6px;white-space:nowrap">
+          <input type="number" class="cl-qtd" min="0" max="${dispPos}" step="1" value="${dispPos}"
+            ${bloq ? 'disabled' : ''} style="width:66px;text-align:right" onfocus="this.select()"
+            title="Quantas peças transferir deste produto">
+          <small style="opacity:.6">de ${dispPos}</small></span>
+      </div>`);
+      row._grupo = g;
+      row._dispPos = dispPos;
+      row._busca = (g.produto.nome + ' ' + (g.produto.referencia || '')).toLowerCase();
+      // marcar ao digitar a quantidade (se ainda não marcado)
+      const q = row.querySelector('.cl-qtd');
+      if (q) q.addEventListener('input', () => {
+        const chk = row.querySelector('.cl-check');
+        if (!chk.disabled && Number(q.value) > 0) chk.checked = true;
+      });
+      wrapItens.appendChild(row);
+      return row;
+    });
+
+    cl.querySelector('.cl-filtro').addEventListener('input', (e) => {
+      const t = e.target.value.trim().toLowerCase();
+      for (const row of linhas) row.style.display = (!t || row._busca.includes(t)) ? '' : 'none';
+    });
+    cl.querySelector('.cl-todos').addEventListener('change', (e) => {
+      for (const row of linhas) {
+        if (row.style.display === 'none') continue;
+        const chk = row.querySelector('.cl-check');
+        if (!chk.disabled) chk.checked = e.target.checked;
+      }
+    });
+    cl.querySelector('.cl-cancelar').onclick = () => cl.remove();
+    cl.querySelector('.cl-add').onclick = () => {
+      let add = 0, pecas = 0;
+      for (const row of linhas) {
+        const chk = row.querySelector('.cl-check');
+        if (!chk.checked || chk.disabled) continue;
+        const g = row._grupo;
+        // quantidade pedida (limitada ao saldo positivo disponível)
+        let pedido = Math.max(0, Math.floor(Number(row.querySelector('.cl-qtd').value) || 0));
+        pedido = Math.min(pedido, row._dispPos);
+        if (pedido <= 0) continue;
+        // distribui a quantidade pedida entre as variações com saldo positivo
+        let resta = pedido;
+        const variacoes = g.variacoes.map(v => {
+          let q = 0;
+          if (v.disponivel > 0 && resta > 0) { q = Math.min(v.disponivel, resta); resta -= q; }
+          return { ...v, qtd: q === 0 ? '' : q };
+        });
+        blocos.push({ produto: g.produto, variacoes });
+        add++; pecas += pedido;
+      }
+      cl.remove();
+      if (!add) { toast('Marque os produtos e informe a quantidade.', true); return; }
+      desenhar();
+      toast(`${add} produto(s), ${pecas} peça(s) adicionada(s) — revise e confirme.`);
+    };
+
+    // remove uma lista aberta antes e insere a nova acima dos blocos
+    m.querySelector('.tr-checklist')?.remove();
+    $blocos.parentNode.insertBefore(cl, $blocos);
+    setTimeout(() => { try { cl.querySelector('.cl-filtro').focus(); } catch {} }, 40);
   }
 
   function totalGeral() {
@@ -517,7 +685,32 @@ export async function viewEstoques(alvo) {
     $det.innerHTML = '<div class="painel"><div class="vazio">Carregando…</div></div>';
     const r = await api('estoques:conteudo', { estoque_id: selecionado });
     if (!r.ok) { $det.innerHTML = `<div class="painel"><div class="vazio">${esc(r.erro)}</div></div>`; return; }
+    // Miniatura sob demanda (v3.25.34): o banco guarda o NOME do arquivo, e a
+    // imagem só é buscada quando a linha entra na tela. Um local com centenas
+    // de peças não carrega centenas de fotos de uma vez.
+    const _obsFoto = ('IntersectionObserver' in window)
+      ? new IntersectionObserver((ents, obs) => {
+          for (const e of ents) {
+            if (!e.isIntersecting) continue;
+            const img = e.target; obs.unobserve(img);
+            const nome = img.dataset.foto;
+            if (!nome) continue;
+            api('fotos:obter', { nome }).then(x => {
+              if (x && x.ok && x.foto) img.src = x.foto;
+            }).catch(() => {});
+          }
+        }, { root: null, rootMargin: '200px' })
+      : null;
+    const celFoto = (foto) => {
+      if (foto && String(foto).startsWith('data:image/'))
+        return `<td class="es-td-foto"><img class="es-thumb" src="${foto}"></td>`;
+      if (foto)
+        return `<td class="es-td-foto"><img class="es-thumb" data-foto="${esc(String(foto))}"
+                  src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E"></td>`;
+      return `<td class="es-td-foto"><span class="es-thumb es-thumb-vazio">👗</span></td>`;
+    };
     const linhas = r.itens.map(i => `<tr>
+      ${celFoto(i.foto)}
       <td>${esc(i.produto)}<br><small style="opacity:.6">${esc(i.categoria)}${i.referencia ? ' · ' + esc(i.referencia) : ''}</small></td>
       <td>${esc([i.cor, i.tamanho].filter(x => x && x !== 'Única' && x !== 'U').join(' · ') || '—')}</td>
       <td class="num"><b>${i.qtd}</b></td>
@@ -531,10 +724,13 @@ export async function viewEstoques(alvo) {
         <button class="btn btn-suave es-nao-imprime" id="es-xlsx">📊 Excel</button>
       </div>
       <table class="es-tab"><thead><tr>
+        <th class="es-td-foto">Foto</th>
         <th>Produto</th><th>Cor / Tam.</th><th class="num">Neste estoque</th>
         <th class="num">Total Salgueiro</th><th class="num">Valor de venda</th>
-      </tr></thead><tbody>${linhas || '<tr><td colspan="5" class="vazio">Este estoque está vazio.</td></tr>'}</tbody></table>
+      </tr></thead><tbody>${linhas || '<tr><td colspan="6" class="vazio">Este estoque está vazio.</td></tr>'}</tbody></table>
     </div>`);
+    // liga o carregamento sob demanda nas miniaturas recém-desenhadas
+    if (_obsFoto) bloco.querySelectorAll('img[data-foto]').forEach(img => _obsFoto.observe(img));
     bloco.querySelector('#es-print').onclick = () => {
       toast('Para enviar por WhatsApp ou e-mail, escolha "Salvar como PDF".');
       window.print();

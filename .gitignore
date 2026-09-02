@@ -35,3 +35,18 @@ recursos/*.psd
 
 # Sessão local — cada máquina tem o seu
 .session-lock
+
+# Arquivo de limpeza temporário — não rastrear
+_to_delete/
+
+# Dados de importação e backups operacionais
+*-importar.xlsx
+backups/
+testes/
+
+# Binários do runtime Neutralino (regenerados pelo download)
+neutralino-linux_x64
+neutralino-win_x64.exe
+
+# Instaladores compilados — não entram no git (binários grandes)
+instalador/*.exe

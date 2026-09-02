@@ -15,7 +15,7 @@ import { viewCatalogo } from './catalogo.js';
 const $app = document.getElementById('app');
 let usuario = null;
 let categoriasCache = [];
-let APP_VERSION = '3.25.19'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
+let APP_VERSION = '3.25.36'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
 
 // API dupla: no aplicativo usa IPC (preload); num terminal em rede (navegador),
 // conversa com o servidor do computador principal via HTTP com token de sessão.
@@ -880,6 +880,7 @@ async function modalExportarLista() {
       <div class="campo">
         <label>Colunas da lista</label>
         <div class="exp-chks">
+          ${chk('cl-foto', 'Foto (só no PDF)', false)}
           ${chk('cl-ref', 'Referência', true)}
           ${chk('cl-cat', 'Categoria', true)}
           ${chk('cl-cor', 'Cor / Tamanho', true)}
@@ -917,6 +918,7 @@ async function modalExportarLista() {
       filtro: q('ex-filtro').value,
       agrupar: q('ex-agrupar').value === '1',
       cols: {
+        foto: q('cl-foto').checked,
         ref: q('cl-ref').checked,
         cat: q('cl-cat').checked,
         cor: q('cl-cor').checked,
@@ -957,6 +959,20 @@ async function exportarListaProdutosPdf(o) {
   if (!r.ok) { toast(r.erro || 'Erro ao gerar a lista.', true); return; }
   const variacoes = _filtrarVariacoes(r.variacoes, o);
   if (!variacoes.length) { toast('Nenhum produto encontrado com esses filtros.', true); return; }
+
+  // Coluna de foto (opcional): resolve os NOMES de arquivo para data URI de uma
+  // vez só, e guarda a imagem pronta em cada variação. Sem isso a lista sai sem
+  // foto, porque o banco guarda só o nome do arquivo.
+  const mostrarFoto = !!(o.cols && o.cols.foto);
+  if (mostrarFoto) {
+    const nomes = [...new Set(variacoes.map(v => v.foto).filter(Boolean))];
+    if (nomes.length) {
+      const rf = await api('fotos:obterVarias', { nomes });
+      const mapa = (rf && rf.ok && rf.fotos) ? rf.fotos : {};
+      for (const v of variacoes) v._fotoData = v.foto ? (mapa[v.foto] || null) : null;
+    }
+  }
+
   const cfg = getConfig() || {};
   const loja = cfg.loja_nome || 'Minha Loja';
   const data = new Date().toLocaleDateString('pt-BR');
@@ -964,7 +980,9 @@ async function exportarListaProdutosPdf(o) {
 
   const c = o.cols;
   // Cabeçalhos conforme as colunas escolhidas
-  const ths = ['<th>Produto</th>'];
+  const ths = [];
+  if (mostrarFoto) ths.push('<th class="lp-foto-th">Foto</th>');
+  ths.push('<th>Produto</th>');
   if (c.ref) ths.push('<th>Referência</th>');
   if (c.cat && !o.agrupar) ths.push('<th>Categoria</th>');
   if (c.cor) ths.push('<th>Cor</th><th>Tam</th>');
@@ -977,7 +995,13 @@ async function exportarListaProdutosPdf(o) {
   const nCols = ths.length;
 
   const linhaTr = v => {
-    const tds = [`<td>${esc(v.nome)}</td>`];
+    const tds = [];
+    if (mostrarFoto) {
+      tds.push(v._fotoData
+        ? `<td class="lp-foto-td"><img class="lp-foto" src="${v._fotoData}"></td>`
+        : `<td class="lp-foto-td"><span class="lp-foto lp-foto-vazia">👗</span></td>`);
+    }
+    tds.push(`<td>${esc(v.nome)}</td>`);
     if (c.ref) tds.push(`<td>${esc(v.referencia || '')}</td>`);
     if (c.cat && !o.agrupar) tds.push(`<td>${esc(v.categoria || '')}</td>`);
     if (c.cor) {
@@ -1017,8 +1041,10 @@ async function exportarListaProdutosPdf(o) {
   // Totais do conjunto filtrado
   const totPecas = variacoes.reduce((s, v) => s + (v.estoque || 0), 0);
   const totVenda = variacoes.reduce((s, v) => s + (v.estoque || 0) * (v.preco_venda || 0), 0);
-  const tfootTds = ['<td>TOTAL GERAL</td>'];
-  for (let i = 1; i < nCols; i++) tfootTds.push('<td></td>');
+  const tfootTds = [];
+  for (let i = 0; i < nCols; i++) tfootTds.push('<td></td>');
+  const idxProd = ths.findIndex(t => t.includes('>Produto<'));
+  if (idxProd >= 0) tfootTds[idxProd] = '<td>TOTAL GERAL</td>';
   const idxEst = ths.findIndex(t => t.includes('Estoque'));
   const idxTot = ths.findIndex(t => t.includes('>Total<'));
   if (idxEst > 0) tfootTds[idxEst] = `<td class="num">${totPecas}</td>`;
@@ -1041,6 +1067,12 @@ async function exportarListaProdutosPdf(o) {
       .num{text-align:right}
       .ctr{text-align:center;font-weight:700}
       .cod{font-family:Consolas,monospace;font-size:8px;color:#555}
+      .lp-foto-th{width:46px}
+      .lp-foto-td{width:46px;padding:2px 4px}
+      .lp-foto{width:40px;height:40px;object-fit:cover;border-radius:4px;
+        border:1px solid #ddd;display:block;background:#fafafa}
+      .lp-foto-vazia{display:flex;align-items:center;justify-content:center;
+        font-size:18px;color:#bbb}
       .preco{font-weight:700;color:#8B1A1C}
       .conf{width:70px;border-bottom:1px solid #999}
       tfoot td{font-weight:700;background:#eee;border-top:2px solid #8B1A1C;padding:6px 4px}
@@ -1148,7 +1180,7 @@ async function viewProdutos(alvo) {
           // Peça consignada: mostra de quem é e qual a fatia do fornecedor no
           // lucro — sem isso, o filtro acha a peça mas não dá para conferir o
           // acerto sem abrir o cadastro uma a uma.
-          p.consignado ? `<br><small style="color:var(--dourado)">🤝 Consignado${p.fornecedor ? ' · ' + esc(p.fornecedor) : ''}${p.pct_fornecedor ? ' · ' + p.pct_fornecedor + '% do lucro' : ''}</small>` : ''
+          p.consignado ? `<br><small style="color:#4a4a4a">🤝 Consignado${p.fornecedor ? ' · ' + esc(p.fornecedor) : ''}${p.pct_fornecedor ? ' · ' + p.pct_fornecedor + '% do lucro' : ''}</small>` : ''
         }</div></div></td>
         <td>${esc(p.categoria || '—')}</td>
         ${pode('produtos.custo') ? `<td class="num">${moeda(p.preco_custo)}</td>` : ''}

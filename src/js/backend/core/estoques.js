@@ -145,10 +145,11 @@ function conteudo(db, p) {
   const e = db.prepare('SELECT * FROM estoques WHERE id=?').get(id);
   if (!e) return { ok: false, erro: 'Estoque não encontrado.' };
   const itens = db.prepare(`
-    SELECT s.variacao_id, s.qtd, pr.nome produto, COALESCE(pr.referencia,'') referencia,
+    SELECT s.variacao_id, s.qtd, pr.id AS produto_id, pr.nome produto, COALESCE(pr.referencia,'') referencia,
            COALESCE(c.nome,'Sem categoria') categoria,
            va.cor, va.tamanho, COALESCE(va.codigo_barras,'') codigo_barras,
-           pr.preco_custo, pr.preco_venda, va.estoque AS total_geral
+           pr.preco_custo, pr.preco_venda, va.estoque AS total_geral,
+           COALESCE(va.foto, pr.foto) AS foto
     FROM estoque_saldos s
     JOIN variacoes va ON va.id = s.variacao_id
     JOIN produtos pr ON pr.id = va.produto_id
@@ -244,6 +245,51 @@ function transferir(db, p, quem) {
   } catch (e) { db.exec('ROLLBACK'); return { ok: false, erro: e.message }; }
 }
 
+// Esvaziar a origem: move o saldo INTEIRO de CADA variação (positivo E negativo)
+// para o destino, de modo que a origem fique EXATAMENTE zerada e o total da loja
+// (variacoes.estoque) não mude. É o "Levar tudo da origem" — a transferência
+// item-a-item só move quantidades positivas e deixava saldos negativos para trás,
+// fazendo a origem terminar negativa. Aqui a origem zera sempre.
+function transferirTudo(db, p, quem) {
+  const origem = Number(p && p.origem_id) || 0;
+  const destino = Number(p && p.destino_id) || 0;
+  if (!origem || !destino) return { ok: false, erro: 'Escolha o estoque de origem e o de destino.' };
+  if (origem === destino) return { ok: false, erro: 'Origem e destino precisam ser diferentes.' };
+  const eo = db.prepare('SELECT * FROM estoques WHERE id=? AND ativo=1').get(origem);
+  const ed = db.prepare('SELECT * FROM estoques WHERE id=? AND ativo=1').get(destino);
+  if (!eo || !ed) return { ok: false, erro: 'Estoque de origem ou destino não encontrado.' };
+
+  const rows = db.prepare('SELECT variacao_id, qtd FROM estoque_saldos WHERE estoque_id=? AND qtd<>0').all(origem);
+  if (!rows.length) return { ok: false, erro: `Não há nada em ${eo.nome} para transferir.` };
+
+  db.exec('BEGIN');
+  try {
+    const r = db.prepare('INSERT INTO transferencias (origem_id, destino_id, usuario_id, obs) VALUES (?,?,?,?)')
+      .run(origem, destino, quem ? quem.id : null, String(p.obs || '').trim() || null);
+    const id = Number(r.lastInsertRowid);
+    const insItem = db.prepare('INSERT INTO transferencia_itens (transferencia_id, variacao_id, qtd) VALUES (?,?,?)');
+    const insMov = db.prepare(`INSERT INTO movimentos_estoque
+      (variacao_id, tipo, qtd, motivo, usuario_id, estoque_id) VALUES (?,?,?,?,?,?)`);
+    let pecas = 0, negativos = 0;
+    for (const row of rows) {
+      const q = arred(row.qtd);              // saldo inteiro (pode ser negativo)
+      if (q < 0) negativos++;
+      pecas = arred(pecas + q);
+      insItem.run(id, row.variacao_id, q);
+      aplicar(db, origem, row.variacao_id, -q);   // origem − saldo  ⇒  origem = 0
+      aplicar(db, destino, row.variacao_id, q);   // destino + saldo (total intacto)
+      insMov.run(row.variacao_id, 'transferencia', -q,
+        `Transf. #${id} (tudo): ${eo.nome} → ${ed.nome}`, quem ? quem.id : null, origem);
+      insMov.run(row.variacao_id, 'transferencia', q,
+        `Transf. #${id} (tudo): ${eo.nome} → ${ed.nome}`, quem ? quem.id : null, destino);
+    }
+    db.exec('COMMIT');
+    auditar(db, quem, 'transferencia_estoque_tudo',
+      `#${id} ${eo.nome} → ${ed.nome} (${rows.length} itens, ${negativos} negativo(s), origem zerada)`);
+    return { ok: true, id, origem: eo.nome, destino: ed.nome, itens: rows.length, pecas, negativos };
+  } catch (e) { db.exec('ROLLBACK'); return { ok: false, erro: e.message }; }
+}
+
 function listarTransferencias(db, p) {
   const limite = Number(p && p.limite) || 50;
   const linhas = db.prepare(`
@@ -284,5 +330,5 @@ export {
   variacoesNoLocal,
   listar, principal, daLoja, salvar, desativar, garantirDaLoja,
   saldo, aplicar, porVariacao, conteudo,
-  transferir, listarTransferencias, obterTransferencia, arred
+  transferir, transferirTudo, listarTransferencias, obterTransferencia, arred
 };

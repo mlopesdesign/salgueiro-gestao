@@ -1,7 +1,7 @@
 # Manual do Usuário — Salgueiro Gestão
 
 **Sistema de gestão para loja de roupas**
-Versão 3.19.0 · ML Lopes Design
+Versão 3.25.25 · ML Lopes Design
 
 ---
 
@@ -1603,6 +1603,16 @@ Use isso depois de atualizar, para saber o que apareceu de novo no sistema.
 | **Não sei o percentual do fornecedor daquela peça** | Ele aparece embaixo do nome na lista de produtos vendidos, e na coluna própria do Excel |
 | **A operadora mudou a taxa do cartão** | Configurações → PDV → **Taxas da maquininha**. Vale para os relatórios gerados dali em diante |
 | **Zerei uma taxa sem querer** | Deixe o campo em branco e salve: o sistema volta ao valor padrão. Ou use **Restaurar padrão** |
+| **O programa abre pequeno ou some na barra de tarefas** | Corrigido na 3.25.19. Ele volta a abrir sempre em tela cheia. Atualize o aplicativo |
+| **O recibo do consignado não batia com o relatório de comissão** | Corrigido na 3.25.20. Agora os dois mostram os mesmos valores — o repasse é calculado sobre o valor recebido |
+| **No estoque, digitei 20 e virou 120** | Corrigido na 3.25.20. Os campos de entrada, saída e ajuste não vêm mais com número pré-preenchido |
+| **O estoque abria vazio, tinha que buscar** | Desde a 3.25.21 a tela de Estoque já abre com todos os produtos em ordem alfabética. Os botões de Entrada, Saída e Ajustar aparecem em cada linha — só para o administrador |
+| **Dava erro "Aborted(OOM)" ao ajustar o estoque** | Corrigido na 3.25.22. As fotos saíram de dentro do banco (o que causava o erro) e passaram a ser arquivos guardados em local seguro. A conversão é automática na primeira abertura, com backup antes |
+| **Quero ver a foto da peça no estoque** | Desde a 3.25.22 a tela de Estoque mostra a miniatura da foto ao lado de cada peça |
+| **Transferi tudo mas a origem ficou negativa** | Corrigido na 3.25.25. Agora "Levar tudo da origem" esvazia o local por completo — a origem fica zerada, mesmo que alguma peça estivesse com saldo negativo. Na opção "Selecionar da lista" também dá para digitar a quantidade de cada produto. |
+| **Transferir muitas peças de uma vez entre locais** | Na transferência (Estoques → Transferir), use **📦 Levar tudo da origem** para colocar todo o saldo do local no romaneio, ou **☑️ Selecionar da lista** para marcar vários produtos com caixinhas e adicionar todos juntos. Desde a 3.25.23 |
+| **Cliquei no botão do meio da barra de título e a tela sumiu** | Corrigido na 3.25.19: esse botão foi desabilitado. Use só o **_** para minimizar e o **X** para fechar |
+| **Aparecem janelas pretas ao abrir o programa** | Corrigido na 3.25.19. Atualize o aplicativo |
 | **O balão do chat tapa o fim do relatório** | Arraste o balão para outro canto — ele fica onde você largar. Dois cliques devolvem ao lugar de origem |
 | **O balão apareceu no relatório impresso** | Corrigido na 3.13.0. Atualize o aplicativo |
 | **Não vejo o desconto nos itens da venda** | Corrigido na 3.14.0: cada peça mostra quanto foi descontado dela e quanto foi pago |
