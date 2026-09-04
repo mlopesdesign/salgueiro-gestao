@@ -361,6 +361,7 @@ const rotas = {
     if (r.ok) await _resolverFotosLista(r.variacoes, 'foto');
     return r;
   },
+  'pdv:trocarLoja': (p) => pdv.trocarLoja(db, p || {}, sessao.usuario),
   'estoque:movimentar': (p) => estoque.movimentar(db, p, sessao.usuario),
   'estoque:kardex': (p) => estoque.kardex(db, p || {}),
   'estoque:reposicao': () => estoque.reposicao(db),
@@ -786,7 +787,9 @@ const rotas = {
     const r = estoques.conteudo(db, p || {});
     if (!r.ok) return r;
     const a2 = n => Math.round((Number(n) || 0) * 100) / 100;
-    const rows = r.itens.map(i => ({
+    // `conteudo` passou a devolver também as linhas zeradas (v3.25.39);
+    // o balanço em Excel continua listando só o que tem saldo.
+    const rows = r.itens.filter(i => i.qtd !== 0).map(i => ({
       'Produto': i.produto, 'Referência': i.referencia, 'Categoria': i.categoria,
       'Cor': i.cor, 'Tamanho': i.tamanho, 'Código de barras': i.codigo_barras,
       'Qtd neste estoque': i.qtd, 'Total do Salgueiro': i.total_geral,
@@ -2292,6 +2295,7 @@ const PERM_ROTA = {
   'estoque:listarCompleto': 'estoque.ver', 'estoque:exportarXlsx': 'estoque.ver',
   'estoque:exportarXlsxFiltrado': 'produtos.ver',
   'config:definirIcone': 'config.gerenciar', 'config:removerIcone': 'config.gerenciar',
+  'pdv:trocarLoja': 'pdv.vender',
   'estoque:movimentar': 'estoque.movimentar',
   'fornecedores:listar': 'compras.ver', 'compras:listar': 'compras.ver', 'compras:obter': 'compras.ver',
   'fornecedores:salvar': 'compras.gerenciar', 'fornecedores:excluir': 'compras.gerenciar',

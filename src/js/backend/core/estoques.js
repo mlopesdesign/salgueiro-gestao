@@ -138,7 +138,10 @@ function porVariacao(db, variacaoId) {
   `).all(Number(variacaoId));
 }
 
-// Listagem completa de um local, para conferência/balanço
+// Listagem completa de um local, para conferência/balanço.
+// Traz também as linhas zeradas (peça que já esteve aqui e saiu): a tela filtra
+// e por padrão esconde, mas o usuário pode pedir "somente zerados" para conferir
+// o que acabou naquele local. (v3.25.39)
 function conteudo(db, p) {
   const id = Number(p && p.estoque_id) || 0;
   if (!id) return { ok: false, erro: 'Informe o estoque.' };
@@ -158,13 +161,14 @@ function conteudo(db, p) {
     JOIN produtos pr ON pr.id = va.produto_id
     LEFT JOIN categorias c ON c.id = pr.categoria_id
     LEFT JOIN fornecedores fo ON fo.id = pr.fornecedor_id
-    WHERE s.estoque_id = ? AND s.qtd <> 0
+    WHERE s.estoque_id = ?
     ORDER BY pr.nome, va.cor, va.tamanho
   `).all(id);
-  const pecas = arred(itens.reduce((s, i) => s + i.qtd, 0));
-  const custo = arred(itens.reduce((s, i) => s + i.qtd * (i.preco_custo || 0), 0));
-  const venda = arred(itens.reduce((s, i) => s + i.qtd * (i.preco_venda || 0), 0));
-  return { ok: true, estoque: e, itens, totais: { pecas, custo, venda, itens: itens.length } };
+  const comSaldo = itens.filter(i => i.qtd !== 0);
+  const pecas = arred(comSaldo.reduce((s, i) => s + i.qtd, 0));
+  const custo = arred(comSaldo.reduce((s, i) => s + i.qtd * (i.preco_custo || 0), 0));
+  const venda = arred(comSaldo.reduce((s, i) => s + i.qtd * (i.preco_venda || 0), 0));
+  return { ok: true, estoque: e, itens, totais: { pecas, custo, venda, itens: comSaldo.length, zerados: itens.length - comSaldo.length } };
 }
 
 // Variações de UM produto com o saldo no local escolhido (v3.5.0).

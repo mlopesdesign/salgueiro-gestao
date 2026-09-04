@@ -2,6 +2,7 @@
 // O total do Salgueiro continua sendo o estoque geral; aqui você vê onde cada
 // peça está e move entre os locais por romaneio (imprimível e em PDF).
 import { api, el, esc, moeda, toast, modal, getConfig, ehAdmin } from './app.js';
+import { formMovimento } from './estoque.js';
 
 const TIPOS = [
   ['almoxarifado', '🏢 Almoxarifado'],
@@ -710,6 +711,7 @@ export async function viewEstoques(alvo) {
       return `<td class="es-td-foto"><span class="es-thumb es-thumb-vazio">👗</span></td>`;
     };
     const todosItens = r.itens;
+    const admin = ehAdmin();
     const bloco = el(`<div class="painel">
       <div class="barra"><b>${esc(r.estoque.nome)}</b>
         <span style="font-size:12px;opacity:.65">${r.totais.itens} tipo(s) · ${r.totais.pecas} peça(s) ·
@@ -717,24 +719,36 @@ export async function viewEstoques(alvo) {
         <button class="btn btn-suave es-nao-imprime" id="es-print" style="margin-left:auto">🖨️ Imprimir balanço</button>
         <button class="btn btn-suave es-nao-imprime" id="es-xlsx">📊 Excel</button>
       </div>
-      <div class="barra es-nao-imprime" style="gap:6px;padding:8px 0 4px">
+      <div class="barra es-nao-imprime" style="gap:6px;padding:8px 0 4px;flex-wrap:wrap">
+        <input type="search" id="esl-busca" placeholder="🔎 Pesquisar por nome, referência, cor, tamanho ou código…"
+          style="flex:1;min-width:240px">
+        <select id="esl-f-saldo" style="min-width:170px">
+          <option value="com">Somente com estoque</option>
+          <option value="zerados">Somente zerados</option>
+          <option value="todos">Com estoque e zerados</option>
+        </select>
         <select id="esl-f-tipo" style="min-width:180px">
           <option value="todos">Consignados e próprios</option>
           <option value="proprios">🏪 Somente da loja</option>
           <option value="cons">🤝 Somente consignados</option>
         </select>
         <select id="esl-f-forn" style="display:none"><option value="">Todos os fornecedores</option></select>
+        <span id="esl-contagem" style="font-size:12px;opacity:.65;margin-left:auto"></span>
       </div>
       <table class="es-tab"><thead><tr>
         <th class="es-td-foto">Foto</th>
         <th>Produto</th><th>Cor / Tam.</th><th class="num">Neste estoque</th>
         <th class="num">Total Salgueiro</th><th class="num">Valor de venda</th>
+        ${admin ? '<th class="es-nao-imprime" style="width:210px"></th>' : ''}
       </tr></thead><tbody id="esl-tbody"></tbody></table>
     </div>`);
 
-    const fTipoEl = bloco.querySelector('#esl-f-tipo');
-    const fFornEl = bloco.querySelector('#esl-f-forn');
-    const tbodyEl = bloco.querySelector('#esl-tbody');
+    const fTipoEl  = bloco.querySelector('#esl-f-tipo');
+    const fFornEl  = bloco.querySelector('#esl-f-forn');
+    const fSaldoEl = bloco.querySelector('#esl-f-saldo');
+    const buscaEl  = bloco.querySelector('#esl-busca');
+    const contaEl  = bloco.querySelector('#esl-contagem');
+    const tbodyEl  = bloco.querySelector('#esl-tbody');
 
     function renderFiltrosForn(lista) {
       const fMap = new Map();
@@ -753,38 +767,87 @@ export async function viewEstoques(alvo) {
       fFornEl.style.display = (fMap.size > 0 && fTipoEl.value === 'cons') ? '' : 'none';
     }
 
+    // Normaliza para busca: sem acento, minúsculo. Assim "sandalia" acha "Sandália".
+    const chave = (x) => String(x || '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
     function aplicarFiltroEsl() {
-      const tipo = fTipoEl.value;
-      const fid  = Number(fFornEl.value) || 0;
+      const tipo  = fTipoEl.value;
+      const fid   = Number(fFornEl.value) || 0;
+      const saldo = fSaldoEl.value;
+      const termo = chave(buscaEl.value.trim());
+
       let lista = todosItens;
+      // Zerados: o backend manda tudo, a tela decide. Padrão é esconder — a lista
+      // de um local grande fica limpa —, mas dá para conferir só o que acabou.
+      if (saldo === 'com') lista = lista.filter(v => v.qtd !== 0);
+      else if (saldo === 'zerados') lista = lista.filter(v => v.qtd === 0);
+
       if (tipo === 'proprios') lista = lista.filter(v => !v.consignado);
       else if (tipo === 'cons') {
         lista = lista.filter(v => v.consignado);
         if (fid) lista = lista.filter(v => v.fornecedor_id === fid);
       }
+      if (termo) {
+        lista = lista.filter(v => chave(
+          [v.produto, v.referencia, v.categoria, v.cor, v.tamanho, v.codigo_barras, v.fornecedor].join(' ')
+        ).includes(termo));
+      }
+
+      const pecas = lista.reduce((a, v) => a + v.qtd, 0);
+      contaEl.textContent = lista.length
+        ? `${lista.length} de ${todosItens.length} linha(s) · ${Math.round(pecas * 100) / 100} peça(s)`
+        : '';
+
       const linhas = lista.map(i => {
-        const tr = el(`<tr>
+        const zerado = i.qtd === 0;
+        const tr = el(`<tr${zerado ? ' style="opacity:.55"' : ''}>
           ${celFoto(i.foto)}
           <td>${esc(i.produto)}<br><small style="opacity:.6">${esc(i.categoria)}${i.referencia ? ' · ' + esc(i.referencia) : ''}</small>
-          ${i.consignado ? `<br><small style="color:#d97706;font-size:11px">🤝 ${esc(i.fornecedor||'')}</small>` : ''}</td>
+          ${i.consignado ? `<br><small style="color:#d97706;font-size:11px">🤝 ${esc(i.fornecedor || '')}</small>` : ''}</td>
           <td>${esc([i.cor, i.tamanho].filter(x => x && x !== 'Única' && x !== 'U').join(' · ') || '—')}</td>
-          <td class="num"><b>${i.qtd}</b></td>
+          <td class="num"><b${i.qtd < 0 ? ' style="color:var(--vermelho)"' : ''}>${i.qtd}</b></td>
           <td class="num" style="opacity:.6">${i.total_geral}</td>
-          <td class="num">${moeda(i.qtd * (i.preco_venda || 0))}</td></tr>`);
+          <td class="num">${moeda(i.qtd * (i.preco_venda || 0))}</td>
+          ${admin ? `<td class="es-nao-imprime acoes-linha" style="white-space:nowrap">
+            <button data-a="entrada" data-v="${i.variacao_id}" style="color:var(--verde)">+ Entrada</button>
+            <button data-a="saida" data-v="${i.variacao_id}" style="color:var(--vermelho)"${zerado ? ' disabled' : ''}>− Saída</button>
+            <button data-a="ajuste" data-v="${i.variacao_id}">Ajustar</button>
+          </td>` : ''}</tr>`);
         if (_obsFoto) tr.querySelectorAll('img[data-foto]').forEach(img => _obsFoto.observe(img));
+        if (admin) {
+          // A peça sai DESTE local — `selecionado` vai junto para o backend, senão
+          // o movimento cairia no almoxarifado central. (fix v3.25.39)
+          for (const btn of tr.querySelectorAll('[data-a]')) {
+            btn.onclick = () => formMovimento({
+              id: i.variacao_id, produto: i.produto, cor: i.cor, tamanho: i.tamanho,
+              estoque: i.total_geral, preco_custo: i.preco_custo,
+            }, btn.dataset.a, async () => { await carregarLocais(); }, selecionado);
+          }
+        }
         return tr;
       });
+
       tbodyEl.innerHTML = '';
       if (linhas.length) linhas.forEach(tr => tbodyEl.appendChild(tr));
-      else tbodyEl.innerHTML = `<tr><td colspan="6" class="vazio">${
-        tipo === 'proprios' ? 'Nenhum produto próprio neste estoque.' :
-        tipo === 'cons' ? 'Nenhum produto consignado neste estoque.' :
-        'Este estoque está vazio.'}</td></tr>`;
+      else {
+        const msg = termo ? `Nada encontrado para "${esc(buscaEl.value.trim())}".`
+          : saldo === 'zerados' ? 'Nenhum item zerado neste estoque.'
+          : tipo === 'proprios' ? 'Nenhum produto próprio neste estoque.'
+          : tipo === 'cons' ? 'Nenhum produto consignado neste estoque.'
+          : 'Este estoque está vazio.';
+        tbodyEl.innerHTML = `<tr><td colspan="${admin ? 7 : 6}" class="vazio">${msg}</td></tr>`;
+      }
     }
 
     renderFiltrosForn(todosItens);
     aplicarFiltroEsl();
 
+    let deb;
+    buscaEl.addEventListener('input', () => {
+      clearTimeout(deb); deb = setTimeout(aplicarFiltroEsl, 200);
+    });
+    fSaldoEl.addEventListener('change', aplicarFiltroEsl);
     fTipoEl.addEventListener('change', () => {
       fFornEl.style.display = 'none'; fFornEl.value = '';
       renderFiltrosForn(todosItens);

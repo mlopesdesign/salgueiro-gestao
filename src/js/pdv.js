@@ -129,7 +129,8 @@ function telaVenda(alvo, caixa) {
   const tela = el(`
     <div>
       <div class="pagina-topo">
-        <h1>PDV — Venda${caixa && caixa.loja ? ` <span style="font-size:13px;font-weight:600;color:var(--vinho);background:#F6E9E9;padding:3px 10px;border-radius:20px;vertical-align:middle">🏬 ${esc(caixa.loja)}</span>` : ''}</h1>
+        <h1>PDV — Venda${caixa && caixa.loja ? ` <button type="button" id="b-loja" title="Trocar de loja sem fechar o caixa nem perder a venda"
+          style="font-size:13px;font-weight:600;color:var(--vinho);background:#F6E9E9;border:1px solid transparent;padding:3px 10px;border-radius:20px;vertical-align:middle;cursor:pointer">🏬 <span id="b-loja-nome">${esc(caixa.loja)}</span> ▾</button>` : ''}</h1>
         <div style="display:flex;gap:8px">
           <button class="btn btn-suave" id="b-consulta">🔍 Consultar preço (F3)</button>
           <button class="btn btn-suave" id="b-troca" style="color:var(--vinho);font-weight:700">🔄 Troca (F6)</button>
@@ -470,6 +471,11 @@ function telaVenda(alvo, caixa) {
   tela.querySelector('#b-sangria')?.addEventListener('click', () => modalMovCaixa('sangria'));
   tela.querySelector('#b-supr')?.addEventListener('click', () => modalMovCaixa('suprimento'));
   tela.querySelector('#b-fechar')?.addEventListener('click', () => modalFechamento(caixa, () => { alvo.innerHTML = ''; viewPdv(alvo); }));
+  // Trocar de loja com a venda montada na tela (v3.25.39). Antes só dava para
+  // mudar fechando e reabrindo o caixa — e o carrinho ia junto. Agora o caixa
+  // continua o mesmo: o que já foi vendido fica na loja anterior, e daqui em
+  // diante a baixa sai do estoque da loja escolhida.
+  tela.querySelector('#b-loja')?.addEventListener('click', () => modalTrocarLoja(caixa, tela));
   tela.querySelector('#b-vendas').onclick = () => modalVendas();
   tela.querySelector('#b-historico').onclick = () => modalHistoricoVendas();
   tela.querySelector('#b-consulta').onclick = consultarPreco;
@@ -1178,6 +1184,42 @@ function modalMovCaixa(tipo) {
     toast(tipo === 'sangria' ? 'Sangria registrada.' : 'Suprimento registrado.');
     fechar();
   }, 'Registrar');
+}
+
+// Troca a loja do caixa aberto SEM fechar o caixa e SEM limpar o carrinho.
+// Os itens já bipados continuam na tela; ao finalizar, a baixa de estoque sai
+// da loja que estiver selecionada neste momento.
+async function modalTrocarLoja(caixa, tela) {
+  const rl = await api('lojas:listar');
+  const lista = (rl && rl.ok ? rl.lojas : []) || [];
+  if (lista.length < 2) { toast('Só há uma loja cadastrada.', true); return; }
+
+  const carrinho = itens.reduce((a, i) => a + (Number(i.qtd) || 0), 0);
+  const aviso = carrinho
+    ? `<p style="margin:0 0 12px;font-size:12.5px;color:var(--texto-suave)">
+         🛒 A venda em andamento (${carrinho} item(ns)) continua na tela — só o estoque de baixa muda.</p>`
+    : '';
+
+  modal('Trocar de loja', `${aviso}
+    <div class="campo"><label>Loja deste caixa</label>
+      <select id="tl-loja">${lista.map(l =>
+        `<option value="${l.id}" ${l.id === caixa.loja_id ? 'selected' : ''}>${esc(l.nome)}</option>`
+      ).join('')}</select></div>
+    <p style="margin:6px 0 0;font-size:12.5px;color:var(--texto-suave)">
+      As vendas já registradas continuam contando para a loja em que foram feitas —
+      o fechamento do caixa segue separando por loja.</p>
+    <div class="erro" id="tl-erro"></div>`, async (m, fechar) => {
+    const id = Number(m.querySelector('#tl-loja').value);
+    if (id === caixa.loja_id) { fechar(); return; }
+    const r = await api('pdv:trocarLoja', { loja_id: id });
+    if (!r.ok) { m.querySelector('#tl-erro').textContent = r.erro; return; }
+    caixa.loja_id = r.loja_id; caixa.loja = r.loja;
+    const badge = tela.querySelector('#b-loja-nome');
+    if (badge) badge.textContent = r.loja;
+    try { localStorage.setItem('salgueiro_loja_id', String(r.loja_id)); } catch {}
+    toast(`Agora vendendo em ${r.loja}${r.estoque ? ` (estoque: ${r.estoque})` : ''}.`);
+    fechar();
+  }, 'Trocar');
 }
 
 async function modalFechamento(caixa, aoConcluir) {

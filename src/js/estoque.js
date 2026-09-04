@@ -372,44 +372,124 @@ function abaMovimentar(corpo) {
   busca.focus();
 }
 
-function formMovimento(v, tipo, aoConcluir) {
-  const titulos = { entrada: 'Entrada de mercadoria', saida: 'Saída manual', ajuste: 'Ajuste de estoque (inventário)' };
-  modal(titulos[tipo], `
-    <p style="margin-bottom:14px"><b>${esc(v.produto)}</b> — ${esc(v.cor)} / ${esc(v.tamanho)}
-      &nbsp;·&nbsp; estoque atual: <b>${v.estoque}</b></p>
+// Movimentação de estoque (entrada / saída / ajuste).
+//
+// TODO movimento acontece dentro de UM local. Antes da v3.25.39 este form não
+// mandava `estoque_id`: o backend caía no almoxarifado central, a peça sumia do
+// total mas continuava no saldo da loja e o almoxarifado ficava negativo — o
+// cliente via a peça "trocar de estoque" em vez de sair. Agora o local é sempre
+// explícito e a entrada pode ser repartida entre vários locais de uma vez.
+//
+// `estoqueFixo` vem da tela de Estoques (locais): já se sabe de onde a peça sai.
+export async function formMovimento(v, tipo, aoConcluir, estoqueFixo = null) {
+  const rl = await api('estoques:porVariacao', { variacao_id: v.id });
+  const locais = (rl && rl.ok ? rl.locais : []) || [];
+  if (!locais.length) { toast('Nenhum estoque cadastrado. Cadastre um local primeiro.', true); return; }
+
+  const titulos = {
+    entrada: 'Entrada de mercadoria',
+    saida:   'Saída manual',
+    ajuste:  'Ajuste de estoque (inventário)',
+  };
+  const cabecalho = `<p style="margin-bottom:14px"><b>${esc(v.produto)}</b> — ${esc(v.cor)} / ${esc(v.tamanho)}
+      &nbsp;·&nbsp; total Salgueiro: <b>${v.estoque}</b></p>`;
+  const campoMotivo = `<div class="campo"><label>Motivo / observação</label>
+      <input id="m-motivo" placeholder="${tipo === 'entrada' ? 'Compra fornecedor X' : tipo === 'saida' ? 'Perda, defeito, uso interno…' : 'Contagem de inventário'}"></div>
+    <div class="erro" id="m-erro"></div>`;
+
+  // ── Entrada: reparte a mercadoria entre os locais numa só operação ────────
+  if (tipo === 'entrada') {
+    const linhas = locais.map(l => `<tr>
+      <td>${esc(l.nome)}${l.tipo === 'almoxarifado' ? ' <small style="opacity:.6">(central)</small>' : ''}</td>
+      <td class="num" style="opacity:.6;width:90px">tem ${l.qtd}</td>
+      <td style="width:110px"><input type="number" min="0" step="1" inputmode="numeric"
+        data-local="${l.id}" placeholder="0" style="width:100%" onfocus="this.select()"></td>
+    </tr>`).join('');
+    modal(titulos.entrada, `${cabecalho}
+      <div class="campo"><label>Quanto entra em cada estoque</label>
+        <table style="width:100%"><tbody>${linhas}</tbody></table></div>
+      <div class="campo"><label>Custo unitário (R$) — opcional</label>
+        <input id="m-custo" type="number" min="0" step="0.01" placeholder="${v.preco_custo || ''}"></div>
+      ${campoMotivo}`, async (m, fechar) => {
+      const erro = m.querySelector('#m-erro');
+      const destinos = [...m.querySelectorAll('[data-local]')]
+        .map(i => ({ id: Number(i.dataset.local), qtd: Number(i.value) || 0 }))
+        .filter(d => d.qtd > 0);
+      if (!destinos.length) { erro.textContent = 'Informe a quantidade em pelo menos um estoque.'; return; }
+      const custo  = Number(m.querySelector('#m-custo').value) || null;
+      const motivo = m.querySelector('#m-motivo').value.trim() || null;
+      let total = 0;
+      for (const d of destinos) {
+        const r = await api('estoque:movimentar', {
+          variacao_id: v.id, tipo: 'entrada', qtd: d.qtd,
+          estoque_id: d.id, custo_unit: custo, motivo,
+        });
+        if (!r.ok) { erro.textContent = r.erro; return; }
+        total = r.estoque;
+      }
+      toast(`Entrada registrada em ${destinos.length} estoque(s). Total: ${total} un.`);
+      fechar(); aoConcluir();
+    }, 'Confirmar');
+    return;
+  }
+
+  // ── Saída / ajuste: sai de UM local, escolhido explicitamente ─────────────
+  const comSaldo = locais.filter(l => l.qtd > 0);
+  if (tipo === 'saida' && !comSaldo.length) {
+    toast('Esta peça não tem saldo em nenhum estoque.', true); return;
+  }
+  const opcoes = (tipo === 'saida' ? comSaldo : locais);
+  const padrao = opcoes.some(l => l.id === Number(estoqueFixo))
+    ? Number(estoqueFixo)
+    : (opcoes.slice().sort((a, b) => b.qtd - a.qtd)[0] || opcoes[0]).id;
+
+  const mod = modal(titulos[tipo], `${cabecalho}
     <div class="linha-2">
       <div class="campo">
-        <label>${tipo === 'ajuste' ? 'Estoque correto (contagem)' : 'Quantidade'}</label>
-        <input id="m-qtd" type="number" min="0" step="1" inputmode="numeric" autofocus
-          placeholder="${tipo === 'ajuste' ? 'contagem: ' + v.estoque : 'quantidade'}" onfocus="this.select()">
+        <label>${tipo === 'saida' ? 'Sai de qual estoque' : 'Qual estoque está sendo contado'}</label>
+        <select id="m-local">${opcoes.map(l =>
+          `<option value="${l.id}" ${l.id === padrao ? 'selected' : ''}>${esc(l.nome)} — ${l.qtd} un.</option>`
+        ).join('')}</select>
       </div>
-      ${tipo === 'entrada' ? `
-      <div class="campo"><label>Custo unitário (R$) — opcional</label>
-        <input id="m-custo" type="number" min="0" step="0.01" placeholder="${v.preco_custo || ''}"></div>` : ''}
+      <div class="campo">
+        <label>${tipo === 'ajuste' ? 'Contagem real neste estoque' : 'Quantidade'}</label>
+        <input id="m-qtd" type="number" min="0" step="1" inputmode="numeric" autofocus
+          placeholder="quantidade" onfocus="this.select()">
+      </div>
     </div>
-    <div class="campo"><label>Motivo / observação</label>
-      <input id="m-motivo" placeholder="${tipo === 'entrada' ? 'Compra fornecedor X' : tipo === 'saida' ? 'Perda, defeito, uso interno…' : 'Contagem de inventário'}"></div>
-    <div class="erro" id="m-erro"></div>
-  `, async (m, fechar) => {
-    const _campoQtd = m.querySelector('#m-qtd');
-    // Campo começa vazio (sem número pré-fixado) — exige digitar o valor.
-    // Sem isto, submeter em branco viraria 0 e num ajuste zeraria o estoque.
-    if (_campoQtd.value.trim() === '') {
-      m.querySelector('#m-erro').textContent = tipo === 'ajuste'
-        ? 'Informe a contagem do estoque.' : 'Informe a quantidade.';
-      _campoQtd.focus(); return;
+    <p id="m-dica" style="margin:-4px 0 12px;font-size:12.5px;color:var(--texto-suave)"></p>
+    ${campoMotivo}`, async (m, fechar) => {
+    const erro  = m.querySelector('#m-erro');
+    const campo = m.querySelector('#m-qtd');
+    // Campo começa vazio de propósito: em branco viraria 0 e num ajuste zeraria
+    // o estoque sem o usuário perceber.
+    if (campo.value.trim() === '') {
+      erro.textContent = tipo === 'ajuste' ? 'Informe a contagem do estoque.' : 'Informe a quantidade.';
+      campo.focus(); return;
     }
     const r = await api('estoque:movimentar', {
-      variacao_id: v.id,
-      tipo,
-      qtd: Number(_campoQtd.value),
-      custo_unit: tipo === 'entrada' ? Number(m.querySelector('#m-custo')?.value) || null : null,
-      motivo: m.querySelector('#m-motivo').value.trim() || null
+      variacao_id: v.id, tipo, qtd: Number(campo.value),
+      estoque_id: Number(m.querySelector('#m-local').value),
+      custo_unit: null,
+      motivo: m.querySelector('#m-motivo').value.trim() || null,
     });
-    if (!r.ok) { m.querySelector('#m-erro').textContent = r.erro; return; }
-    toast(`Estoque atualizado: ${r.estoque} un.`);
+    if (!r.ok) { erro.textContent = r.erro; return; }
+    toast(`${r.local}: ${r.estoque_local} un. · total Salgueiro: ${r.estoque} un.`);
     fechar(); aoConcluir();
   }, 'Confirmar');
+
+  // Dica viva: mostra o saldo do local escolhido enquanto o usuário troca.
+  const selLocal = mod.querySelector('#m-local');
+  const dica     = mod.querySelector('#m-dica');
+  const atualizarDica = () => {
+    const l = opcoes.find(x => x.id === Number(selLocal.value));
+    dica.textContent = !l ? '' : (tipo === 'saida'
+      ? `Saldo atual em ${l.nome}: ${l.qtd} un. — a saída não pode passar disso.`
+      : `Saldo registrado em ${l.nome}: ${l.qtd} un.`);
+  };
+  selLocal.addEventListener('change', atualizarDica);
+  atualizarDica();
+  mod.querySelector('#m-qtd').focus();
 }
 
 // ---------- Aba: Kardex ----------

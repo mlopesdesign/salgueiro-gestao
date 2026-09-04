@@ -3,6 +3,19 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.25.39',
+    data: '2026-09-04',
+    itens: [
+      '🐛 CORREÇÃO IMPORTANTE — saída de estoque: a peça saía do total mas continuava no saldo da loja e aparecia negativa no Almoxarifado. Agora a saída pede DE QUAL estoque a peça sai e tira de lá mesmo.',
+      '📦 Entrada de mercadoria: dá para repartir a mesma entrada entre vários estoques de uma vez, dizendo quanto vai para cada um.',
+      '📋 Ajuste de inventário: a contagem informada agora é a DAQUELE estoque, não o total do Salgueiro.',
+      '🔎 Estoques (locais): campo de pesquisa por nome, referência, cor, tamanho ou código de barras.',
+      '👁️ Estoques (locais): itens zerados ficam escondidos por padrão — no filtro dá para ver "somente zerados" ou os dois juntos.',
+      '⚡ Estoques (locais): botões de Entrada, Saída e Ajuste direto na linha de cada peça.',
+      '🏬 PDV: botão para trocar de loja sem fechar o caixa e sem perder a venda que está na tela.',
+    ],
+  },
+  {
     versao: '3.25.38',
     data: '2026-09-02',
     itens: [

@@ -37,6 +37,27 @@ function abrirCaixa(db, p, quem) {
   return { ok: true, id: Number(r.lastInsertRowid), loja_id: lojaId };
 }
 
+// Troca a loja do caixa ABERTO sem fechar nada (v3.25.39).
+//
+// Cada venda grava a própria `vendas.loja_id`, então o que já foi vendido
+// continua contando para a loja em que foi feito — o fechamento segue separando
+// certo. Só as PRÓXIMAS vendas passam a baixar do estoque da nova loja.
+function trocarLoja(db, p, quem) {
+  const cx = caixaAtual(db).caixa;
+  if (!cx) return { ok: false, erro: 'Nenhum caixa aberto.' };
+  const lojaId = Number(p && p.loja_id) || 0;
+  if (!lojaId) return { ok: false, erro: 'Informe a loja.' };
+  if (lojaId === cx.loja_id) return { ok: false, erro: 'O caixa já está nesta loja.' };
+  const l = db.prepare('SELECT id, nome FROM lojas WHERE id=? AND ativo=1').get(lojaId);
+  if (!l) return { ok: false, erro: 'Loja inválida ou inativa.' };
+
+  db.prepare('UPDATE caixas SET loja_id=? WHERE id=?').run(lojaId, cx.id);
+  auditar(db, quem, 'caixa_troca_loja', `caixa #${cx.id}: ${cx.loja || '—'} → ${l.nome}`);
+
+  const est = estoques.daLoja(db, lojaId);
+  return { ok: true, loja_id: lojaId, loja: l.nome, estoque: est ? est.nome : null };
+}
+
 function movimentoCaixa(db, p, quem) {
   const cx = caixaAtual(db).caixa;
   if (!cx) return { ok: false, erro: 'Nenhum caixa aberto.' };
@@ -543,6 +564,6 @@ function cancelarVenda(db, p, quem) {
 }
 
 export {
-  caixaAtual, abrirCaixa, movimentoCaixa, resumoCaixa, fecharCaixa,
+  caixaAtual, abrirCaixa, trocarLoja, movimentoCaixa, resumoCaixa, fecharCaixa,
   registrarVenda, obterVenda, listarVendas, listarVendasGeral, cancelarVenda
 };

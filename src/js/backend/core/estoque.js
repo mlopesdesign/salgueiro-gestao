@@ -2,6 +2,8 @@
 import { auditar } from './util.js';
 import * as estoques from './estoques.js';
 
+const arred = (n) => Math.round((Number(n) || 0) * 100) / 100;
+
 // Busca variações por código de barras, nome ou referência (para o form de movimentação)
 function buscarVariacoes(db, termo) {
   const t = String(termo || '').trim();
@@ -26,9 +28,17 @@ function buscarVariacoes(db, termo) {
 }
 
 // tipo: 'entrada' | 'saida' | 'ajuste'
-// entrada: soma qtd (custo_unit opcional atualiza custo médio do produto)
-// saida:   subtrai qtd (bloqueia estoque negativo)
-// ajuste:  define o estoque para exatamente qtd (inventário/correção)
+//
+// Todo movimento acontece DENTRO de um local. O total geral (variacoes.estoque)
+// e sempre a soma dos saldos dos locais, entao os dois lados andam juntos:
+//   entrada: local +qtd  e  total +qtd   (sem local => almoxarifado central)
+//   saida:   local -qtd  e  total -qtd   (limite = saldo DAQUELE local)
+//   ajuste:  local = qtd e  total +/- a diferenca (contagem de inventario)
+//
+// Ate a v3.25.38 a saida validava contra o TOTAL e, sem estoque_id, jogava o
+// movimento no almoxarifado: a peca saia do total mas continuava no saldo da
+// loja e o almoxarifado ficava negativo. Parecia que a peca tinha trocado de
+// estoque em vez de sair de verdade. (fix v3.25.39)
 function movimentar(db, p, quem) {
   const v = db.prepare(`
     SELECT v.id, v.estoque, v.produto_id, p.preco_custo,
@@ -46,29 +56,38 @@ function movimentar(db, p, quem) {
     return { ok: false, erro: 'Quantidade inválida.' };
   }
 
+  // Local do movimento, resolvido ANTES do calculo: saida e ajuste precisam do
+  // saldo daquele local para validar. Entrada sem local cai no almoxarifado.
+  const alvo = Number(p.estoque_id) > 0
+    ? db.prepare('SELECT * FROM estoques WHERE id=? AND ativo=1').get(Number(p.estoque_id))
+    : estoques.principal(db);
+  if (!alvo) return { ok: false, erro: 'Estoque nao encontrado.' };
+  const alvoId = alvo.id;
+  const saldoLocal = arred(estoques.saldo(db, alvoId, v.id));
+
   let novoEstoque, qtdMovimento;
-  if (tipo === 'entrada') { novoEstoque = v.estoque + qtd; qtdMovimento = qtd; }
+  if (tipo === 'entrada') { novoEstoque = arred(v.estoque + qtd); qtdMovimento = qtd; }
   else if (tipo === 'saida') {
-    if (qtd > v.estoque) return { ok: false, erro: `Estoque insuficiente (disponível: ${v.estoque}).` };
-    novoEstoque = v.estoque - qtd; qtdMovimento = -qtd;
-  } else { // ajuste
-    novoEstoque = qtd; qtdMovimento = qtd - v.estoque;
-    if (qtdMovimento === 0) return { ok: false, erro: 'O estoque já é esse valor.' };
+    // A peca sai DAQUELE local: o limite e o saldo de la, nao o total geral.
+    if (qtd > saldoLocal) {
+      return { ok: false, erro: `Estoque insuficiente em ${alvo.nome} (disponivel: ${saldoLocal}).` };
+    }
+    novoEstoque = arred(v.estoque - qtd); qtdMovimento = -qtd;
+  } else { // ajuste: a contagem informada e a DAQUELE local
+    qtdMovimento = arred(qtd - saldoLocal);
+    if (qtdMovimento === 0) return { ok: false, erro: `O saldo em ${alvo.nome} ja e esse valor.` };
+    novoEstoque = arred(v.estoque + qtdMovimento);
+    if (novoEstoque < 0) return { ok: false, erro: 'O ajuste deixaria o total geral negativo.' };
   }
 
   db.exec('BEGIN');
   try {
     db.prepare('UPDATE variacoes SET estoque=? WHERE id=?').run(novoEstoque, v.id);
-    // o movimento cai no local escolhido (padrão: almoxarifado central)
-    const alvo = Number(p.estoque_id) > 0
-      ? db.prepare('SELECT * FROM estoques WHERE id=? AND ativo=1').get(Number(p.estoque_id))
-      : estoques.principal(db);
-    const alvoId = alvo ? alvo.id : null;
     db.prepare(`
       INSERT INTO movimentos_estoque (variacao_id, tipo, qtd, custo_unit, motivo, usuario_id, estoque_id)
       VALUES (?,?,?,?,?,?,?)
     `).run(v.id, tipo, qtdMovimento, p.custo_unit || null, p.motivo || null, quem ? quem.id : null, alvoId);
-    if (alvoId) estoques.aplicar(db, alvoId, v.id, qtdMovimento);
+    estoques.aplicar(db, alvoId, v.id, qtdMovimento);
 
     // custo médio ponderado do produto (apenas em entradas com custo informado)
     const custoUnit = Number(p.custo_unit) || 0;
@@ -83,8 +102,8 @@ function movimentar(db, p, quem) {
     db.exec('COMMIT');
   } catch (e) { db.exec('ROLLBACK'); throw e; }
 
-  auditar(db, quem, `estoque_${tipo}`, `variação #${v.id}: ${qtdMovimento > 0 ? '+' : ''}${qtdMovimento}`);
-  return { ok: true, estoque: novoEstoque };
+  auditar(db, quem, `estoque_${tipo}`, `variação #${v.id} em ${alvo.nome}: ${qtdMovimento > 0 ? '+' : ''}${qtdMovimento}`);
+  return { ok: true, estoque: novoEstoque, estoque_local: arred(saldoLocal + qtdMovimento), local: alvo.nome };
 }
 
 function kardex(db, p) {
