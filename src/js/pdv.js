@@ -136,6 +136,7 @@ function telaVenda(alvo, caixa) {
           <button class="btn btn-suave" id="b-troca" style="color:var(--vinho);font-weight:700">🔄 Troca (F6)</button>
           <button class="btn btn-suave" id="b-custo" title="Vender pelo preço de custo (precisa de administrador)">🏷️ Preço de custo (F8)</button>
           <button class="btn btn-suave" id="b-vendas">Vendas do caixa</button>
+          ${pode('pdv.vender') ? '<button class="btn btn-suave" id="b-importar" title="Importar as vendas anotadas na planilha do WhatsApp">📥 Importar planilha</button>' : ''}
           <button class="btn btn-suave" id="b-historico">📋 Histórico</button>
           ${pode('caixa.sangria') ? '<button class="btn btn-suave" id="b-supr">+ Suprimento</button>' : ''}
           ${pode('caixa.sangria') ? '<button class="btn btn-suave" id="b-sangria">− Sangria</button>' : ''}
@@ -476,10 +477,14 @@ function telaVenda(alvo, caixa) {
   // continua o mesmo: o que já foi vendido fica na loja anterior, e daqui em
   // diante a baixa sai do estoque da loja escolhida.
   tela.querySelector('#b-loja')?.addEventListener('click', () => modalTrocarLoja(caixa, tela));
+  tela.querySelector('#b-importar')?.addEventListener('click',
+    () => modalImportarVendas(() => { alvo.innerHTML = ''; viewPdv(alvo); }));
   tela.querySelector('#b-vendas').onclick = () => modalVendas();
   tela.querySelector('#b-historico').onclick = () => modalHistoricoVendas();
   tela.querySelector('#b-consulta').onclick = consultarPreco;
-  tela.querySelector('#b-troca').onclick = () => modalBuscarVendaTroca();
+  // F6 abre a troca RÁPIDA (v3.25.40): é o caso do balcão em 9 de cada 10 vezes.
+  // O caminho pela venda de origem continua a um clique, dentro do próprio modal.
+  tela.querySelector('#b-troca').onclick = () => modalTrocaRapida();
 
   // ── Venda a preço de custo (v3.19.0) ───────────────────────────────────────
   // Liga/desliga o modo. Ligar exige autorização de administrador; desligar
@@ -1391,6 +1396,369 @@ async function modalDevolucao(venda_id, aoFinalizar) {
 // Entrada pelo botão 🔄 Troca do PDV (F6). Começa no dia de hoje — o caso
 // normal é a cliente voltar no mesmo dia de funcionamento — mas o período é
 // editável para trocas de dias anteriores.
+// ── Importar vendas de planilha (v3.25.40) ──────────────────────────────────
+//
+// As vendas do WhatsApp são anotadas numa planilha durante o dia e depois
+// digitadas uma a uma no PDV. Aqui a planilha inteira entra de uma vez.
+//
+// Uma linha por ITEM; a coluna "Venda" agrupa. Duas linhas com Venda = 1 são
+// duas peças no mesmo pedido, e cliente/pagamento saem da primeira linha do
+// grupo. Sempre em dois passos — confere primeiro, grava depois — porque uma
+// planilha com um código errado gravaria meia importação e torceria o estoque.
+const MODELO_VENDAS = [
+  ['Venda', 'Cliente', 'Telefone', 'Código de barras', 'Produto', 'Cor', 'Tamanho',
+   'Qtd', 'Preço unit.', 'Desconto', 'Forma de pagamento', 'Observação'],
+  [1, 'Maria da Silva', '87 99999-0000', '7891234567890', '', '', '', 1, 89.90, 0, 'PIX', 'Entrega no bairro'],
+  [1, '', '', '7891234567891', '', '', '', 2, 49.90, 5, '', ''],
+  [2, 'Ana Lima', '87 98888-1111', '', 'Blusa Canelada', 'Preto', 'M', 1, 79.90, 0, 'Dinheiro', ''],
+  [3, '', '', '7891234567892', '', '', '', 1, '', 0, 'Cartão Crédito', 'Sem cadastro de cliente'],
+];
+
+function baixarModeloVendas() {
+  const XL = window.XLSX;
+  if (!XL) {
+    const csv = MODELO_VENDAS.map(l => l.join(';')).join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = 'modelo-vendas-whatsapp.csv'; a.click();
+    toast('O modelo saiu em CSV — abre no Excel do mesmo jeito.');
+    return;
+  }
+  const ws = XL.utils.aoa_to_sheet(MODELO_VENDAS);
+  ws['!cols'] = [{ wch: 8 }, { wch: 24 }, { wch: 16 }, { wch: 18 }, { wch: 26 }, { wch: 12 },
+                 { wch: 10 }, { wch: 6 }, { wch: 12 }, { wch: 10 }, { wch: 20 }, { wch: 26 }];
+  const wb = XL.utils.book_new();
+  XL.utils.book_append_sheet(wb, ws, 'Vendas');
+  const bin = XL.write(wb, { bookType: 'xlsx', type: 'array' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([bin],
+    { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+  a.download = 'modelo-vendas-whatsapp.xlsx'; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+async function modalImportarVendas(aoFinalizar) {
+  const rl = await api('lojas:listar');
+  const lojas = (rl && rl.ok ? rl.lojas : []) || [];
+  // Palpite da loja do WhatsApp: a que tiver "whats"/"online" no nome. É só o
+  // valor inicial do select — o operador confirma.
+  const palpite = lojas.find(l => /whats|online|delivery/i.test(l.nome || '')) || lojas[0];
+
+  let analise = null;   // resultado de vendas:importarAnalisar
+  let linhas  = null;   // linhas cruas da planilha
+
+  const m = modal('📥 Importar vendas de planilha', `
+    <div style="width:min(820px,94vw)">
+      <p style="font-size:12px;color:var(--texto-suave);margin:0 0 10px">
+        Uma linha por peça. A coluna <b>Venda</b> agrupa: duas linhas com o mesmo número
+        viram um pedido só. Cliente e forma de pagamento saem da primeira linha do grupo.
+        Sem código de barras, informe produto + cor + tamanho.
+      </p>
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px">
+        <div class="campo" style="margin:0;flex:1;min-width:180px">
+          <label>Vendas entram na loja</label>
+          <select id="iv-loja">${lojas.map(l =>
+            `<option value="${l.id}" ${palpite && l.id === palpite.id ? 'selected' : ''}>${esc(l.nome)}</option>`
+          ).join('')}</select>
+        </div>
+        <div class="campo" style="margin:0;flex:2;min-width:220px">
+          <label>Planilha (.xlsx ou .csv)</label>
+          <input type="file" id="iv-arquivo" accept=".xlsx,.xls,.csv">
+        </div>
+        <button type="button" class="btn btn-suave" id="iv-modelo" style="flex:0 0 auto">⬇ Baixar modelo</button>
+      </div>
+      <div id="iv-resultado" style="max-height:44vh;overflow-y:auto"></div>
+      <div class="erro" id="iv-erro"></div>
+    </div>`, async (mm, fechar) => {
+    const erro = mm.querySelector('#iv-erro');
+    if (!analise || !analise.resumo.prontas) {
+      erro.textContent = 'Escolha uma planilha com pelo menos uma venda sem erro.';
+      return;
+    }
+    const r = await api('vendas:importarConfirmar', {
+      linhas, loja_id: Number(mm.querySelector('#iv-loja').value),
+    });
+    if (!r.ok) { erro.textContent = r.erro; return; }
+    fechar();
+    toast(`${r.resumo.vendas} venda(s) importada(s) · ${r.resumo.pecas} peça(s) · ${moeda(r.resumo.total)}.`);
+    if (aoFinalizar) aoFinalizar();
+  }, 'Importar');
+
+  m.querySelector('#iv-modelo').onclick = baixarModeloVendas;
+
+  const $res = m.querySelector('#iv-resultado');
+  m.querySelector('#iv-arquivo').addEventListener('change', async (ev) => {
+    const arq = ev.target.files && ev.target.files[0];
+    m.querySelector('#iv-erro').textContent = '';
+    analise = null; linhas = null;
+    if (!arq) { $res.innerHTML = ''; return; }
+    const XL = window.XLSX;
+    if (!XL) { m.querySelector('#iv-erro').textContent = 'Leitor de planilha indisponível.'; return; }
+
+    $res.innerHTML = '<div class="vazio">Conferindo a planilha…</div>';
+    try {
+      const buf = await arq.arrayBuffer();
+      const wb  = XL.read(buf, { type: 'array' });
+      // `defval: ''` para a célula vazia virar string e não sumir do objeto —
+      // sem isso a linha perde a coluna e o agrupamento por venda quebra.
+      linhas = XL.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '', raw: false });
+    } catch {
+      $res.innerHTML = '';
+      m.querySelector('#iv-erro').textContent = 'Não consegui ler esta planilha. Use o modelo como base.';
+      return;
+    }
+
+    const r = await api('vendas:importarAnalisar', { linhas });
+    if (!r.ok) { $res.innerHTML = ''; m.querySelector('#iv-erro').textContent = r.erro; return; }
+    analise = r;
+
+    const s = r.resumo;
+    const cartao = (rot, val, cor) => `
+      <div style="flex:1;min-width:110px;border:1px solid var(--borda);border-radius:8px;padding:8px 10px">
+        <div style="font-size:11px;color:var(--texto-suave)">${rot}</div>
+        <b style="font-size:16px;${cor ? `color:${cor}` : ''}">${val}</b></div>`;
+
+    $res.innerHTML = `
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        ${cartao('Prontas', s.prontas, 'var(--verde,#16a34a)')}
+        ${cartao('Com erro', s.com_erro, s.com_erro ? 'var(--vermelho,#dc2626)' : '')}
+        ${cartao('Peças', s.pecas)}
+        ${cartao('Total', moeda(s.total))}
+      </div>
+      ${r.vendas.map(v => `
+        <div style="border:1px solid var(--borda);border-left:3px solid ${v.pode ? 'var(--verde,#16a34a)' : 'var(--vermelho,#dc2626)'};
+          border-radius:6px;padding:8px 10px;margin-bottom:6px">
+          <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px">
+            <b>${v.pode ? '✅' : '⚠️'} Venda ${esc(String(v.ref))}</b>
+            <span>${esc(v.cliente || 'sem cliente')}${v.cliente_novo ? ' <small style="opacity:.6">(não cadastrada)</small>' : ''}
+              · ${esc(v.forma)} · <b>${moeda(v.total)}</b></span>
+          </div>
+          ${v.itens.length ? `<div style="font-size:11px;color:var(--texto-suave);margin-top:4px">
+            ${v.itens.map(i => `${i.qtd}× ${esc(i.produto)}${i.cor && i.cor !== 'Única' ? ' · ' + esc(i.cor) : ''}${i.tamanho && i.tamanho !== 'U' ? ' · ' + esc(i.tamanho) : ''} — ${moeda(i.total)}`).join('<br>')}
+          </div>` : ''}
+          ${v.erros.length ? `<div style="font-size:11px;color:var(--vermelho,#dc2626);margin-top:4px">
+            ${v.erros.map(e => '• ' + esc(e)).join('<br>')}</div>` : ''}
+        </div>`).join('')}
+      ${s.com_erro ? `<p style="font-size:11.5px;color:var(--texto-suave);margin-top:8px">
+        As vendas com erro <b>não são importadas</b> — as prontas entram normalmente.
+        Corrija a planilha e importe as que faltaram depois.</p>` : ''}`;
+  });
+}
+
+// ── Troca rápida (v3.25.40) ─────────────────────────────────────────────────
+// Entra o que voltou, sai o que a cliente leva. Sem procurar a venda de origem:
+// era o passo lento do balcão e o que mais dava errado (cupom perdido, data
+// errada, venda de outro caixa). O crédito é o preço de tabela da peça devolvida
+// e o operador pode baixar — nunca subir, isso o backend também trava.
+//
+// Quem precisa do rastro completo (desconto herdado da compra, garantia de não
+// devolver a mesma peça duas vezes) usa "Troca pela venda".
+async function modalTrocaRapida(aoFinalizar) {
+  let voltou = [];   // [{ variacao_id, produto, cor, tamanho, tabela, valor_unit, qtd }]
+  let levou  = [];   // idem, com preco_unit
+  const ar = v => Math.round((Number(v) || 0) * 100) / 100;
+  const rot = i => `${i.produto}${i.cor && i.cor !== 'Única' ? ' · ' + i.cor : ''}${i.tamanho && i.tamanho !== 'U' ? ' · ' + i.tamanho : ''}`;
+
+  const painel = (lado, cor, titulo, dica) => `
+    <div style="flex:1;min-width:260px;border:1px solid var(--borda);border-radius:8px;padding:10px">
+      <div style="font-weight:700;color:${cor};font-size:13px;margin-bottom:2px">${titulo}</div>
+      <div style="font-size:11px;color:var(--texto-suave);margin-bottom:8px">${dica}</div>
+      <input id="tr-busca-${lado}" type="text" placeholder="🔍 Bipe o código ou digite o nome…"
+        style="width:100%;padding:6px 10px;border:1px solid var(--borda);border-radius:6px;font-size:12px">
+      <div id="tr-res-${lado}" style="display:none;max-height:130px;overflow-y:auto;border:1px solid var(--borda);border-radius:6px;padding:4px;margin-top:6px;background:var(--fundo)"></div>
+      <table style="width:100%;font-size:12px;margin-top:8px"><tbody id="tr-body-${lado}"></tbody></table>
+      <div style="display:flex;justify-content:space-between;border-top:1px solid var(--borda);margin-top:8px;padding-top:6px">
+        <span style="font-size:12px;color:var(--texto-suave)">${lado === 'dev' ? 'Crédito' : 'Total'}</span>
+        <b id="tr-tot-${lado}" style="color:${cor}">R$ 0,00</b>
+      </div>
+    </div>`;
+
+  const m = modal('🔄 Troca rápida', `
+    <div style="width:min(860px,94vw)">
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        ${painel('dev', 'var(--verde,#16a34a)', '⬅️ Voltou (entra no estoque)',
+                 'O valor começa no preço de tabela. Dá para baixar se a peça veio com defeito ou foi comprada em promoção.')}
+        ${painel('novo', 'var(--vinho)', '➡️ Levou (sai do estoque)',
+                 'O que a cliente está levando no lugar.')}
+      </div>
+
+      <div style="border-top:1px solid var(--borda);padding-top:10px;margin-top:12px">
+        <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:8px">
+          <span>Diferença</span><b id="tr-dif" style="font-size:16px">R$ 0,00</b>
+        </div>
+        <div id="tr-pag" style="display:none">
+          <div style="font-size:11px;color:var(--texto-suave);margin-bottom:6px">Cliente paga a diferença em:</div>
+          <div class="linha-2">
+            <div class="campo" style="margin:0"><label>Forma</label>
+              <select id="tr-forma">
+                <option value="dinheiro">Dinheiro</option><option value="pix">PIX</option>
+                <option value="debito">Cartão Débito</option><option value="credito">Cartão Crédito</option>
+              </select></div>
+            <div class="campo" style="margin:0"><label>Valor (R$)</label>
+              <input id="tr-valor" type="number" min="0" step="0.01" value="0"></div>
+          </div>
+        </div>
+        <div id="tr-exc" style="display:none;margin-top:4px">
+          <div id="tr-exc-msg" style="color:var(--verde,#16a34a);font-size:12px;margin-bottom:6px"></div>
+          <div class="campo" style="margin:0"><label>O que fazer com a diferença a favor da cliente?</label>
+            <select id="tr-destino">
+              <option value="vale">🎫 Vale-troca (crédito para usar depois)</option>
+              <option value="dinheiro">💵 Devolver em dinheiro (sai do caixa)</option>
+              <option value="estorno">💳 Estornar no cartão (registro)</option>
+              <option value="nada">— Nada (cliente abre mão da diferença)</option>
+            </select></div>
+        </div>
+        <div id="tr-igual" style="display:none;font-size:12px;color:var(--texto-suave);margin-top:4px">
+          ✅ Mesmo valor — nada a acertar. É só confirmar.
+        </div>
+        <div class="erro" id="tr-erro"></div>
+        <div style="margin-top:8px;font-size:11px;color:var(--texto-suave)">
+          Precisa do desconto da compra original ou do vínculo com a nota?
+          <a href="#" id="tr-pela-venda" style="color:var(--vinho);font-weight:600">Trocar pela venda de origem</a>.
+        </div>
+      </div>
+    </div>`, async (mm, fechar) => {
+    const erro = mm.querySelector('#tr-erro');
+    if (!voltou.length) { erro.textContent = 'Bipe a peça que a cliente devolveu.'; return; }
+    const credito = ar(voltou.reduce((a, i) => a + i.valor_unit * i.qtd, 0));
+    const total   = ar(levou.reduce((a, i) => a + i.preco_unit * i.qtd, 0));
+    const dif     = ar(total - credito);
+    const extras  = dif > 0.01
+      ? [{ forma: mm.querySelector('#tr-forma').value, valor: Number(mm.querySelector('#tr-valor').value) || 0 }]
+      : [];
+    const r = await api('trocas:registrarRapida', {
+      itens_devolver: voltou.map(i => ({ variacao_id: i.variacao_id, qtd: i.qtd, valor_unit: i.valor_unit })),
+      itens_novo:     levou.map(i => ({ variacao_id: i.variacao_id, qtd: i.qtd, preco_unit: i.preco_unit })),
+      pagamentos_extra: extras,
+      destino_excedente: dif < -0.01 ? mm.querySelector('#tr-destino').value : null,
+    });
+    if (!r.ok) { erro.textContent = r.erro; return; }
+    fechar();
+    if (r.vale && r.vale.codigo) toast(`Troca feita. Vale-troca ${r.vale.codigo} de ${moeda(r.excedente)}.`);
+    else if (r.destino_excedente === 'dinheiro') toast(`Troca feita. ${moeda(r.excedente)} devolvidos do caixa.`);
+    else toast('Troca registrada!');
+    if (aoFinalizar) aoFinalizar();
+  }, 'Confirmar troca');
+
+  function linhas(lado) {
+    const lista = lado === 'dev' ? voltou : levou;
+    const campoValor = lado === 'dev' ? 'valor_unit' : 'preco_unit';
+    const corpo = m.querySelector(`#tr-body-${lado}`);
+    if (!lista.length) {
+      corpo.innerHTML = `<tr><td style="font-size:11px;color:var(--texto-suave);padding:8px">Nada aqui ainda.</td></tr>`;
+      return;
+    }
+    corpo.innerHTML = lista.map((i, ix) => `<tr>
+      <td style="padding:3px 0">${esc(rot(i))}<br>
+        <small style="opacity:.55">tabela ${moeda(i.tabela)}</small></td>
+      <td style="width:52px"><input type="number" min="1" step="1" value="${i.qtd}"
+        data-ix="${ix}" data-campo="qtd" style="width:100%;font-size:11px;padding:2px 4px"></td>
+      <td style="width:76px"><input type="number" min="0" step="0.01" value="${i[campoValor].toFixed(2)}"
+        data-ix="${ix}" data-campo="valor" style="width:100%;font-size:11px;padding:2px 4px"></td>
+      <td style="width:24px"><button data-ix="${ix}" data-campo="rm"
+        style="border:0;background:none;cursor:pointer;color:var(--vermelho)">✕</button></td>
+    </tr>`).join('');
+    for (const inp of corpo.querySelectorAll('[data-ix]')) {
+      const ix = Number(inp.dataset.ix);
+      if (inp.dataset.campo === 'rm') { inp.onclick = () => { lista.splice(ix, 1); linhas(lado); calcular(); }; continue; }
+      inp.addEventListener('input', () => {
+        const v = Number(inp.value) || 0;
+        if (inp.dataset.campo === 'qtd') lista[ix].qtd = Math.max(1, Math.round(v));
+        else lista[ix][campoValor] = Math.min(ar(v), lista[ix].tabela); // teto no preço de tabela
+        calcular();
+      });
+      // Corrige o campo só ao sair: normalizar a cada tecla atrapalha a digitação.
+      inp.addEventListener('blur', () => { linhas(lado); calcular(); });
+    }
+  }
+
+  function calcular() {
+    const credito = ar(voltou.reduce((a, i) => a + i.valor_unit * i.qtd, 0));
+    const total   = ar(levou.reduce((a, i) => a + i.preco_unit * i.qtd, 0));
+    const dif     = ar(total - credito);
+    m.querySelector('#tr-tot-dev').textContent  = moeda(credito);
+    m.querySelector('#tr-tot-novo').textContent = moeda(total);
+    const $d = m.querySelector('#tr-dif');
+    const $p = m.querySelector('#tr-pag');
+    const $e = m.querySelector('#tr-exc');
+    const $i = m.querySelector('#tr-igual');
+    if (dif > 0.01) {
+      $d.textContent = moeda(dif); $d.style.color = 'var(--vermelho,#dc2626)';
+      $p.style.display = ''; $e.style.display = 'none'; $i.style.display = 'none';
+      m.querySelector('#tr-valor').value = dif.toFixed(2);
+    } else if (dif < -0.01) {
+      $d.textContent = moeda(Math.abs(dif)); $d.style.color = 'var(--verde,#16a34a)';
+      $p.style.display = 'none'; $e.style.display = ''; $i.style.display = 'none';
+      m.querySelector('#tr-exc-msg').textContent =
+        `Sobram ${moeda(Math.abs(dif))} a favor da cliente.`;
+    } else {
+      $d.textContent = moeda(0); $d.style.color = '';
+      $p.style.display = 'none'; $e.style.display = 'none'; $i.style.display = '';
+    }
+  }
+
+  // Busca e inclusão nos dois lados. Código de barras exato entra direto: o
+  // leitor manda o código + Enter, e parar para clicar na lista mataria a
+  // vantagem de bipar.
+  function ligarBusca(lado) {
+    const inp = m.querySelector(`#tr-busca-${lado}`);
+    const res = m.querySelector(`#tr-res-${lado}`);
+    const lista = () => (lado === 'dev' ? voltou : levou);
+    const campo = lado === 'dev' ? 'valor_unit' : 'preco_unit';
+
+    const incluir = (v) => {
+      const ex = lista().find(i => i.variacao_id === v.id);
+      if (ex) ex.qtd++;
+      else lista().push({
+        variacao_id: v.id, produto: v.produto, cor: v.cor || '', tamanho: v.tamanho || '',
+        tabela: ar(v.preco_venda), [campo]: ar(v.preco_venda), qtd: 1,
+      });
+      inp.value = ''; res.style.display = 'none';
+      linhas(lado); calcular(); inp.focus();
+    };
+
+    let t;
+    inp.addEventListener('input', () => {
+      clearTimeout(t);
+      const termo = inp.value.trim();
+      if (!termo) { res.style.display = 'none'; return; }
+      t = setTimeout(async () => {
+        const r = await api('estoque:buscar', { termo });
+        const vs = (r.ok && r.variacoes) || [];
+        if (!vs.length) {
+          res.style.display = 'block';
+          res.innerHTML = '<div style="padding:6px;font-size:11px;color:var(--texto-suave)">Nenhum produto encontrado.</div>';
+          return;
+        }
+        // Bipou: código de barras bate exato e é único → entra sem clique.
+        const exato = vs.filter(v => String(v.codigo_barras || '') === termo);
+        if (exato.length === 1) { incluir(exato[0]); return; }
+        res.style.display = 'block';
+        res.innerHTML = vs.slice(0, 10).map(v => `
+          <div class="tr-ri" data-vid="${v.id}"
+            style="padding:5px 7px;cursor:pointer;border-radius:4px;font-size:11px;display:flex;justify-content:space-between;gap:8px">
+            <span>${esc(v.produto)} ${v.cor && v.cor !== 'Única' ? esc(v.cor) : ''} ${v.tamanho && v.tamanho !== 'U' ? esc(v.tamanho) : ''}
+              <span style="color:var(--texto-suave)">(est:${v.estoque})</span></span>
+            <b style="color:var(--vinho)">${moeda(v.preco_venda)}</b>
+          </div>`).join('');
+        for (const div of res.querySelectorAll('.tr-ri')) {
+          div.addEventListener('mouseenter', () => div.style.background = 'var(--fundo-hover,#f3f4f6)');
+          div.addEventListener('mouseleave', () => div.style.background = '');
+          div.onclick = () => incluir(vs.find(v => v.id === Number(div.dataset.vid)));
+        }
+      }, 250);
+    });
+  }
+
+  m.querySelector('#tr-pela-venda').onclick = (e) => {
+    e.preventDefault(); m.remove(); modalBuscarVendaTroca();
+  };
+
+  ligarBusca('dev'); ligarBusca('novo');
+  linhas('dev'); linhas('novo'); calcular();
+  setTimeout(() => { try { m.querySelector('#tr-busca-dev').focus(); } catch {} }, 60);
+}
+
 async function modalBuscarVendaTroca() {
   const hoje = new Date().toISOString().slice(0, 10);
   let ini = hoje, fim = hoje, termo = '';

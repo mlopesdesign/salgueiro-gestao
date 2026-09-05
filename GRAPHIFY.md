@@ -3,7 +3,7 @@
 > Mapa técnico gerado automaticamente por `tools/graphify.js`.
 > **Não edite à mão.** Regere com `node tools/graphify.js` a cada alteração estrutural.
 
-**Versão:** 3.25.37 · **Gerado em:** 2026-09-02
+**Versão:** 3.25.40 · **Gerado em:** 2026-09-05
 **Aplicação:** `br.com.mllopes.salgueirogestao` (Neutralino 6 + WebView2)
 **Cliente:** Boutique do Salgueiro · **Autor:** ML Lopes Design
 
@@ -78,21 +78,22 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `crediario.js` | 108 | 5 | aniversariantes, excluirCliente, obterCliente, parcelasAbertas, receberParcela |
 | `dashboard.js` | 214 | 2 | resumo |
 | `devolucoes.js` | 127 | 3 | itensVenda, listar, registrar |
-| `estoque.js` | 152 | 5 | buscarVariacoes, kardex, listarCompleto, movimentar, reposicao |
-| `estoques.js` | 335 | 15 | aplicar, arred, conteudo, daLoja, desativar, garantirDaLoja, listar, listarTransferencias, +8 |
+| `estoque.js` | 171 | 5 | buscarVariacoes, kardex, listarCompleto, movimentar, reposicao |
+| `estoques.js` | 343 | 15 | aplicar, arred, conteudo, daLoja, desativar, garantirDaLoja, listar, listarTransferencias, +8 |
 | `financeiro.js` | 138 | 5 | baixar, excluir, fluxo, listar, salvar |
+| `importar-vendas.js` | 270 | 6 | COLUNAS, analisar, confirmar |
 | `licenca.js` | 288 | 25 | DEV_USUARIO, MODULOS, NOME_PLANO, PLANOS, SETORES, devAplicar, devEntrar, devRemover, +14 |
 | `logo-default.js` | 4 | 0 | LOGO_DEFAULT |
 | `lojas.js` | 91 | 5 | arred, desativar, excluir, listar, lojaPadrao, salvar |
 | `mensagens.js` | 406 | 21 | JANELA_POPUP_H, ONLINE_TTL_S, confirmarAviso, contatos, encerrarAviso, enviar, enviarAviso, historico, +4 |
 | `nuvem.js` | 353 | 14 | desconectar, fazerBackup, fazerBackupTodos, iniciarOAuth, obterStatus, precisaBackupDiario, registrarOAuthListener, salvarClientId |
-| `pdv.js` | 548 | 12 | abrirCaixa, caixaAtual, cancelarVenda, fecharCaixa, listarVendas, listarVendasGeral, movimentoCaixa, obterVenda, +2 |
+| `pdv.js` | 569 | 13 | abrirCaixa, caixaAtual, cancelarVenda, fecharCaixa, listarVendas, listarVendasGeral, movimentoCaixa, obterVenda, +3 |
 | `permissoes.js` | 94 | 3 | CATALOGO, DEFAULTS, TODAS, efetivas, normalizar, pode |
 | `pontos.js` | 110 | 9 | ajustar, calcularGanho, calcularResgate, creditar, debitar, getConfig, historico, saldo, +1 |
-| `produtos.js` | 253 | 7 | excluirCategoria, excluirProduto, listarCategorias, listarProdutos, obterProduto, salvarCategoria, salvarProduto |
+| `produtos.js` | 254 | 7 | excluirCategoria, excluirProduto, listarCategorias, listarProdutos, obterProduto, salvarCategoria, salvarProduto |
 | `rede.js` | 150 | 3 | SOMENTE_LOCAL, imprimir, iniciar, listarImpressoras, parar, preparar, status |
 | `relatorios.js` | 1419 | 21 | TAXAS_PADRAO, comprasAcompanhadas, consignadosMensal, curvaAbc, estoqueDetalhado, eventosVenda, pecasParadas, ranking, +5 |
-| `trocas.js` | 252 | 2 | DESTINOS, registrar |
+| `trocas.js` | 417 | 3 | DESTINOS, registrar, registrarRapida |
 | `updater.js` | 50 | 1 | verificarAtualizacao |
 | `util.js` | 68 | 4 | auditar, codigoInterno, dvEan13, hashSenha, verificarSenha |
 | `vales_troca.js` | 122 | 9 | VALIDADE_PADRAO_DIAS, consultar, criar, estaVencido, listar, usar |
@@ -104,7 +105,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `ambiente.js` | 316 | 6 |
 | `db.js` | 565 | 5 |
 | `servidor-rede-embutido.js` | 612 | 17 |
-| `servidor.js` | 2679 | 15 |
+| `servidor.js` | 2688 | 15 |
 
 ## 6. Telas (`src/js`)
 
@@ -115,20 +116,20 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `clientes.js` | 528 | viewClientes |
 | `compras.js` | 228 | viewCompras |
 | `configuracoes.js` | 1527 | viewConfiguracoes |
-| `estoque.js` | 544 | abrirEtiquetas, ean13Svg, viewEstoque |
-| `estoques.js` | 803 | viewEstoques |
+| `estoque.js` | 624 | abrirEtiquetas, ean13Svg, formMovimento, viewEstoque |
+| `estoques.js` | 927 | viewEstoques |
 | `etiquetas.js` | 146 | abrirEtiquetasLote |
 | `financeiro.js` | 261 | viewFinanceiro |
 | `mensagens.js` | 758 | abrirBalao, encerrarTelaMensagens, iniciarMensagens, pararMensagens, viewMensagens |
 | `neutralino.js` | 2 | — |
-| `novidades.js` | 848 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
-| `pdv.js` | 1908 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
+| `novidades.js` | 879 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
+| `pdv.js` | 2318 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
 | `ranking.js` | 361 | viewRanking |
 | `relatorios.js` | 1690 | viewRelatorios |
 
 ---
 
-## 7. Rotas da API (152)
+## 7. Rotas da API (156)
 
 Toda comunicação tela ↔ backend passa por `api('canal:acao', payload)`.
 A coluna **Permissão** vem de `PERMISSAO_ROTA` em `servidor.js` — sem entrada ali,
@@ -362,6 +363,7 @@ a rota exige apenas sessão válida.
 
 | Canal | Permissão | Destino |
 |---|---|---|
+| `pdv:trocarLoja` | `pdv.vender` | `pdv.trocarLoja(db, p \|\| {}, sessao.usuario)` |
 | `pdv:caixaAtual` | `pdv.ver` | `pdv.caixaAtual(db)` |
 | `pdv:abrirCaixa` | `caixa.abrir_fechar` | `pdv.abrirCaixa(db, p, sessao.usuario)` |
 | `pdv:movimentoCaixa` | `caixa.sangria` | `pdv.movimentoCaixa(db, p, sessao.usuario)` |
@@ -432,6 +434,7 @@ a rota exige apenas sessão válida.
 
 | Canal | Permissão | Destino |
 |---|---|---|
+| `trocas:registrarRapida` | `pdv.ver` | `trocas.registrarRapida(db, p \|\| {}, sessao.usuario)` |
 | `trocas:registrar` | `pdv.ver` | `trocas.registrar(db, p, sessao.usuario)` |
 
 ### `updater:*`
@@ -446,6 +449,13 @@ a rota exige apenas sessão válida.
 |---|---|---|
 | `vales_troca:consultar` | `vales.ver` | `valesTroca.consultar(db, p.codigo)` |
 | `vales_troca:listar` | `vales.ver` | `valesTroca.listar(db)` |
+
+### `vendas:*`
+
+| Canal | Permissão | Destino |
+|---|---|---|
+| `vendas:importarAnalisar` | `pdv.vender` | `importarVendas.analisar(db, p \|\| {})` |
+| `vendas:importarConfirmar` | `pdv.vender` | `importarVendas.confirmar(db, p \|\| {}, sessao.usuario)` |
 
 ---
 
@@ -526,9 +536,10 @@ apenas **repartem** esse total.
 | `compras.js` | 1 | 1 |
 | `devolucoes.js` | 1 | 1 |
 | `estoque.js` | 1 | 1 |
+| `importar-vendas.js` | 1 | 1 |
 | `pdv.js` | 2 | 2 |
 | `produtos.js` | 1 | 1 |
-| `trocas.js` | 2 | 2 |
+| `trocas.js` | 4 | 4 |
 
 > Ao acrescentar um ponto novo que mexa em estoque, ele precisa aparecer nas
 > **duas** colunas, senão o total e a soma dos locais divergem.

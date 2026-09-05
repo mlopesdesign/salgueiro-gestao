@@ -9,29 +9,27 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.25.37 |
-| **Data do último build** | 2026-09-02 |
+| **Versão atual** | 3.25.40 |
+| **Data do último build** | 2026-09-05 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.25.37 em 2026-09-02 ✓ |
-| **5 lugares da versão** | todos em 3.25.37 ✓ (config, app.js, ambiente.js, .nsi, novidades.js) |
+| **GRAPHIFY** | atualizado para 3.25.40 em 2026-09-05 ✓ |
+| **5 lugares da versão** | todos em 3.25.40 ✓ (config, app.js, ambiente.js, .nsi, novidades.js) |
 
 ---
 
 ## 2. Git — situação real
 
-Último commit no repositório: **v3.25.19** (janela maximizada + botão do meio).
+Commitado e tagueado até **v3.25.40**. O histórico voltou a acompanhar o disco.
 
-As versões **3.25.20 a 3.25.34 não estão commitadas.** O código no disco está
-correto e completo — só o histórico do git não acompanhou.
+Últimos commits:
+- `v3.25.40` — troca rápida + importação de vendas por planilha
+- `v3.25.39` — fix da saída de estoque, entrada repartida, busca nos estoques, troca de loja no PDV
+- `7c37a1e` — push-github.bat para v3.25.38
+- `aa4061c` — v3.25.38
 
-Quando for commitar, agrupar em blocos temáticos:
-- 3.25.20–3.25.22: estoque, fotos para arquivo (fix OOM), recibo consignado
-- 3.25.23–3.25.25: transferência melhorada
-- 3.25.26–3.25.28: foto opcional em listas, catálogo, cancelar venda
-- 3.25.30–3.25.31: fix consignado desconto duplo, catálogo com fotos
-- 3.25.32–3.25.33: reparo automático de vínculo de fotos, fix do updater
-- 3.25.34: fotos na listagem do estoque por local
+> **Falta apenas dar o push.** O sandbox Linux não tem as credenciais do GitHub;
+> rodar `push-github.bat` no Windows envia commits, tags e cria a release.
 
 ---
 
@@ -55,7 +53,9 @@ Quando for commitar, agrupar em blocos temáticos:
 | 3.25.35 | 2026-08-31 | Fix OOM migração/reparo fotos; desconto à vista bloqueado com taxa; venda a custo bloqueia categoria; scroll PDV; variação excluída pode ser re-adicionada |
 | 3.25.36 | 2026-09-02 | Filtros por fornecedor consignado no Estoque; badge de fornecedor na lista |
 | 3.25.37 | 2026-09-02 | Filtro cascata consignado/fornecedor em Produtos e Estoque (SELECT dropdowns) |
-| 3.25.37 | 2026-09-02 | Filtro cascata consignado/fornecedor em Produtos e Estoque (SELECT dropdowns) |
+| 3.25.38 | 2026-09-02 | Fix do filtro por fornecedor em Produtos (fornecedor_id ausente na API); filtro cascata em Estoques (locais) |
+| 3.25.39 | 2026-09-04 | **Fix crítico:** saída de estoque caía no almoxarifado em vez de sair do local. Entrada repartida entre estoques; busca e filtro de zerados em Estoques (locais); troca de loja no PDV sem fechar o caixa |
+| 3.25.40 | 2026-09-05 | Troca rápida (sem venda de origem); importação de vendas de planilha para a loja do WhatsApp |
 
 ---
 
@@ -70,9 +70,11 @@ Quando for commitar, agrupar em blocos temáticos:
 - [x] Variação excluída (soft-delete) bloqueava re-inserção com mesmo nome
 
 **Próximos passos:**
-- [x] `neu build --release` + gerar instalador v3.25.37
+- [x] `resources.neu` regerado nos DOIS lugares para v3.25.40
 - [x] `node tools/graphify.js` para atualizar GRAPHIFY.md
-- [x] git commitado até v3.25.37 (commits 4c0c499, 7f3f3c1, a16ef85)
+- [x] git commitado e tagueado até v3.25.40
+- [ ] **rodar `push-github.bat` no Windows** — envia commits/tags e cria a release v3.25.40
+- [ ] recompilar o instalador com `makensis salgueiro-setup.nsi` (opcional; o updater usa o resources.neu)
 
 ---
 
@@ -84,6 +86,12 @@ Quando for commitar, agrupar em blocos temáticos:
 - **Impressão silenciosa do cupom** — aguardando nome da impressora do cliente.
 - **Rede multiterminal no cliente** — testar após firewall liberar porta 8750 TCP.
 - **Teste visual E2E bloqueado** — sandbox sem GTK/WebKit. Substituto: jsdom.
+- **Troca rápida não confere dupla devolução** — sem venda de origem não há
+  `venda_itens` para comparar. O crédito é limitado ao preço de tabela e a peça
+  volta ao estoque, então uma devolução repetida aparece como sobra no balanço.
+  Quem precisa da garantia usa "Trocar pela venda de origem".
+- **Importação de vendas exige caixa aberto** — as vendas entram no caixa do
+  momento. Importar o movimento de ontem lança tudo no caixa de hoje.
 
 ---
 

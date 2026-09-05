@@ -18,6 +18,7 @@ import * as config from './core/config.js';
 import * as dashboard from './core/dashboard.js';
 import * as permissoes from './core/permissoes.js';
 import * as devolucoes from './core/devolucoes.js';
+import * as importarVendas from './core/importar-vendas.js';
 import * as valesTroca from './core/vales_troca.js';
 import * as pontos from './core/pontos.js';
 import * as consignacao from './core/consignacao.js';
@@ -1069,6 +1070,9 @@ const rotas = {
   'vales_troca:listar': () => valesTroca.listar(db),
 
   // Trocas (devolução + nova venda em transação única)
+  'trocas:registrarRapida': (p) => trocas.registrarRapida(db, p || {}, sessao.usuario),
+  'vendas:importarAnalisar': (p) => importarVendas.analisar(db, p || {}),
+  'vendas:importarConfirmar': (p) => importarVendas.confirmar(db, p || {}, sessao.usuario),
   'trocas:registrar': (p) => trocas.registrar(db, p, sessao.usuario),
 
   // Backup na nuvem — Google Drive e OneDrive (OAuth 2.0 PKCE)
@@ -2341,7 +2345,8 @@ const PERM_ROTA = {
   'devolucoes:itensVenda': 'pdv.devolucao', 'devolucoes:registrar': 'pdv.devolucao', 'devolucoes:listar': 'pdv.devolucao',
   // Troca liberada para todo mundo que opera o PDV (decisão do Marcio, v3.2.0):
   // gerente e vendedores precisam resolver a troca na hora, sem chamar o admin.
-  'trocas:registrar': 'pdv.ver',
+  'trocas:registrar': 'pdv.ver', 'trocas:registrarRapida': 'pdv.ver',
+  'vendas:importarAnalisar': 'pdv.vender', 'vendas:importarConfirmar': 'pdv.vender',
   'vales_troca:consultar': 'vales.ver', 'vales_troca:listar': 'vales.ver',
   'pontos:config': 'pdv.ver', 'pontos:saldo': 'pdv.ver', 'pontos:historico': 'clientes.ver',
   'pontos:salvarConfig': 'config.gerenciar', 'pontos:ajustar': 'config.gerenciar',

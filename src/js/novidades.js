@@ -3,6 +3,16 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.25.40',
+    data: '2026-09-05',
+    itens: [
+      '🔄 TROCA RÁPIDA — a troca ficou muito mais simples: bipa a peça que voltou, bipa a peça que a cliente leva, acerta a diferença. Não precisa mais procurar a venda de origem. O F6 já abre direto nela.',
+      '🧾 A troca pela venda de origem continua disponível (um clique dentro da própria tela) para quando precisar do desconto da compra original.',
+      '📥 IMPORTAR VENDAS DO WHATSAPP — as vendas anotadas na planilha do dia entram todas de uma vez, sem digitar uma a uma no PDV. Botão "Importar planilha" no PDV, com modelo pronto para baixar.',
+      '✅ A planilha é conferida antes de gravar: mostra quantas vendas estão prontas, quais têm erro e por quê. As com erro ficam de fora, as prontas entram.',
+    ],
+  },
+  {
     versao: '3.25.39',
     data: '2026-09-04',
     itens: [

@@ -248,4 +248,169 @@ function registrar(db, p, quem) {
   }
 }
 
-export { registrar, DESTINOS };
+// ── Troca rápida (v3.25.40) ─────────────────────────────────────────────────
+//
+// A troca de balcão do dia a dia: entra a peça que voltou, sai a peça que a
+// cliente leva. Sem caçar a venda de origem — que era o passo lento e o que o
+// operador mais errava (data errada, cupom perdido, venda de outro caixa).
+//
+// O que se perde sem a venda de origem, e por que tudo bem:
+//  · Desconto herdado: não há como saber quanto ela pagou, então o crédito é o
+//    preço de TABELA da peça que voltou. O operador pode BAIXAR esse valor
+//    (peça com defeito, comprada em promoção), nunca subir — senão a troca
+//    viraria uma porta para dar crédito acima do que a peça vale.
+//  · Controle de dupla devolução: sem venda não há `venda_itens` para conferir.
+//    Em compensação a peça devolvida volta ao estoque, então uma peça devolvida
+//    duas vezes aparece como sobra no balanço.
+//
+// Quem precisa do rastro completo (nota, desconto herdado, garantia de não
+// devolver duas vezes) continua usando `registrar()` pela venda de origem.
+function registrarRapida(db, p, quem) {
+  const devolver = (p.itens_devolver || []).filter(i => Number(i.qtd) > 0);
+  const novos    = (p.itens_novo    || []).filter(i => Number(i.qtd) > 0);
+  if (!devolver.length) return { ok: false, erro: 'Bipe a peça que a cliente devolveu.' };
+
+  const infoVar = db.prepare(`
+    SELECT va.id, va.estoque, pr.nome, pr.preco_venda
+    FROM variacoes va JOIN produtos pr ON pr.id = va.produto_id
+    WHERE va.id = ? AND va.ativo = 1
+  `);
+
+  // ── Peças que voltaram: geram crédito ─────────────────────────────────────
+  const devInfos = [];
+  let credito = 0;
+  for (const it of devolver) {
+    const va = infoVar.get(it.variacao_id);
+    if (!va) return { ok: false, erro: 'Peça devolvida não encontrada no cadastro.' };
+    const tabela = arred(va.preco_venda || 0);
+    const pedido = Number(it.valor_unit);
+    // Teto no preço de tabela: crédito acima disso seria dinheiro saindo do nada.
+    const unit = arred(Number.isFinite(pedido) && pedido >= 0 ? Math.min(pedido, tabela) : tabela);
+    const total = arred(it.qtd * unit);
+    devInfos.push({ variacao_id: va.id, qtd: Number(it.qtd), valor_unit: unit, total, nome: va.nome });
+    credito += total;
+  }
+  credito = arred(credito);
+
+  // ── Peças que saem ────────────────────────────────────────────────────────
+  const novosInfos = [];
+  let totalNovo = 0;
+  for (const it of novos) {
+    const va = infoVar.get(it.variacao_id);
+    if (!va) return { ok: false, erro: 'Peça levada não encontrada no cadastro.' };
+    if (va.estoque < it.qtd) return { ok: false, erro: `Estoque insuficiente: ${va.nome} (tem ${va.estoque}).` };
+    const tabela = arred(va.preco_venda || 0);
+    const pedido = Number(it.preco_unit);
+    // Mesmo teto: a peça nova nunca sai acima da tabela.
+    const unit = arred(Number.isFinite(pedido) && pedido >= 0 ? Math.min(pedido, tabela) : tabela);
+    const total = arred(it.qtd * unit);
+    novosInfos.push({ variacao_id: va.id, qtd: Number(it.qtd), preco_unit: unit, total });
+    totalNovo += total;
+  }
+  totalNovo = arred(totalNovo);
+
+  const diferenca = arred(totalNovo - credito);
+  const extras = (p.pagamentos_extra || []).filter(pg => Number(pg.valor) > 0);
+  if (diferenca > 0.01) {
+    const pago = arred(extras.reduce((s, pg) => s + Number(pg.valor), 0));
+    if (pago < diferenca - 0.01) {
+      return { ok: false, erro: `Diferença de ${moedaF(diferenca)} não coberta pelos pagamentos.` };
+    }
+  }
+  const excedente = arred(credito - totalNovo);
+  const destino = DESTINOS.includes(p.destino_excedente) ? p.destino_excedente : 'vale';
+  const clienteId = Number(p.cliente_id) || null;
+
+  db.exec('BEGIN');
+  try {
+    const caixa = db.prepare(
+      'SELECT id, loja_id FROM caixas WHERE fechado_em IS NULL ORDER BY id DESC LIMIT 1'
+    ).get();
+    if (!caixa) { db.exec('ROLLBACK'); return { ok: false, erro: 'Nenhum caixa aberto. Abra o caixa antes de fazer trocas.' }; }
+
+    // Sem venda de origem, o local é o da loja do caixa aberto.
+    const local = estoques.daLoja(db, caixa.loja_id);
+    const localId = local ? local.id : null;
+
+    const formaReembolso = excedente > 0.01 ? destino : 'troca';
+    const rd = db.prepare(`
+      INSERT INTO devolucoes (venda_id, cliente_id, usuario_id, caixa_id, tipo, valor_devolvido, forma_reembolso, motivo)
+      VALUES (NULL,?,?,?,?,?,?,?)
+    `).run(clienteId, quem?.id || null, caixa.id, 'troca', credito, formaReembolso,
+           p.motivo || 'Troca rápida (sem venda de origem)');
+    const devId = Number(rd.lastInsertRowid);
+
+    const insDevItem = db.prepare(
+      'INSERT INTO devolucao_itens (devolucao_id, variacao_id, qtd, valor_unit, total) VALUES (?,?,?,?,?)'
+    );
+    const insMov = db.prepare(
+      'INSERT INTO movimentos_estoque (variacao_id, tipo, qtd, motivo, usuario_id, estoque_id) VALUES (?,?,?,?,?,?)'
+    );
+    for (const it of devInfos) {
+      insDevItem.run(devId, it.variacao_id, it.qtd, it.valor_unit, it.total);
+      db.prepare('UPDATE variacoes SET estoque=estoque+? WHERE id=?').run(it.qtd, it.variacao_id);
+      insMov.run(it.variacao_id, 'devolucao', it.qtd, `Troca rápida #${devId}`, quem?.id || null, localId);
+      if (localId) estoques.aplicar(db, localId, it.variacao_id, it.qtd);
+    }
+
+    let novaVendaId = null, vale = null;
+    if (novosInfos.length) {
+      const rv = db.prepare(`
+        INSERT INTO vendas (caixa_id, loja_id, cliente_id, usuario_id, subtotal, desconto, total, obs, status)
+        VALUES (?,?,?,?,?,?,?,?,?)
+      `).run(caixa.id, caixa.loja_id || null, clienteId, quem?.id || null,
+             totalNovo, 0, totalNovo, `Troca rápida — devolução #${devId}`, 'concluida');
+      novaVendaId = Number(rv.lastInsertRowid);
+
+      const insItem = db.prepare(
+        'INSERT INTO venda_itens (venda_id, variacao_id, qtd, preco_unit, desconto, total) VALUES (?,?,?,?,?,?)'
+      );
+      for (const it of novosInfos) {
+        insItem.run(novaVendaId, it.variacao_id, it.qtd, it.preco_unit, 0, it.total);
+        db.prepare('UPDATE variacoes SET estoque=estoque-? WHERE id=?').run(it.qtd, it.variacao_id);
+        insMov.run(it.variacao_id, 'venda', -it.qtd, `Troca rápida (venda #${novaVendaId})`, quem?.id || null, localId);
+        if (localId) estoques.aplicar(db, localId, it.variacao_id, -it.qtd);
+      }
+
+      const creditoAplicado = arred(Math.min(credito, totalNovo));
+      if (creditoAplicado > 0) {
+        db.prepare('INSERT INTO venda_pagamentos (venda_id, forma, valor, parcelas, troco) VALUES (?,?,?,?,?)')
+          .run(novaVendaId, 'troca', creditoAplicado, 1, 0);
+      }
+      for (const pg of extras) {
+        db.prepare('INSERT INTO venda_pagamentos (venda_id, forma, valor, parcelas, troco) VALUES (?,?,?,?,?)')
+          .run(novaVendaId, pg.forma, arred(Number(pg.valor)), pg.parcelas || 1, 0);
+      }
+    }
+
+    let excedentePago = 0;
+    if (excedente > 0.01) {
+      if (destino === 'vale') {
+        vale = valesTroca.criar(db, { valor: excedente, clienteId, devolucaoId: devId }, quem);
+      } else if (destino === 'dinheiro') {
+        db.prepare('INSERT INTO caixa_movimentos (caixa_id, tipo, valor, motivo, usuario_id) VALUES (?,?,?,?,?)')
+          .run(caixa.id, 'sangria', excedente, `Troca rápida #${devId} — diferença devolvida`, quem?.id || null);
+        excedentePago = excedente;
+      } else if (destino === 'estorno') {
+        excedentePago = excedente;
+      }
+    }
+
+    db.exec('COMMIT');
+    auditar(db, quem, 'troca_rapida',
+      `dev#${devId}${novaVendaId ? ` nova#${novaVendaId}` : ''} crédito ${moedaF(credito)}` +
+      (excedente > 0.01 ? ` exced ${moedaF(excedente)} → ${destino}` : ''));
+    return {
+      ok: true, rapida: true,
+      devolucao_id: devId, venda_nova_id: novaVendaId,
+      credito, total_novo: totalNovo, diferenca, excedente,
+      destino_excedente: excedente > 0.01 ? destino : null,
+      excedente_pago: excedentePago, vale,
+    };
+  } catch (e) {
+    db.exec('ROLLBACK');
+    throw e;
+  }
+}
+
+export { registrar, registrarRapida, DESTINOS };

@@ -50,3 +50,7 @@ neutralino-win_x64.exe
 
 # Instaladores compilados — não entram no git (binários grandes)
 instalador/*.exe
+
+# Pastas de descarte e backups locais
+_to_delete/
+*.bak
