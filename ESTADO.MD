@@ -9,20 +9,21 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.25.40 |
-| **Data do último build** | 2026-09-05 |
+| **Versão atual** | 3.25.41 |
+| **Data do último build** | 2026-09-10 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.25.40 em 2026-09-05 ✓ |
-| **5 lugares da versão** | todos em 3.25.40 ✓ (config, app.js, ambiente.js, .nsi, novidades.js) |
+| **GRAPHIFY** | atualizado para 3.25.41 em 2026-09-10 ✓ |
+| **5 lugares da versão** | todos em 3.25.41 ✓ (config, app.js, ambiente.js, .nsi, novidades.js) |
 
 ---
 
 ## 2. Git — situação real
 
-Commitado e tagueado até **v3.25.40**. O histórico voltou a acompanhar o disco.
+Commitado e tagueado até **v3.25.41**. O histórico voltou a acompanhar o disco.
 
 Últimos commits:
+- `v3.25.41` — fim do corte na busca do PDV (produto novo ficava invisível)
 - `v3.25.40` — troca rápida + importação de vendas por planilha
 - `v3.25.39` — fix da saída de estoque, entrada repartida, busca nos estoques, troca de loja no PDV
 - `7c37a1e` — push-github.bat para v3.25.38
@@ -56,6 +57,7 @@ Commitado e tagueado até **v3.25.40**. O histórico voltou a acompanhar o disco
 | 3.25.38 | 2026-09-02 | Fix do filtro por fornecedor em Produtos (fornecedor_id ausente na API); filtro cascata em Estoques (locais) |
 | 3.25.39 | 2026-09-04 | **Fix crítico:** saída de estoque caía no almoxarifado em vez de sair do local. Entrada repartida entre estoques; busca e filtro de zerados em Estoques (locais); troca de loja no PDV sem fechar o caixa |
 | 3.25.40 | 2026-09-05 | Troca rápida (sem venda de origem); importação de vendas de planilha para a loja do WhatsApp |
+| 3.25.41 | 2026-09-10 | Busca do PDV sem corte (produto novo não aparecia); fotos limitadas a 40 por busca para não estourar memória |
 
 ---
 
@@ -70,10 +72,10 @@ Commitado e tagueado até **v3.25.40**. O histórico voltou a acompanhar o disco
 - [x] Variação excluída (soft-delete) bloqueava re-inserção com mesmo nome
 
 **Próximos passos:**
-- [x] `resources.neu` regerado nos DOIS lugares para v3.25.40
+- [x] `resources.neu` regerado nos DOIS lugares para v3.25.41
 - [x] `node tools/graphify.js` para atualizar GRAPHIFY.md
-- [x] git commitado e tagueado até v3.25.40
-- [ ] **rodar `push-github.bat` no Windows** — envia commits/tags e cria a release v3.25.40
+- [x] git commitado e tagueado até v3.25.41
+- [ ] **rodar `push-github.bat` no Windows** — envia commits/tags e cria as releases v3.25.39, .40 e .41
 - [ ] recompilar o instalador com `makensis salgueiro-setup.nsi` (opcional; o updater usa o resources.neu)
 
 ---
@@ -106,6 +108,10 @@ Commitado e tagueado até **v3.25.40**. O histórico voltou a acompanhar o disco
   automaticamente. Recompilar com `makensis salgueiro-setup.nsi` no Windows a cada release.
 - Build no sandbox: copiar para `/tmp/build-vXXX`, `neu build --release`, depois ícone com `peresed`.
 - GRAPHIFY: rodar `node tools/graphify.js` ao fim de toda sessão com mudança estrutural.
+- `estoque:buscar` devolve até 500 linhas, mas **só as 40 primeiras com foto** (as demais
+  saem com `foto: null`). A foto vira base64 no servidor — resolver centenas de uma vez
+  reintroduz o estouro de memória do WebView2 que a v3.25.22 corrigiu. Se for mexer no
+  limite da lista, mexa no limite das FOTOS, não no da lista.
 
 ---
 

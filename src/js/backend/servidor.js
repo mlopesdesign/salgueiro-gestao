@@ -357,9 +357,19 @@ const rotas = {
   },
 
   // Estoque
+  // A busca deixou de cortar em 40 (v3.25.41): produto novo ficava fora da lista
+  // e o cliente achava que o cadastro não tinha entrado. Mas a foto vira base64
+  // aqui, e resolver 500 fotos de uma vez traria de volta o estouro de memória
+  // do WebView2 que a v3.25.22 corrigiu. Então: a LISTA vem inteira, e só as
+  // primeiras FOTOS_BUSCA fotos viram imagem — o resto sai com o ícone padrão.
+  // Digitar mais letras reduz a lista e as fotos voltam a aparecer.
   'estoque:buscar': async (p) => {
+    const FOTOS_BUSCA = 40;
     const r = estoque.buscarVariacoes(db, p.termo);
-    if (r.ok) await _resolverFotosLista(r.variacoes, 'foto');
+    if (r.ok) {
+      await _resolverFotosLista(r.variacoes.slice(0, FOTOS_BUSCA), 'foto');
+      for (const v of r.variacoes.slice(FOTOS_BUSCA)) v.foto = null;
+    }
     return r;
   },
   'pdv:trocarLoja': (p) => pdv.trocarLoja(db, p || {}, sessao.usuario),

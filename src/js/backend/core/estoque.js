@@ -4,7 +4,12 @@ import * as estoques from './estoques.js';
 
 const arred = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
-// Busca variações por código de barras, nome ou referência (para o form de movimentação)
+// Busca variações por código de barras, nome ou referência.
+//
+// O teto era 40 e a tela do PDV ainda cortava em 8. Quem cadastrava produto novo
+// pesquisava, não achava e concluía que o cadastro não tinha entrado — mas era o
+// corte: a ordem é alfabética, então quem estava no fim da lista nunca aparecia.
+// Agora o teto é folgado e a tela mostra tudo, com rolagem. (v3.25.41)
 function buscarVariacoes(db, termo) {
   const t = String(termo || '').trim();
   if (!t) return { ok: true, variacoes: [] };
@@ -22,7 +27,7 @@ function buscarVariacoes(db, termo) {
     WHERE v.ativo = 1 AND p.ativo = 1
       AND (v.codigo_barras = ? OR p.nome LIKE ? OR p.referencia LIKE ?)
     ORDER BY p.nome, v.cor, v.tamanho
-    LIMIT 40
+    LIMIT 500
   `).all(t, like, like);
   return { ok: true, variacoes: linhas };
 }

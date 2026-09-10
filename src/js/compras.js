@@ -105,7 +105,7 @@ function formCompra(aoConcluir) {
     </div>
     <div class="campo"><label>Adicionar item (bipe o código ou digite o nome)</label>
       <input id="cp-busca" placeholder="Buscar produto…"></div>
-    <div id="cp-sugestoes"></div>
+    <div id="cp-sugestoes" style="max-height:38vh;overflow-y:auto"></div>
     <table><thead><tr><th>Item</th><th style="width:80px">Qtd</th><th style="width:110px">Custo un.</th>
       <th class="num">Total</th><th style="width:36px"></th></tr></thead>
       <tbody id="cp-itens"></tbody></table>
@@ -160,7 +160,8 @@ function formCompra(aoConcluir) {
       $sug.innerHTML = '';
       if (termo.length < 2) return;
       const r = await api('estoque:buscar', { termo });
-      for (const v of (r.ok ? r.variacoes : []).slice(0, 6)) {
+      // sem corte (v3.25.41) — a caixa rola
+      for (const v of (r.ok ? r.variacoes : [])) {
         const s = el(`<div class="sug"><span><b>${esc(v.produto)}</b> — ${esc(v.cor)}/${esc(v.tamanho)}</span>
           <small>custo atual ${moeda(v.preco_custo)}</small></div>`);
         s.onclick = () => {

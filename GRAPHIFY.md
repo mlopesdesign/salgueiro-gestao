@@ -3,7 +3,7 @@
 > Mapa técnico gerado automaticamente por `tools/graphify.js`.
 > **Não edite à mão.** Regere com `node tools/graphify.js` a cada alteração estrutural.
 
-**Versão:** 3.25.40 · **Gerado em:** 2026-09-05
+**Versão:** 3.25.41 · **Gerado em:** 2026-09-10
 **Aplicação:** `br.com.mllopes.salgueirogestao` (Neutralino 6 + WebView2)
 **Cliente:** Boutique do Salgueiro · **Autor:** ML Lopes Design
 
@@ -78,7 +78,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `crediario.js` | 108 | 5 | aniversariantes, excluirCliente, obterCliente, parcelasAbertas, receberParcela |
 | `dashboard.js` | 214 | 2 | resumo |
 | `devolucoes.js` | 127 | 3 | itensVenda, listar, registrar |
-| `estoque.js` | 171 | 5 | buscarVariacoes, kardex, listarCompleto, movimentar, reposicao |
+| `estoque.js` | 176 | 5 | buscarVariacoes, kardex, listarCompleto, movimentar, reposicao |
 | `estoques.js` | 343 | 15 | aplicar, arred, conteudo, daLoja, desativar, garantirDaLoja, listar, listarTransferencias, +8 |
 | `financeiro.js` | 138 | 5 | baixar, excluir, fluxo, listar, salvar |
 | `importar-vendas.js` | 270 | 6 | COLUNAS, analisar, confirmar |
@@ -105,7 +105,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `ambiente.js` | 316 | 6 |
 | `db.js` | 565 | 5 |
 | `servidor-rede-embutido.js` | 612 | 17 |
-| `servidor.js` | 2688 | 15 |
+| `servidor.js` | 2698 | 15 |
 
 ## 6. Telas (`src/js`)
 
@@ -114,16 +114,16 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `app.js` | 1725 | EM_REDE, api, aplicarTema, ehAdmin, el |
 | `catalogo.js` | 262 | viewCatalogo |
 | `clientes.js` | 528 | viewClientes |
-| `compras.js` | 228 | viewCompras |
+| `compras.js` | 229 | viewCompras |
 | `configuracoes.js` | 1527 | viewConfiguracoes |
 | `estoque.js` | 624 | abrirEtiquetas, ean13Svg, formMovimento, viewEstoque |
-| `estoques.js` | 927 | viewEstoques |
+| `estoques.js` | 928 | viewEstoques |
 | `etiquetas.js` | 146 | abrirEtiquetasLote |
 | `financeiro.js` | 261 | viewFinanceiro |
 | `mensagens.js` | 758 | abrirBalao, encerrarTelaMensagens, iniciarMensagens, pararMensagens, viewMensagens |
 | `neutralino.js` | 2 | — |
-| `novidades.js` | 879 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
-| `pdv.js` | 2318 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
+| `novidades.js` | 889 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
+| `pdv.js` | 2326 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
 | `ranking.js` | 361 | viewRanking |
 | `relatorios.js` | 1690 | viewRelatorios |
 

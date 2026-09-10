@@ -612,7 +612,8 @@ function formTransferir(origemId, aoConcluir) {
       }
       $res.style.display = 'block';
       $res.innerHTML = '';
-      for (const pr of lista.slice(0, 10)) {
+      // sem corte (v3.25.41) — .es-busca-res rola
+      for (const pr of lista) {
         const d = el(`<div><b>${esc(pr.nome)}</b>
           ${pr.referencia ? `<small style="opacity:.6"> Ref. ${esc(pr.referencia)}</small>` : ''}
           <small style="opacity:.6"> — ${pr.qtd_variacoes} variação(ões), ${pr.estoque_total} no total</small></div>`);

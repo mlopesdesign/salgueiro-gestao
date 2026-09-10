@@ -340,7 +340,14 @@ function telaVenda(alvo, caixa) {
     const lista = r.ok ? r.variacoes : [];
     if (lista.length === 1 && lista[0].codigo_barras === termo) { addItem(lista[0]); return; }
     if (!lista.length) { $sug.appendChild(el(`<div class="sug vazio-sug">Nada encontrado.</div>`)); return; }
-    for (const v of lista.slice(0, 8)) {
+    // SEM corte (v3.25.41). Antes mostrava só 8 e, como a ordem é alfabética,
+    // produto recém-cadastrado quase nunca entrava nesses 8 — o cliente achava
+    // que o cadastro não tinha salvo. A caixa já rola (max-height + overflow).
+    if (lista.length > 8) {
+      $sug.appendChild(el(`<div class="sug" style="cursor:default;background:#FBF3F3;font-size:11.5px;color:var(--texto-suave)">
+        ${lista.length} resultado(s) — role para ver todos. Digite mais letras para afinar a busca.</div>`));
+    }
+    for (const v of lista) {
       const s = el(`<div class="sug">
         <span class="sug-info">${v.foto ? `<img class="thumb thumb-sm" src="${v.foto}">` : '<span class="thumb thumb-sm thumb-vazio">👗</span>'}<span><b>${esc(v.produto)}</b> — ${esc(v.cor)}/${esc(v.tamanho)}
           <small>(${v.estoque} un.)</small></span></span><b>${moeda(v.preco_venda)}</b></div>`);
@@ -542,7 +549,8 @@ function telaVenda(alvo, caixa) {
       const lista = r.ok ? r.variacoes : [];
       res.innerHTML = '';
       if (!lista.length) { res.appendChild(el(`<div class="vazio" style="padding:18px !important">Nada encontrado.</div>`)); return; }
-      for (const v of lista.slice(0, 12)) {
+      for (const v of lista) {   // sem corte (v3.25.41) — a caixa rola
+
         const linha = el(`<div class="cp-item">
           ${v.foto ? `<img class="thumb" src="${v.foto}">` : '<span class="thumb thumb-vazio">👗</span>'}
           <div class="cp-info"><b>${esc(v.produto)}</b><small>${esc(v.cor)} / ${esc(v.tamanho)} · ${v.estoque} un.</small></div>
@@ -1734,7 +1742,7 @@ async function modalTrocaRapida(aoFinalizar) {
         const exato = vs.filter(v => String(v.codigo_barras || '') === termo);
         if (exato.length === 1) { incluir(exato[0]); return; }
         res.style.display = 'block';
-        res.innerHTML = vs.slice(0, 10).map(v => `
+        res.innerHTML = vs.map(v => `
           <div class="tr-ri" data-vid="${v.id}"
             style="padding:5px 7px;cursor:pointer;border-radius:4px;font-size:11px;display:flex;justify-content:space-between;gap:8px">
             <span>${esc(v.produto)} ${v.cor && v.cor !== 'Única' ? esc(v.cor) : ''} ${v.tamanho && v.tamanho !== 'U' ? esc(v.tamanho) : ''}
@@ -2157,7 +2165,7 @@ async function modalTroca(venda_id, aoFinalizar) {
         return;
       }
       resultados.style.display = 'block';
-      resultados.innerHTML = r.variacoes.slice(0,10).map(v => {
+      resultados.innerHTML = r.variacoes.map(v => {
         const label = `${esc(v.produto)} ${v.cor && v.cor!=='Única' ? esc(v.cor) : ''} ${v.tamanho && v.tamanho!=='U' ? esc(v.tamanho) : ''}`.trim();
         return `<div class="tc-ri" data-vid="${v.id}" data-nome="${esc(v.produto)}" data-cor="${esc(v.cor||'')}"
           data-tam="${esc(v.tamanho||'')}" data-preco="${v.preco_venda}" data-est="${v.estoque}"

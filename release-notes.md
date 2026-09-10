@@ -1,29 +1,41 @@
-## v3.25.40 — 2026-09-05
+## v3.25.41 — 2026-09-10
 
-### 🔄 Troca rápida — a troca ficou simples
+### 🔎 A busca do PDV não corta mais a lista
 
-Antes, para fazer uma troca era preciso **achar a venda de origem**: escolher o período, procurar pelo número do cupom ou pelo nome da cliente, achar a venda na lista. Era o passo mais lento do balcão e o que mais dava errado — cupom perdido, data errada, venda feita em outro caixa.
+O cliente relatou que **produtos novos não apareciam no PDV**. Não era falta de atualização em tempo real — o cadastro entrava na hora. Era **corte na exibição**:
 
-Agora o **F6** abre direto a troca rápida:
+- a busca no servidor parava em **40** resultados;
+- a tela do PDV mostrava só os **8 primeiros**;
+- a ordem é **alfabética**.
 
-1. **Bipa a peça que voltou** — ela entra no estoque e vira crédito.
-2. **Bipa a peça que a cliente leva** — ela sai do estoque.
-3. **Acerta a diferença** — cliente paga, ou sobra vira vale-troca, dinheiro, estorno ou nada.
+Ou seja: numa loja com 120 blusas, pesquisar "blusa" trazia 40 e mostrava 8 — sempre as mesmas, do começo do alfabeto. Um produto recém-cadastrado caía na posição 121 e **nunca aparecia**, dando a impressão de que o cadastro não tinha salvo.
 
-O crédito começa no preço de tabela da peça devolvida e pode ser **baixado** (peça com defeito, comprada em promoção) — nunca aumentado.
+Agora **aparecem todos**, com rolagem e a contagem de resultados no topo da lista.
 
-> A troca **pela venda de origem** continua disponível, a um clique dentro da própria tela. Use quando precisar do desconto da compra original ou do vínculo com a nota.
+O mesmo corte foi retirado de:
 
-### 📥 Importar as vendas do WhatsApp
+- Consulta de preço (F3)
+- Troca rápida e troca pela venda de origem
+- Entrada de compras
+- Busca de produtos na transferência entre estoques
 
-As vendas do WhatsApp são anotadas numa planilha durante o dia e depois digitadas **uma a uma** no PDV. Agora a planilha inteira entra de uma vez.
+### 🖼️ Fotos nas buscas amplas
 
-- Botão **"📥 Importar planilha"** no PDV, com **modelo pronto para baixar**.
-- Uma linha por peça; a coluna **Venda** agrupa — duas linhas com o mesmo número viram um pedido só.
-- A peça é identificada pelo **código de barras** ou por **produto + cor + tamanho**.
-- Escolha em qual **loja** as vendas entram (a do WhatsApp já vem sugerida).
+A foto é convertida no servidor para ser exibida. Carregar centenas de uma vez traria de volta o travamento por excesso de imagens corrigido na v3.25.22. Por isso, numa busca ampla **só as 40 primeiras linhas trazem a foto** — as demais aparecem com o ícone padrão, mas continuam na lista e podem ser selecionadas normalmente. Digitando mais letras, a lista diminui e as fotos voltam.
 
-**Confere antes de gravar:** a tela mostra quantas vendas estão prontas, quais têm erro e exatamente por quê (código que não existe, estoque insuficiente, forma de pagamento não aceita). As vendas com erro ficam de fora; as prontas entram normalmente.
+### ✅ Entrada repartida — conferida
+
+A entrada dividida entre vários estoques foi testada contra o banco real:
+
+| Operação | Resultado |
+|---|---|
+| Entrada de 10 no Almoxarifado, 5 na Loja, 3 no WhatsApp | cada estoque ficou com exatamente o que foi escolhido |
+| Total do Salgueiro | 18 — igual à soma dos locais |
+| Saída de 5 da Loja | saiu da Loja, não trocou de estoque |
+| Saída acima do saldo do local | recusada, com o saldo daquele estoque na mensagem |
+| Ajuste de inventário | aplicado ao estoque contado |
+
+Em todos os casos o total do Salgueiro continuou sendo a soma dos locais.
 
 ---
 

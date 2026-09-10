@@ -3,6 +3,16 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.25.41',
+    data: '2026-09-10',
+    itens: [
+      '🔎 PDV: a pesquisa não corta mais a lista. Antes mostrava só 8 produtos, e como a ordem é alfabética o produto recém-cadastrado quase nunca entrava nesses 8 — parecia que o cadastro não tinha salvo. Agora aparecem todos, com rolagem e a contagem de resultados.',
+      '🔎 O mesmo corte foi tirado da consulta de preço (F3), das duas telas de troca, da entrada de compras e da busca de produtos na transferência.',
+      '🖼️ Nas buscas muito amplas, só as 40 primeiras linhas carregam a foto (o resto usa o ícone) — é o que evita o travamento por excesso de imagens. Digitando mais letras, as fotos voltam.',
+      '✅ Conferido: a entrada repartida coloca em cada estoque exatamente a quantidade escolhida, e o total do Salgueiro continua sendo a soma dos locais.',
+    ],
+  },
+  {
     versao: '3.25.40',
     data: '2026-09-05',
     itens: [

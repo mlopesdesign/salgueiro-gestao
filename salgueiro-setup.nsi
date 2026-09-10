@@ -1,10 +1,10 @@
-; Salgueiro Gestao v3.25.40
+; Salgueiro Gestao v3.25.41
 ; Build: /tmp/rel  — gerado pelo pipeline de build (ver CLAUDE.md)
 Unicode True
 !include "LogicLib.nsh"
 
 Name "Salgueiro Gestao"
-OutFile "/tmp/Salgueiro Gestao Setup v3.25.40.exe"
+OutFile "/tmp/Salgueiro Gestao Setup v3.25.41.exe"
 InstallDir "$LOCALAPPDATA\SalgueiroGestao"
 InstallDirRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "InstallLocation"
 RequestExecutionLevel user
