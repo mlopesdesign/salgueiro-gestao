@@ -15,7 +15,7 @@ import { viewCatalogo } from './catalogo.js';
 const $app = document.getElementById('app');
 let usuario = null;
 let categoriasCache = [];
-let APP_VERSION = '3.25.41'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
+let APP_VERSION = '3.26.5'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
 
 // API dupla: no aplicativo usa IPC (preload); num terminal em rede (navegador),
 // conversa com o servidor do computador principal via HTTP com token de sessão.
@@ -1318,8 +1318,11 @@ async function viewProdutos(alvo) {
 // NOVO: não há prod.id, o título muda e o estoque começa vazio.
 function formProduto(prod, variacoes, aoConcluir, duplicando) {
   // linha nova nasce sem estoque preenchido (campos em branco, não com 0/1)
+  // `_estoque0` guarda o total que a variação TINHA ao abrir a tela. A diferença
+  // entre ele e o que o usuário digitar é o que vira movimento e o que vai para
+  // a etiqueta. (v3.26.5)
   const linhas = (variacoes.length ? variacoes : [{ cor: '', tamanho: '', estoque: '' }])
-    .map(v => ({ ...v }));
+    .map(v => ({ ...v, _estoque0: v.id ? Number(v.estoque || 0) : 0 }));
 
   let fotoAtual = prod?.foto || null;
   const m = modal(duplicando ? 'Duplicar produto' : (prod?.id ? 'Editar produto' : 'Novo produto'), `
@@ -1363,6 +1366,9 @@ function formProduto(prod, variacoes, aoConcluir, duplicando) {
       </div>
     </div>
 
+    ${prod?.id && ehAdmin() ? `<p style="margin:0 0 8px;font-size:12.5px;color:var(--texto-suave)">
+      🔑 <b>Administrador:</b> a coluna Estoque é o <b>total</b> da variação. Corrija direto aqui — tem 10 e chegaram 10, escreva 20.
+      As peças que entrarem vão para o <b>Almoxarifado Central</b> e a etiqueta delas é oferecida ao salvar.</p>` : ''}
     <div class="grade-titulo">
       <h3>Grade — cores e tamanhos</h3>
       <button class="btn btn-suave" id="add-var" type="button">+ Variação</button>
@@ -1404,7 +1410,20 @@ function formProduto(prod, variacoes, aoConcluir, duplicando) {
     };
     const r = await api('produtos:salvar', dados);
     if (!r.ok) { m.querySelector('#p-erro').textContent = r.erro; return; }
-    toast('Produto salvo.'); fechar(); aoConcluir();
+    // Etiquetas das peças que ENTRARAM agora (v3.26.5). O core devolve em
+    // `entradas` só as variações com diferença positiva, e `estoque` ali é a
+    // QUANTIDADE QUE ENTROU — não o saldo. Sem isso, o usuário salvava o
+    // produto, saía, abria a tela de etiquetas e tinha que desmarcar tudo na
+    // mão para imprimir só as novas.
+    const entradas = (r.entradas || []).filter(v => Number(v.estoque) > 0);
+    toast(entradas.length
+      ? `Produto salvo. ${entradas.reduce((a, v) => a + Number(v.estoque), 0)} peça(s) entraram em ${r.destino || 'estoque'}.`
+      : 'Produto salvo.');
+    fechar(); aoConcluir();
+    if (entradas.length) {
+      const d = await api('produtos:obter', { id: r.id });
+      if (d.ok) abrirEtiquetasLote([{ produto: d.produto, variacoes: entradas }], { entrada: true });
+    }
   });
 
   const corpo = m.querySelector('#grade-corpo');
@@ -1464,7 +1483,8 @@ function formProduto(prod, variacoes, aoConcluir, duplicando) {
         <td class="var-foto-cell"></td>
         <td><input data-c="cor" value="${esc(l.cor || '')}" placeholder="Preto"></td>
         <td><input data-c="tamanho" value="${esc(l.tamanho || '')}" placeholder="M"></td>
-        <td><input data-c="estoque" type="number" min="0" value="${l.id ? (l.estoque ?? 0) : (l.estoque || '')}" placeholder="0" ${l.id ? 'disabled title="Ajuste pelo módulo Estoque"' : ''}></td>
+        <td><input data-c="estoque" type="number" min="0" value="${l.id ? (l.estoque ?? 0) : (l.estoque || '')}" placeholder="0" ${l.id && !ehAdmin() ? 'disabled title="Só administrador altera o estoque por aqui"' : (l.id ? 'title="Digite o TOTAL novo. Ex.: tem 10, chegaram 10, escreva 20"' : '')}>
+          ${l.id && ehAdmin() ? '<small class="delta-estoque" style="display:block;font-size:11px;min-height:13px"></small>' : ''}</td>
         <td><input data-c="estoque_minimo" type="number" min="0" value="${l.estoque_minimo || ''}" placeholder="0" style="width:60px" title="Mínimo para esta variação (0 = usa o padrão do produto)"></td>
         <td>${l.id
           ? `<span class="cod">${esc(l.codigo_barras || '')}</span>`
@@ -1531,6 +1551,17 @@ function formProduto(prod, variacoes, aoConcluir, duplicando) {
           l[inp.dataset.c] = inp.type === 'number'
             ? (inp.value === '' ? 0 : Number(inp.value))
             : inp.value;
+          // Aviso vivo da diferença. Escreve NO ELEMENTO, sem `desenharGrade()`:
+          // redesenhar aqui mataria o cursor no meio da digitação — é a mesma
+          // armadilha documentada na v3.2.0 e repetida na v3.5.0.
+          if (inp.dataset.c === 'estoque' && l.id) {
+            const avi = tr.querySelector('.delta-estoque');
+            if (avi) {
+              const d = (Number(l.estoque) || 0) - Number(l._estoque0 ?? 0);
+              avi.textContent = d === 0 ? '' : (d > 0 ? `entram ${d}` : `saem ${-d}`);
+              avi.style.color = d > 0 ? 'var(--verde, #1a7f37)' : 'var(--vermelho)';
+            }
+          }
         });
       });
       // Duplicar variação: copia cor, tamanho, mínimo e foto da linha. Estoque e

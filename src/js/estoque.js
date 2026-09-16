@@ -1,5 +1,6 @@
 // Módulo Estoque — movimentação, kardex, reposição e etiquetas
 import { api, el, esc, moeda, toast, modal, getConfig, ehAdmin } from './app.js';
+import { abrirEtiquetasLote, imprimirFolhaEtiquetas } from './etiquetas.js';
 const dataBrH = (s) => s ? `${String(s).slice(0, 10).split('-').reverse().join('/')} ${String(s).slice(11, 16)}` : '—';
 
 // ---------- EAN-13 em SVG (sem dependências) ----------
@@ -183,20 +184,40 @@ function abaMovimentar(corpo) {
       </div>
       ${admin ? '' : `<p style="margin:0 12px 10px;font-size:12.5px;color:var(--texto-suave)">
         🔒 Só o administrador altera a quantidade em estoque. Aqui você consulta o saldo.</p>`}
-      <table>
-        <thead><tr><th style="width:52px"></th><th>Produto</th><th>Cor / Tamanho</th><th>Código</th>
-          <th class="num">Estoque</th>${admin ? '<th style="width:230px"></th>' : ''}</tr></thead>
-        <tbody><tr><td colspan="${admin ? 6 : 5}" class="vazio">Carregando estoque…</td></tr></tbody>
+      <div class="tab-scroll">
+      <table class="tab-estoque">
+        <thead><tr id="est-cab"><th style="width:52px"></th><th>Produto / variação</th><th>Código</th>
+          <th class="num" style="width:70px">Total</th>${admin ? '<th style="width:132px"></th>' : ''}</tr></thead>
+        <tbody><tr><td colspan="${admin ? 5 : 4}" class="vazio">Carregando estoque…</td></tr></tbody>
       </table>
+      </div>
     </div>`);
   const tbody   = painel.querySelector('tbody');
   const busca   = painel.querySelector('#mov-busca');
   const fTipo   = painel.querySelector('#est-f-tipo');
   const fForn   = painel.querySelector('#est-f-forn');
-  const COLSPAN = admin ? 6 : 5;
+  const cabecalho = painel.querySelector('#est-cab');
+  // COLSPAN muda conforme o número de lojas — as colunas de saldo são montadas
+  // quando `_locais` chega. Nunca deixar fixo. (v3.26.5)
+  let COLSPAN = admin ? 5 : 4;
+
+  // Cada loja vira uma COLUNA de verdade, com o número alinhado à direita.
+  // Antes os saldos eram texto solto numa célula só, e nada batia entre as linhas.
+  function montarCabecalho() {
+    if (!cabecalho) return;
+    [...cabecalho.querySelectorAll('.col-loja')].forEach(th => th.remove());
+    const antesDeAcoes = admin ? cabecalho.children[cabecalho.children.length - 1] : null;
+    for (const l of _locais) {
+      const th = el(`<th class="col-loja num" style="width:96px;white-space:nowrap">${esc(l.nome)}</th>`);
+      if (antesDeAcoes) cabecalho.insertBefore(th, antesDeAcoes); else cabecalho.appendChild(th);
+    }
+    COLSPAN = (admin ? 5 : 4) + _locais.length;
+  }
 
   let _todosItens = [];   // lista completa carregada do backend
   let _emBusca    = false;
+  let _locais     = [];   // estoques ativos (para a coluna por loja)
+  let _saldos     = new Map();  // "variacao_id:estoque_id" → qtd
 
   // Carrega miniaturas sob demanda: a lista completa traz o NOME do arquivo da
   // foto; só busca a imagem (fotos:obter) quando a linha entra na tela. Assim a
@@ -228,7 +249,22 @@ function abaMovimentar(corpo) {
     return `<td><span class="thumb thumb-sm thumb-vazio">👗</span></td>`;
   }
 
-  // Desenha as linhas de uma lista já pronta.
+  // ── Lista AGRUPADA POR PRODUTO (v3.26.0) ─────────────────────────────────
+  //
+  // ANTES: uma linha por variação. Um produto com 6 cores × 5 tamanhos ocupava
+  // 30 linhas soltas e sumia no meio da rolagem, e os botões de entrada/saída
+  // ficavam na VARIAÇÃO — para dar entrada num produto inteiro era abrir, digitar
+  // e fechar 30 vezes.
+  //
+  // AGORA: uma linha por PRODUTO (nome, total geral, botões) e, embaixo, as
+  // variações com o saldo EM CADA LOJA. Os botões de entrada e saída são do
+  // produto e abrem a grade inteira numa tela só.
+  //
+  // `_locais` e `_saldos` vêm de `estoques:mapaLocais`, uma consulta só.
+  function saldoDe(variacaoId, estoqueId) {
+    return _saldos.get(`${variacaoId}:${estoqueId}`) || 0;
+  }
+
   function desenhar(lista, vazioMsg) {
     if (_obs) _obs.disconnect();
     tbody.innerHTML = '';
@@ -236,30 +272,70 @@ function abaMovimentar(corpo) {
       tbody.appendChild(el(`<tr><td colspan="${COLSPAN}" class="vazio">${vazioMsg}</td></tr>`));
       return;
     }
+    // agrupa mantendo a ordem alfabética que o backend já devolveu
+    const grupos = new Map();
     for (const v of lista) {
-      // Badge de consignação: aparece no nome do produto quando aplicável
-      const badgeCons = v.consignado
-        ? ` <span style="font-size:10px;padding:1px 5px;border-radius:10px;background:var(--azul-claro,#dbeafe);color:var(--azul,#1d4ed8);font-weight:600;white-space:nowrap">🤝 ${esc(v.fornecedor || 'Consig.')}</span>`
+      if (!grupos.has(v.produto_id)) grupos.set(v.produto_id, { p: v, vars: [] });
+      grupos.get(v.produto_id).vars.push(v);
+    }
+
+    for (const { p, vars } of grupos.values()) {
+      const total = vars.reduce((a, v) => a + (Number(v.estoque) || 0), 0);
+      const badgeCons = p.consignado
+        ? ` <span style="font-size:10px;padding:1px 5px;border-radius:10px;background:var(--azul-claro,#dbeafe);color:var(--azul,#1d4ed8);font-weight:600;white-space:nowrap">🤝 ${esc(p.fornecedor || 'Consig.')}</span>`
         : '';
-      const tr = el(`<tr>
-        ${celFoto(v.foto)}
-        <td><b>${esc(v.produto)}</b>${badgeCons}${v.referencia ? ` <small style="color:var(--texto-suave)">Ref. ${esc(v.referencia)}</small>` : ''}</td>
-        <td>${esc(v.cor)} / ${esc(v.tamanho)}</td>
-        <td style="font-family:Consolas,monospace">${esc(v.codigo_barras || '')}</td>
-        <td class="num"><b>${v.estoque}</b></td>
-        ${admin ? `<td class="acoes-linha">
-          <button data-a="entrada" style="color:var(--verde)">+ Entrada</button>
-          <button data-a="saida" style="color:var(--vermelho)">− Saída</button>
-          <button data-a="ajuste">Ajustar</button>
+      // ---- linha do PRODUTO ----
+      // A foto da linha do produto é a primeira foto QUE EXISTE entre as variações.
+      // Usar `p.foto` (a primeira variação da lista) fazia o produto aparecer com o
+      // ícone genérico sempre que a variação de cima estava sem foto. (v3.26.4)
+      const fotoProduto = (vars.find(v => v.foto) || {}).foto || null;
+      const trP = el(`<tr class="linha-produto" style="background:var(--fundo-suave,#f7f7f8)">
+        ${celFoto(fotoProduto)}
+        <td><b style="font-size:14.5px">${esc(p.produto)}</b>${badgeCons}
+          ${p.referencia ? ` <small style="color:var(--texto-suave)">Ref. ${esc(p.referencia)}</small>` : ''}
+          <small style="color:var(--texto-suave)"> · ${vars.length} variação(ões)</small></td>
+        <td></td>
+        <td class="num"><b style="font-size:14.5px">${total}</b></td>
+        ${_locais.map(l => {
+          const q = vars.reduce((a, v) => a + saldoDe(v.id ?? v.variacao_id, l.id), 0);
+          return `<td class="num col-loja"${q ? '' : ' style="opacity:.3"'}><b>${q}</b></td>`;
+        }).join('')}
+        ${admin ? `<td class="acoes-estoque">
+          <button class="btn-est btn-est-entrada" data-a="p-entrada">+ Entrada</button>
+          <button class="btn-est btn-est-saida" data-a="p-saida">− Saída</button>
+          <button class="btn-est btn-est-ajuste" data-a="p-ajuste">Ajustar</button>
         </td>` : ''}</tr>`);
       if (admin) {
-        for (const acao of ['entrada', 'saida', 'ajuste']) {
-          tr.querySelector(`[data-a=${acao}]`).onclick = () => formMovimento(v, acao, recarregar);
-        }
+        trP.querySelector('[data-a=p-entrada]').onclick = () => formMovimentoProduto(p, 'entrada', recarregar);
+        trP.querySelector('[data-a=p-saida]').onclick   = () => formMovimentoProduto(p, 'saida', recarregar);
+        trP.querySelector('[data-a=p-ajuste]').onclick  = () => formMovimentoProduto(p, 'ajuste', recarregar);
       }
-      const thumbLazy = tr.querySelector('img[data-foto]');
-      if (thumbLazy && _obs) _obs.observe(thumbLazy);
-      tbody.appendChild(tr);
+      const thumbP = trP.querySelector('img[data-foto]');
+      if (thumbP && _obs) _obs.observe(thumbP);
+      tbody.appendChild(trP);
+
+      // ---- linhas das VARIAÇÕES, com o saldo em cada loja ----
+      for (const v of vars) {
+        const porLocal = _locais.map(l => {
+          const q = saldoDe(v.id ?? v.variacao_id, l.id);
+          return `<td class="num col-loja"${q ? '' : ' style="opacity:.3"'}>${q}</td>`;
+        }).join('');
+        const trV = el(`<tr class="linha-variacao">
+          ${celFoto(v.foto)}
+          <td style="padding-left:26px">${esc(v.cor)} / <b>${esc(v.tamanho)}</b></td>
+          <td style="font-family:Consolas,monospace;font-size:11.5px">${esc(v.codigo_barras || '')}</td>
+          <td class="num">${v.estoque}</td>
+          ${porLocal}
+          ${admin ? '<td></td>' : ''}
+        </tr>`);
+        // Sem botão por variação (v3.26.2): entrada, saída e ajuste são do
+        // PRODUTO e abrem a grade inteira numa janela só. Ordem do Marcio:
+        // "entrada, saída, ajustar é tudo no produto, entrando tem que aparecer
+        // todas as opções do produto pra alterar o que eu quiser na mesma janela".
+        const thumbV = trV.querySelector('img[data-foto]');
+        if (thumbV && _obs) _obs.observe(thumbV);
+        tbody.appendChild(trV);
+      }
     }
   }
 
@@ -308,9 +384,19 @@ function abaMovimentar(corpo) {
   // Estoque inteiro em ordem alfabética, já na abertura.
   async function carregarTudo() {
     tbody.innerHTML = `<tr><td colspan="${COLSPAN}" class="vazio">Carregando estoque…</td></tr>`;
+    // Saldos por loja numa consulta só (v3.26.0). Se falhar, a lista abre
+    // do mesmo jeito — só sem a coluna por loja, em vez de não abrir.
+    try {
+      const rl = await api('estoques:mapaLocais');
+      if (rl && rl.ok) {
+        _locais = rl.locais || [];
+        _saldos = new Map((rl.saldos || []).map(x => [`${x.variacao_id}:${x.estoque_id}`, x.qtd]));
+      }
+    } catch { _locais = []; _saldos = new Map(); }
+    montarCabecalho();
     const r = await api('estoque:listarCompleto');
     _todosItens = (r.ok ? r.variacoes : []).map(v => ({
-      id: v.variacao_id, produto: v.nome, referencia: v.referencia,
+      id: v.variacao_id, produto_id: v.produto_id, produto: v.nome, referencia: v.referencia,
       cor: v.cor, tamanho: v.tamanho, codigo_barras: v.codigo_barras,
       estoque: v.estoque, preco_custo: v.preco_custo, preco_venda: v.preco_venda,
       foto: v.foto,
@@ -347,7 +433,7 @@ function abaMovimentar(corpo) {
     // Fallback: lista ainda não carregou — usa API normalmente
     const r = await api('estoque:buscar', { termo });
     const lista = (r.ok ? r.variacoes : []).map(v => ({
-      id: v.id, produto: v.produto, referencia: v.referencia,
+      id: v.id, produto_id: v.produto_id, produto: v.produto, referencia: v.referencia,
       cor: v.cor, tamanho: v.tamanho, codigo_barras: v.codigo_barras,
       estoque: v.estoque, preco_custo: v.preco_custo, preco_venda: v.preco_venda,
       foto: v.foto,
@@ -370,6 +456,181 @@ function abaMovimentar(corpo) {
   corpo.appendChild(painel);
   carregarTudo();
   busca.focus();
+}
+
+// ── Entrada / saída do PRODUTO INTEIRO, numa tela só (v3.26.0) ─────────────
+//
+// Pedido do Marcio: "se eu clicasse em dar entrada ou dar saída no produto,
+// abriria uma tela com todas as variações para alterar todo mundo de uma vez.
+// E não ficar alterando de um em um. Isso é horrível."
+//
+// Mesmo desenho da transferência por produto (v3.5.0), que já resolveu isso do
+// outro lado: a grade inteira abre de uma vez, com o saldo de cada linha e um
+// campo de quantidade. Variação zerada aparece esmaecida em vez de sumir — na
+// entrada ela é preenchível (é justamente a peça que está chegando).
+//
+// UM local para a operação inteira: chegou mercadoria, vai tudo para o mesmo
+// lugar. O padrão é o Almoxarifado Central na entrada e, na saída, o local com
+// mais saldo daquele produto.
+export async function formMovimentoProduto(prod, tipo, aoConcluir) {
+  const rv = await api('produtos:obter', { id: prod.produto_id });
+  if (!rv.ok) { toast(rv.erro, true); return; }
+  const rl = await api('estoques:listar', {});
+  const locais = (rl && rl.ok ? rl.estoques || rl.locais : []) || [];
+  if (!locais.length) { toast('Nenhum estoque cadastrado. Cadastre um local primeiro.', true); return; }
+
+  const variacoes = rv.variacoes || [];
+  if (!variacoes.length) { toast('Este produto não tem variações ativas.', true); return; }
+
+  // saldo de cada variação em cada local, para montar a grade e limitar a saída
+  const rm = await api('estoques:mapaLocais');
+  const mapa = new Map(((rm && rm.ok ? rm.saldos : []) || [])
+    .map(x => [`${x.variacao_id}:${x.estoque_id}`, x.qtd]));
+  const saldo = (vid, lid) => mapa.get(`${vid}:${lid}`) || 0;
+
+  const totalNoLocal = (lid) => variacoes.reduce((a, v) => a + saldo(v.id, lid), 0);
+  const ordenados = locais.slice().sort((a, b) => totalNoLocal(b.id) - totalNoLocal(a.id));
+  const padrao = tipo === 'entrada'
+    ? (locais.find(l => l.tipo === 'almoxarifado') || locais[0]).id
+    : (ordenados[0] || locais[0]).id;
+
+  const ehEntrada = tipo === 'entrada';
+  const ehAjuste  = tipo === 'ajuste';
+  const corpo = `
+    <p style="margin:0 0 12px"><b style="font-size:15px">${esc(prod.produto)}</b>
+      ${prod.referencia ? `<small style="color:var(--texto-suave)"> · Ref. ${esc(prod.referencia)}</small>` : ''}</p>
+    <div class="campo" style="max-width:340px">
+      <label>${ehEntrada ? 'Entra em qual estoque' : ehAjuste ? 'Qual estoque está sendo contado' : 'Sai de qual estoque'}</label>
+      <select id="mp-local">${locais.map(l =>
+        `<option value="${l.id}" ${l.id === padrao ? 'selected' : ''}>${esc(l.nome)}${l.tipo === 'almoxarifado' ? ' (central)' : ''}</option>`
+      ).join('')}</select>
+    </div>
+    <div style="display:flex;gap:8px;margin:4px 0 8px">
+      ${ehEntrada || ehAjuste ? '' : '<button type="button" class="btn btn-suave" id="mp-tudo">Baixar tudo</button>'}
+      <button type="button" class="btn btn-suave" id="mp-limpar">Limpar</button>
+      <span style="margin-left:auto;align-self:center;font-size:13px" id="mp-resumo"></span>
+    </div>
+    <table style="width:100%">
+      <thead><tr><th>Cor</th><th>Tamanho</th><th class="num" style="width:110px">Tem aqui</th>
+        <th style="width:120px">${ehEntrada ? 'Entra' : ehAjuste ? 'Contagem real' : 'Sai'}</th></tr></thead>
+      <tbody id="mp-corpo"></tbody>
+    </table>
+    ${ehAjuste ? `<p style="margin:8px 2px 0;font-size:12.5px;color:var(--texto-suave)">
+      Digite a <b>contagem real</b> de cada variação neste estoque. Linha em branco não é tocada —
+      e <b>0 zera</b> o saldo daquela peça aqui.</p>` : ''}
+    ${ehEntrada ? `<div class="campo" style="max-width:220px;margin-top:10px">
+      <label>Custo unitário (R$) — opcional</label>
+      <input id="mp-custo" type="number" min="0" step="0.01"></div>` : ''}
+    <div class="campo"><label>Motivo / observação</label>
+      <input id="mp-motivo" placeholder="${ehEntrada ? 'Compra fornecedor X' : 'Perda, defeito, uso interno…'}"></div>
+    <div class="erro" id="mp-erro"></div>`;
+
+  const m = modal(
+    ehEntrada ? 'Entrada de mercadoria — produto inteiro'
+      : ehAjuste ? 'Ajuste de inventário — produto inteiro'
+      : 'Saída — produto inteiro',
+    corpo, async (mm, fechar) => {
+      const erro = mm.querySelector('#mp-erro');
+      const localId = Number(mm.querySelector('#mp-local').value);
+      // No ajuste, 0 é um valor VÁLIDO (zera a peça naquele local), então o que
+      // separa "mexer" de "não mexer" é o campo estar preenchido — não ser > 0.
+      const linhas = [...mm.querySelectorAll('[data-var]')]
+        .map(i => ({ variacao_id: Number(i.dataset.var), bruto: i.value.trim(), qtd: Number(i.value) || 0 }))
+        .filter(x => ehAjuste ? x.bruto !== '' : x.qtd > 0);
+      if (!linhas.length) {
+        erro.textContent = ehAjuste
+          ? 'Informe a contagem de pelo menos uma variação.'
+          : 'Informe a quantidade em pelo menos uma variação.';
+        return;
+      }
+      const motivo = mm.querySelector('#mp-motivo').value.trim() || null;
+      const custo = ehEntrada ? (Number(mm.querySelector('#mp-custo').value) || null) : null;
+      // Sem motivo a saída em lote vira um punhado de baixas sem justificativa
+      // no kardex — e é justamente aí que some peça sem ninguém saber por quê.
+      if (tipo === 'saida' && !motivo) { erro.textContent = 'Informe o motivo da saída.'; return; }
+      let feitas = 0, pecas = 0, iguais = 0;
+      for (const l of linhas) {
+        const r = await api('estoque:movimentar', {
+          variacao_id: l.variacao_id, tipo, qtd: l.qtd,
+          estoque_id: localId, custo_unit: custo, motivo,
+        });
+        if (!r.ok) {
+          // "o saldo já é esse valor" não é erro: é linha que não precisou mudar.
+          if (ehAjuste && /j[áa] e(h|)\s*esse valor/i.test(r.erro || '')) { iguais++; continue; }
+          erro.textContent = `${r.erro} (as ${feitas} primeiras linhas já foram gravadas)`;
+          if (feitas) aoConcluir();
+          return;
+        }
+        feitas++; pecas += l.qtd;
+      }
+      toast(ehAjuste
+        ? `${feitas} variação(ões) ajustada(s)${iguais ? ` · ${iguais} já estava(m) certa(s)` : ''}.`
+        : `${ehEntrada ? 'Entrada' : 'Saída'} de ${pecas} peça(s) em ${feitas} variação(ões).`);
+      fechar(); aoConcluir();
+      // Etiquetas do que acabou de entrar, igual à tela de Produtos (v3.26.3).
+      // `estoque` aqui é a QUANTIDADE QUE ENTROU, não o saldo.
+      if (ehEntrada && linhas.length) {
+        const entradas = linhas.map(l => {
+          const v = variacoes.find(x => x.id === l.variacao_id);
+          return v ? { ...v, estoque: l.qtd } : null;
+        }).filter(Boolean);
+        if (entradas.length) {
+          abrirEtiquetasLote([{ produto: rv.produto, variacoes: entradas }], { entrada: true });
+        }
+      }
+    }, 'Confirmar');
+
+  const corpoTab = m.querySelector('#mp-corpo');
+  const selLocal = m.querySelector('#mp-local');
+  const resumo   = m.querySelector('#mp-resumo');
+
+  function atualizarResumo() {
+    const tot = [...m.querySelectorAll('[data-var]')].reduce((a, i) => a + (Number(i.value) || 0), 0);
+    const n = [...m.querySelectorAll('[data-var]')].filter(i => Number(i.value) > 0).length;
+    resumo.textContent = tot ? `${tot} peça(s) em ${n} variação(ões)` : '';
+  }
+
+  function desenharGrade() {
+    const lid = Number(selLocal.value);
+    corpoTab.innerHTML = '';
+    for (const v of variacoes) {
+      const tem = saldo(v.id, lid);
+      // Na saída, variação sem saldo AQUI não pode ser preenchida (não existe
+      // estoque negativo). Na entrada, pode — é a peça que está chegando.
+      const trava = tipo === 'saida' && tem <= 0;
+      const tr = el(`<tr${trava ? ' style="opacity:.4"' : ''}>
+        <td>${esc(v.cor)}</td>
+        <td><b>${esc(v.tamanho)}</b></td>
+        <td class="num">${tem}</td>
+        <td><input type="number" min="0" ${tipo === 'saida' ? `max="${tem}"` : ''} step="1" inputmode="numeric"
+          data-var="${v.id}" placeholder="0" style="width:100%" onfocus="this.select()" ${trava ? 'disabled' : ''}></td>
+      </tr>`);
+      const inp = tr.querySelector('input');
+      inp.addEventListener('input', () => {
+        // clamp na saída, sem redesenhar a grade (mataria o cursor — armadilha
+        // registrada na v3.2.0 e repetida na v3.5.0)
+        if (tipo === 'saida' && Number(inp.value) > tem) inp.value = tem;
+        atualizarResumo();
+      });
+      corpoTab.appendChild(tr);
+    }
+    atualizarResumo();
+  }
+
+  selLocal.addEventListener('change', desenharGrade);
+  const bTudo = m.querySelector('#mp-tudo');
+  if (bTudo) bTudo.onclick = () => {
+    const lid = Number(selLocal.value);
+    for (const i of m.querySelectorAll('[data-var]')) {
+      if (!i.disabled) i.value = saldo(Number(i.dataset.var), lid);
+    }
+    atualizarResumo();
+  };
+  m.querySelector('#mp-limpar').onclick = () => {
+    for (const i of m.querySelectorAll('[data-var]')) i.value = '';
+    atualizarResumo();
+  };
+  desenharGrade();
 }
 
 // Movimentação de estoque (entrada / saída / ajuste).
@@ -616,8 +877,12 @@ function imprimirEtiquetas(produto, variacoes, qtds, mostrar = { preco: false, r
     }
   }
   area.innerHTML = `<div class="etq-grid">${etiquetas.join('')}</div>`;
-  // Tentar impressão silenciosa; se impressora não configurada, cai no diálogo do browser
+  // Impressão silenciosa quando há impressora configurada. Sem ela — e SEMPRE
+  // num terminal em rede, onde `config:imprimir` é SOMENTE_LOCAL — abre a janela
+  // com o CSS 60×40mm. Antes caía em `window.print()`, que usava o `@page` de
+  // 80mm do cupom e saía sem o layout da etiqueta. (v3.26.3)
+  const folha = area.innerHTML;
   api('config:imprimir', { tipo: 'etiqueta' }).then(r => {
-    if (!r.ok) window.print();
-  }).catch(() => window.print());
+    if (!r.ok) imprimirFolhaEtiquetas(folha);
+  }).catch(() => imprimirFolhaEtiquetas(folha));
 }

@@ -119,12 +119,68 @@ function saldo(db, estoqueId, variacaoId) {
   return r ? Number(r.qtd) : 0;
 }
 
-// Soma `delta` (pode ser negativo) ao saldo do local. NÃO mexe no total.
+// Soma `delta` ao saldo do local. NÃO mexe no total.
+// COMPORTAMENTO ORIGINAL — não mexer. Troca, devolução e compra continuam
+// passando por aqui exatamente como antes. Quem precisa da regra de saldo
+// não-negativo usa `aplicarEstrito()` logo abaixo.
 function aplicar(db, estoqueId, variacaoId, delta) {
   if (!estoqueId || !delta) return;
   db.prepare(`INSERT INTO estoque_saldos (estoque_id, variacao_id, qtd) VALUES (?,?,?)
               ON CONFLICT(estoque_id, variacao_id) DO UPDATE SET qtd = qtd + excluded.qtd`)
     .run(Number(estoqueId), Number(variacaoId), arred(delta));
+}
+
+// Igual ao `aplicar()`, mas RECUSA o que deixaria o saldo abaixo de zero.
+//
+// REGRA: não existe saldo negativo. Ela é aplicada caminho por caminho, e não
+// dentro do `aplicar()`, de propósito: uma trava global mudaria também troca e
+// devolução, que estão FORA do escopo desta versão (decisão do Marcio em
+// 15/09/2026 — troca fica para uma atualização própria). Quando a troca for
+// revista, ela troca a chamada e herda a regra.
+//
+// Última linha de defesa: quem avisa o usuário com mensagem decente valida
+// antes, com `conferirSaldo()`. Esta guarda existe porque um terminal em rede
+// pode montar o payload à mão. Lançar exceção aqui faz a transação do chamador
+// sofrer ROLLBACK — nada fica gravado pela metade.
+function aplicarEstrito(db, estoqueId, variacaoId, delta) {
+  if (!estoqueId || !delta) return;
+  const d = arred(delta);
+  if (d < 0) {
+    const atual = saldo(db, estoqueId, variacaoId);
+    if (arred(atual + d) < 0) {
+      const e = db.prepare('SELECT nome FROM estoques WHERE id=?').get(Number(estoqueId));
+      throw new Error(
+        `Estoque negativo bloqueado: ${e ? e.nome : 'local #' + estoqueId} tem ${atual} e a operação pediu ${-d}.`);
+    }
+  }
+  aplicar(db, estoqueId, variacaoId, d);
+}
+
+// Confere se dá para tirar `qtd` peças da variação naquele local, SEM gravar.
+// Devolve { ok, saldo, falta, nome } — é o que as telas usam para recusar a
+// operação com uma mensagem que diz o nome da peça e quanto falta.
+function conferirSaldo(db, estoqueId, variacaoId, qtd) {
+  const precisa = arred(qtd);
+  const tem = saldo(db, estoqueId, variacaoId);
+  const e = db.prepare('SELECT nome FROM estoques WHERE id=?').get(Number(estoqueId));
+  return { ok: tem >= precisa, saldo: tem, falta: arred(Math.max(0, precisa - tem)),
+           nome: e ? e.nome : '' };
+}
+
+// Saldos negativos que já existem no banco (herança de antes da v3.26.0).
+// A tela de Estoque mostra isso como alerta e a migração zera com um ajuste
+// registrado no kardex — negativo não se apaga escondido, se corrige à vista.
+function negativos(db) {
+  return db.prepare(`
+    SELECT s.estoque_id, s.variacao_id, s.qtd, e.nome AS estoque,
+           p.nome AS produto, v.cor, v.tamanho, v.codigo_barras
+    FROM estoque_saldos s
+    JOIN estoques e ON e.id = s.estoque_id
+    JOIN variacoes v ON v.id = s.variacao_id
+    JOIN produtos p ON p.id = v.produto_id
+    WHERE s.qtd < 0
+    ORDER BY p.nome, v.cor, v.tamanho
+  `).all();
 }
 
 // Saldo de uma variação em cada local (para a tela de Estoque)
@@ -334,9 +390,23 @@ function obterTransferencia(db, id) {
   return { ok: true, transferencia: t, itens, pecas: arred(itens.reduce((s, i) => s + i.qtd, 0)) };
 }
 
+// Mapa de saldos por local, para a tela de Estoque agrupada por produto.
+// Uma consulta só: a tela junta com a lista de variações que já tem em mãos.
+// Não carrega foto nem nada pesado — a regra das 40 fotos por busca continua
+// valendo em quem monta a lista.
+function mapaLocais(db) {
+  const locais = db.prepare(
+    "SELECT id, nome, tipo FROM estoques WHERE ativo=1 ORDER BY (tipo='almoxarifado') DESC, nome"
+  ).all();
+  const saldos = db.prepare(
+    'SELECT estoque_id, variacao_id, qtd FROM estoque_saldos WHERE qtd <> 0'
+  ).all();
+  return { locais, saldos };
+}
+
 export {
   variacoesNoLocal,
   listar, principal, daLoja, salvar, desativar, garantirDaLoja,
-  saldo, aplicar, porVariacao, conteudo,
-  transferir, transferirTudo, listarTransferencias, obterTransferencia, arred
+  saldo, aplicar, aplicarEstrito, porVariacao, conteudo, mapaLocais,
+  transferir, transferirTudo, listarTransferencias, obterTransferencia, arred, conferirSaldo, negativos,
 };

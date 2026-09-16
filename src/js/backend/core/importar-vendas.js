@@ -221,6 +221,39 @@ function confirmar(db, p, quem) {
   const local = estoques.daLoja(db, lojaId);
   const localId = local ? local.id : null;
 
+  // ── Saldo do LOCAL, conferido antes de gravar (v3.26.0) ───────────────────
+  // A análise da planilha confere `variacoes.estoque`, que é o total de todos
+  // os locais — mas a baixa sai do estoque DA LOJA escolhida aqui, que só é
+  // conhecida neste passo. Sem esta conferência, importar o movimento de uma
+  // loja derrubava o saldo dela para baixo de zero.
+  //
+  // A importação é tudo-ou-nada de propósito: metade de uma planilha lançada é
+  // pior de arrumar do que planilha nenhuma. Some por variação, porque a mesma
+  // peça pode aparecer em várias vendas da mesma planilha.
+  if (localId) {
+    const pedido = new Map();
+    for (const v of prontas) {
+      for (const i of v.itens) {
+        pedido.set(i.variacao_id, (pedido.get(i.variacao_id) || 0) + i.qtd);
+      }
+    }
+    const faltas = [];
+    for (const [variacaoId, qtd] of pedido) {
+      const c = estoques.conferirSaldo(db, localId, variacaoId, qtd);
+      if (c.ok) continue;
+      const d = db.prepare(`SELECT pr.nome, va.cor, va.tamanho FROM variacoes va
+        JOIN produtos pr ON pr.id = va.produto_id WHERE va.id=?`).get(variacaoId);
+      const nome = d ? d.nome + (d.cor && d.cor !== 'Única' ? ` (${d.cor}/${d.tamanho})` : '') : `Variação #${variacaoId}`;
+      faltas.push(`${nome}: a planilha pede ${qtd} e ${c.nome} tem ${c.saldo}`);
+    }
+    if (faltas.length) {
+      return { ok: false, sem_estoque: true, faltas, erro:
+        `A planilha pede mais peças do que ${local.nome} tem. Nada foi importado:\n· `
+        + faltas.join('\n· ')
+        + '\n\nTransfira as peças para esta loja (Estoques → Transferir) e importe de novo.' };
+    }
+  }
+
   db.exec('BEGIN');
   try {
     const insVenda = db.prepare(`
@@ -246,7 +279,7 @@ function confirmar(db, p, quem) {
         insItem.run(vendaId, i.variacao_id, i.qtd, i.preco_unit, i.desconto, i.total);
         baixa.run(i.qtd, i.variacao_id);
         insMov.run(i.variacao_id, 'venda', -i.qtd, `Venda importada #${vendaId}`, quem?.id || null, localId);
-        if (localId) estoques.aplicar(db, localId, i.variacao_id, -i.qtd);
+        if (localId) estoques.aplicarEstrito(db, localId, i.variacao_id, -i.qtd);
       }
       if (v.total > 0) insPag.run(vendaId, v.forma, v.total, 1);
       criadas.push({ ref: v.ref, venda_id: vendaId, total: v.total });

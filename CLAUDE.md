@@ -1,8 +1,50 @@
 # Salgueiro Gestão V2 — Contexto do Projeto
 
+## 0. REGRA ZERO — ler o ESTADO.MD antes de qualquer coisa
+
+> **A primeira ação de toda sessão é abrir e ler `ESTADO.MD` na raiz do projeto.**
+> Automático, a cada chamada. Só depois de ler é que se abre código, se audita
+> ou se escreve. Ler `GRAPHIFY.md` na sequência.
+>
+> Ao FIM da sessão, atualizar os dois — sem esperar o usuário pedir.
+>
+> Ler "de memória" ou confiar no que uma sessão anterior disse NÃO conta:
+> tem que ser o arquivo do disco, agora. (Ordem do Marcio, repetida em 15/09/2026.)
+
+### Quando o mount `$HOME/mnt/` estiver quebrado
+Desde a atualização do Windows de 08/09/2026 o shell do Cowork pode não montar a
+pasta. Nesse caso **não trabalhe em cópias temporárias e não invente o conteúdo**:
+use `device_stage_files` para trazer o arquivo real, edite, e devolva com
+`device_commit_files` apontando para o caminho de origem. Entrega que não passou
+por `device_commit_files` NÃO chegou no disco do Marcio.
+
+---
+
+## 0.1 REGRA CRÍTICA — versão e publicação
+
+> **Antes de escolher QUALQUER número de versão, abrir
+> `https://github.com/mlopesdesign/salgueiro-gestao/releases` e `/tags` e ler a maior
+> versão JÁ PUBLICADA.** O número sai do que está publicado no remoto — nunca do disco,
+> nunca do ESTADO.MD, que podem estar atrás.
+>
+> Em 16/09/2026 entreguei a v3.26.0 inteira e o GitHub recusou:
+> `v3.26.0 is used by another release`. O Marcio tinha avisado que a tag já existia e eu
+> segui achando que `git tag -f` resolvia — não resolve: `-f` mexe na tag local, não
+> libera release publicada. Custou o reempacotamento inteiro e atrasou a entrega ao cliente.
+>
+> Se o Marcio disser que uma tag já existe, é **PARADA IMEDIATA** — conferir o remoto antes
+> de continuar.
+>
+> **Quem publica a release é SEMPRE o Marcio.** Eu entrego tag, título, descrição e o
+> caminho do arquivo. Nunca abrir o GitHub para publicar nem anexar asset.
+>
+> **Nada é entregue sem ponto de retorno:** backup dos arquivos antes de tocar neles.
+>
+> Regras completas em `REGRAS-CRITICAS.md` na raiz — ler junto com o ESTADO.MD.
+
 ## Local de trabalho (decidido 2026-07-31)
 
-**`D:\Projetos\LOJA FISICA SALGUEIRO V2` é o ÚNICO local de trabalho.**
+**`E:\Projetos\LOJA FISICA SALGUEIRO V2` (desktop) é o ÚNICO local de trabalho.**
 O experimento de sincronizar por Google Drive foi encerrado: o shell (sandbox
 Linux) **não monta unidades do Drive** (`H:`, `B:`), então dá para ler e editar
 mas **não dá para buildar** — o `resources.neu` não sai. Trabalhar em duas
@@ -386,7 +428,11 @@ cliente — o histórico de conversas reaparece quando o chat voltar.
   `%APPDATA%\SalgueiroGestao\impressao.log` e o nome exato da impressora.
   Investigar lendo `config:imprimir`, `_imprimirDireto()`, `core/rede.js` e o PS1.
 - **Impressão silenciosa do cupom** — aguardando o nome da impressora no cliente.
-- **Rede multiterminal no cliente** — testar após liberar a porta 8750 TCP.
+- **Rede multiterminal no cliente** — CAUSA RAIZ (2026-09-11): `RequestExecutionLevel user`
+  no `.nsi` + `netsh advfirewall add rule` (exige admin) = falha SILENCIOSA do `nsExec::Exec`;
+  a regra `SalgueiroRede` nunca existiu na máquina do cliente. Corrigido com `ExecShell "runas"`
+  + `profile=any`. Instalações antigas: rodar `DIAGNOSTICO-REDE.bat` como administrador
+  (audita processo/extensão/porta/firewall/perfil de rede/IPs/HTTP/erro.log e repara).
 - **Validação visual no Windows das versões 3.2.0 → 3.5.2.** Nenhuma foi aberta
   de verdade: o teste E2E está bloqueado (ver abaixo).
 

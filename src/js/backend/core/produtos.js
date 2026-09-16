@@ -138,6 +138,56 @@ function salvarProduto(db, p, quem) {
     chaves.add(chave);
   }
 
+  // ── Estoque editado direto na grade do produto (v3.26.0) ──────────────────
+  //
+  // ANTES: o campo Estoque das variações que já existem vinha DESABILITADO na
+  // tela (app.js) e este core ignorava o valor — só o estoque inicial de uma
+  // variação NOVA era gravado, e sempre no almoxarifado central. Para corrigir
+  // 10 → 20 o usuário tinha que sair do produto, abrir o módulo Estoque e mexer
+  // variação por variação, depois voltar para imprimir etiqueta.
+  //
+  // AGORA: o número na grade é o TOTAL NOVO daquela variação. A diferença vira
+  // movimento de verdade, com kardex e auditoria. As peças que ENTRAM caem no
+  // almoxarifado central (decisão do Marcio: depois transfere pela tela de
+  // Estoques), ou no local mandado em `p.estoque_destino_id`.
+  //
+  // Só ADMIN. O campo fica travado para os outros perfis na tela, mas a trava
+  // que vale é esta, no servidor — terminal em rede monta payload à mão.
+  const ehAdmin = !!quem && quem.perfil === 'admin';
+  const destino = Number(p.estoque_destino_id) > 0
+    ? db.prepare('SELECT * FROM estoques WHERE id=? AND ativo=1').get(Number(p.estoque_destino_id))
+    : estoques.principal(db);
+  const ajustes = [];
+  for (const v of variacoes) {
+    if (!v.id) continue;                       // variação nova: segue o caminho do estoque inicial
+    if (v.estoque === undefined || v.estoque === null || String(v.estoque).trim() === '') continue;
+    const alvo = Math.round(Number(v.estoque));
+    if (!Number.isFinite(alvo) || alvo < 0) {
+      return { ok: false, erro: 'Quantidade de estoque inválida na grade.' };
+    }
+    const atualRow = db.prepare('SELECT estoque FROM variacoes WHERE id=? AND produto_id=? AND ativo=1')
+      .get(v.id, p.id);
+    if (!atualRow) continue;
+    const delta = alvo - Number(atualRow.estoque || 0);
+    if (delta === 0) continue;                 // nada mudou (é o caso de quem não é admin)
+    if (!ehAdmin) {
+      return { ok: false, erro: 'Só administrador pode alterar o estoque pela tela de Produtos.' };
+    }
+    if (!destino) return { ok: false, erro: 'Nenhum estoque cadastrado para receber a entrada.' };
+    // Saída pela grade: a peça sai do local de destino, e ele precisa ter saldo.
+    // Sem isso o total cairia e o local ficaria negativo — o que não existe.
+    if (delta < 0) {
+      const c = estoques.conferirSaldo(db, destino.id, v.id, -delta);
+      if (!c.ok) {
+        const d = db.prepare('SELECT cor, tamanho FROM variacoes WHERE id=?').get(v.id);
+        return { ok: false, erro:
+          `Não dá para baixar ${-delta} de ${d ? d.cor + '/' + d.tamanho : 'uma variação'}: `
+          + `${c.nome} tem só ${c.saldo}. Baixe pelo local certo em Estoques.` };
+      }
+    }
+    ajustes.push({ variacao_id: v.id, delta, total: alvo });
+  }
+
   db.exec('BEGIN');
   try {
     let produtoId = p.id;
@@ -230,9 +280,33 @@ function salvarProduto(db, p, quem) {
       }
     }
 
+    // Aplica as correções de estoque da grade (calculadas antes da transação).
+    // `entradas` volta para a tela para imprimir etiqueta SÓ do que entrou.
+    const entradas = [];
+    for (const a of ajustes) {
+      db.prepare('UPDATE variacoes SET estoque=? WHERE id=?').run(a.total, a.variacao_id);
+      db.prepare(`
+        INSERT INTO movimentos_estoque (variacao_id, tipo, qtd, custo_unit, motivo, usuario_id, estoque_id)
+        VALUES (?,?,?,?,?,?,?)
+      `).run(a.variacao_id, a.delta > 0 ? 'entrada' : 'saida', a.delta,
+             a.delta > 0 ? (Number(p.preco_custo) || null) : null,
+             `Correção pela tela de Produtos (total ${a.total})`,
+             quem ? quem.id : null, destino.id);
+      estoques.aplicarEstrito(db, destino.id, a.variacao_id, a.delta);
+      if (a.delta > 0) {
+        const d = db.prepare(`SELECT id, cor, tamanho, codigo_barras FROM variacoes WHERE id=?`)
+          .get(a.variacao_id);
+        if (d) entradas.push({ ...d, estoque: a.delta });
+      }
+    }
+
     db.exec('COMMIT');
     auditar(db, quem, p.id ? 'produto_editado' : 'produto_criado', `#${produtoId} ${nome}`);
-    return { ok: true, id: produtoId };
+    if (ajustes.length) {
+      auditar(db, quem, 'estoque_grade_produto',
+        `#${produtoId} ${nome}: ${ajustes.map(a => (a.delta > 0 ? '+' : '') + a.delta).join(', ')} em ${destino.nome}`);
+    }
+    return { ok: true, id: produtoId, entradas, destino: destino ? destino.nome : null };
   } catch (e) {
     db.exec('ROLLBACK');
     if (String(e.message).includes('UNIQUE') && String(e.message).includes('codigo_barras')) {

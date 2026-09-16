@@ -322,11 +322,42 @@ function registrarVenda(db, p, quem) {
     }
   }
 
-  // estoque disponível
+  // ── Estoque disponível (v3.26.0: confere o LOCAL, não só o total) ─────────
+  //
+  // O QUE ESTAVA ERRADO: esta validação olhava `variacoes.estoque`, que é o
+  // total somado de TODOS os locais. Produto com 10 no total (5 na loja + 5 no
+  // almoxarifado) passava numa venda de 7 na loja — e o saldo da loja ia para
+  // −2. Depois, lá embaixo, o código detectava a falta, montava um aviso
+  // "pegue no Almoxarifado" e aplicava a baixa assim mesmo.
+  //
+  // REGRA NOVA (decisão do Marcio, 15/09/2026): não existe saldo negativo em
+  // hipótese alguma. Falta peça no local do caixa, a venda é RECUSADA — com o
+  // nome da peça, o local e quanto tem. Se a peça está fisicamente na arara mas
+  // não no sistema, alguém esqueceu de registrar a descida do almoxarifado: a
+  // mensagem diz isso, e a descida se resolve em Estoques → Transferir.
+  const localVenda = estoques.daLoja(db, cx.loja_id);
+  const faltas = [];
   for (const i of itens) {
     const v = db.prepare('SELECT estoque FROM variacoes WHERE id=? AND ativo=1').get(i.variacao_id);
     if (!v) return { ok: false, erro: 'Item não encontrado no estoque.' };
-    if (v.estoque < i.qtd) return { ok: false, erro: `Estoque insuficiente (disponível: ${v.estoque}).` };
+    if (!localVenda) {
+      // Loja sem estoque próprio: só resta o total geral (comportamento antigo).
+      if (v.estoque < i.qtd) return { ok: false, erro: `Estoque insuficiente (disponível: ${v.estoque}).` };
+      continue;
+    }
+    const c = estoques.conferirSaldo(db, localVenda.id, i.variacao_id, i.qtd);
+    if (!c.ok) {
+      const d = db.prepare(`SELECT pr.nome, va.cor, va.tamanho FROM variacoes va
+        JOIN produtos pr ON pr.id = va.produto_id WHERE va.id=?`).get(i.variacao_id);
+      const nome = d ? d.nome + (d.cor && d.cor !== 'Única' ? ` (${d.cor}/${d.tamanho})` : '') : 'Peça';
+      faltas.push(`${nome}: ${c.saldo} em ${c.nome}, precisa de ${i.qtd}`);
+    }
+  }
+  if (faltas.length) {
+    return { ok: false, sem_estoque: true, erro:
+      `Sem estoque em ${localVenda.nome}:\n· ${faltas.join('\n· ')}\n\n` +
+      'Se a peça está na loja, a descida do Almoxarifado não foi registrada. ' +
+      'Registre em Estoques → Transferir e refaça a venda.' };
   }
 
   db.exec('BEGIN');
@@ -362,8 +393,9 @@ function registrarVenda(db, p, quem) {
     const insMov = db.prepare(`INSERT INTO movimentos_estoque (variacao_id, tipo, qtd, motivo, usuario_id, estoque_id)
                                VALUES (?,?,?,?,?,?)`);
     // A baixa sai do estoque da loja deste caixa (ou do central, se a loja não
-    // tiver estoque próprio). Se faltar peça lá, a venda passa mesmo assim e o
-    // sistema avisa para buscar no almoxarifado.
+    // tiver estoque próprio). A falta JÁ FOI RECUSADA lá em cima (v3.26.0):
+    // aqui o saldo é garantido, e `aplicarEstrito` é só a última linha de
+    // defesa contra um payload montado à mão por um terminal em rede.
     const local = estoques.daLoja(db, cx.loja_id);
     const localId = local ? local.id : null;
     const avisosEstoque = [];
@@ -378,16 +410,7 @@ function registrarVenda(db, p, quem) {
       insItem.run(vendaId, i.variacao_id, i.qtd, arred(Number(i.preco_unit)), arred(Number(i.desconto) || 0), i.total);
       updEstoque.run(i.qtd, i.variacao_id);
       insMov.run(i.variacao_id, 'venda', -i.qtd, `Venda #${vendaId}`, quem.id, localId);
-      if (localId) {
-        const disp = estoques.saldo(db, localId, i.variacao_id);
-        if (disp < i.qtd) {
-          const v = db.prepare(`SELECT pr.nome, va.cor, va.tamanho FROM variacoes va
-            JOIN produtos pr ON pr.id=va.produto_id WHERE va.id=?`).get(i.variacao_id);
-          avisosEstoque.push(`${v ? v.nome : 'Peça'}${v && v.cor !== 'Única' ? ` (${v.cor}/${v.tamanho})` : ''}: `
-            + `acabou em ${local.nome} — pegue no Almoxarifado Central e registre a descida.`);
-        }
-        estoques.aplicar(db, localId, i.variacao_id, -i.qtd);
-      }
+      if (localId) estoques.aplicarEstrito(db, localId, i.variacao_id, -i.qtd);
       const pr = infoConsig.get(i.variacao_id);
       if (pr && pr.consignado && pr.fornecedor_id && pr.pct_fornecedor > 0) {
         // O desconto do FECHAMENTO entra na base do repasse (v3.14.0).

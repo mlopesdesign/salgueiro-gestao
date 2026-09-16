@@ -596,3 +596,75 @@ body.com-chat .conteudo { padding-bottom: 96px; }
 @media (hover: none) {
   #img-hov { display: none !important; }
 }
+
+
+/* ---------- Tela de Estoque: alinhamento e responsivo (v3.26.5) ---------- */
+/* Números em colunas de verdade, alinhados à direita e com dígitos de largura
+   fixa — sem isso "9" e "11" não batem na vertical. A rolagem horizontal fica
+   na tabela, nunca na página: com muitas lojas a tela não pode empurrar o
+   layout todo para o lado. */
+.tab-scroll { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.tab-estoque { width: 100%; border-collapse: collapse; }
+.tab-estoque th, .tab-estoque td { vertical-align: middle; }
+.tab-estoque th.num, .tab-estoque td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  white-space: nowrap;
+}
+.tab-estoque th.col-loja { font-size: 11.5px; font-weight: 600; color: var(--texto-suave); }
+.tab-estoque td.col-loja { font-size: 12.5px; color: var(--texto-suave); }
+.tab-estoque tr.linha-produto td.col-loja { color: inherit; }
+.tab-estoque .acoes-linha { text-align: right; white-space: nowrap; }
+.tab-estoque .acoes-linha button { white-space: nowrap; }
+
+@media (max-width: 1400px) {
+  .tab-estoque th, .tab-estoque td { padding-left: 8px; padding-right: 8px; }
+  .tab-estoque th.col-loja, .tab-estoque td.col-loja { font-size: 11.5px; }
+}
+@media (max-width: 1100px) {
+  /* o código de barras é o primeiro a sair: está na etiqueta e no leitor */
+  .tab-estoque th:nth-child(3), .tab-estoque td:nth-child(3) { display: none; }
+}
+@media (max-width: 860px) {
+  .tab-estoque th:first-child, .tab-estoque td:first-child { display: none; } /* foto */
+  .tab-estoque .acoes-linha button { padding: 4px 6px; font-size: 12px; }
+}
+
+/* Ações do produto: três botões EMPILHADOS, mesma largura, mesmo espaçamento.
+   Largura igual vem do `stretch` + `width:100%`; o espaçamento é um `gap` só,
+   nunca margem solta — margem em botão é o que desalinha quando um deles tem
+   texto mais curto. (v3.26.5) */
+.tab-estoque td.acoes-estoque {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 10px 12px;
+  width: 132px;
+}
+.tab-estoque .btn-est {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  border: 1px solid var(--borda);
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  transition: background .12s, border-color .12s;
+}
+.tab-estoque .btn-est:hover { background: #FBF3F3; border-color: var(--vinho); }
+.tab-estoque .btn-est-entrada { color: var(--verde, #1a7f37); }
+.tab-estoque .btn-est-saida   { color: var(--vermelho); }
+.tab-estoque .btn-est-ajuste  { color: var(--texto, #333); }
+
+@media (max-width: 860px) {
+  .tab-estoque td.acoes-estoque { width: 108px; padding: 8px; }
+  .tab-estoque .btn-est { font-size: 11.5px; padding: 5px 6px; }
+}

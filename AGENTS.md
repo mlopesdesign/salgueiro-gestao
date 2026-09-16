@@ -12,6 +12,46 @@
 
 ---
 
+## 0. REGRA ZERO — ler o ESTADO.MD antes de qualquer coisa
+
+> **A primeira ação de toda sessão é abrir e ler `ESTADO.MD` na raiz do projeto.**
+> Não é sugestão, não é "quando parecer útil": é automático, a cada chamada.
+> Só depois de ler o ESTADO.MD é que se abre código, se audita ou se escreve.
+>
+> Ler também `GRAPHIFY.md` (mapa técnico) na sequência.
+>
+> Ao FIM da sessão, atualizar os dois — sem esperar o usuário pedir.
+>
+> Ler "de memória", ou confiar no que uma sessão anterior disse, não conta:
+> tem que ser o arquivo do disco, agora.
+>
+> Motivo: sem esse ponto de partida as sessões repetem trabalho já feito,
+> mexem em versões erradas e perdem pendências. Já aconteceu.
+
+---
+
+## 0.1 REGRA CRÍTICA — versão e publicação
+
+> **Antes de escolher QUALQUER número de versão, abrir
+> `https://github.com/mlopesdesign/salgueiro-gestao/releases` e `/tags` e ler a maior
+> versão JÁ PUBLICADA.** O número sai do que está publicado no remoto — nunca do disco,
+> nunca do ESTADO.MD, que podem estar atrás.
+>
+> Em 16/09/2026 entreguei a v3.26.0 inteira e o GitHub recusou:
+> `v3.26.0 is used by another release`. O Marcio tinha avisado que a tag já existia e eu
+> segui achando que `git tag -f` resolvia — não resolve: `-f` mexe na tag local, não
+> libera release publicada. Custou o reempacotamento inteiro e atrasou a entrega ao cliente.
+>
+> Se o Marcio disser que uma tag já existe, é **PARADA IMEDIATA** — conferir o remoto antes
+> de continuar.
+>
+> **Quem publica a release é SEMPRE o Marcio.** Eu entrego tag, título, descrição e o
+> caminho do arquivo. Nunca abrir o GitHub para publicar nem anexar asset.
+>
+> **Nada é entregue sem ponto de retorno:** backup dos arquivos antes de tocar neles.
+>
+> Regras completas em `REGRAS-CRITICAS.md` na raiz — ler junto com o ESTADO.MD.
+
 ## 1. Tecnologia — obrigatória, não é sugestão
 
 | Peça | O que é | Versão |

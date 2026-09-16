@@ -82,7 +82,7 @@ Function .onInit
     ${If} $R1 == ""
       StrCpy $R1 "versao anterior"
     ${EndIf}
-    MessageBox MB_YESNO|MB_ICONQUESTION "Salgueiro Gestao ($R1) ja esta instalado neste computador.$\n$\nDeseja atualizar para a versao 3.25.36?$\n$\nSeus dados, vendas e configuracoes serao preservados." IDYES prosseguir
+    MessageBox MB_YESNO|MB_ICONQUESTION "Salgueiro Gestao ($R1) ja esta instalado neste computador.$\n$\nDeseja atualizar para a versao 3.25.41?$\n$\nSeus dados, vendas e configuracoes serao preservados." IDYES prosseguir
     Abort
     prosseguir:
   ${EndIf}
@@ -146,13 +146,17 @@ Section "Principal"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "DisplayName" "Salgueiro Gestao"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "UninstallString" "$INSTDIR\uninstall.exe"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "InstallLocation" "$INSTDIR"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "DisplayVersion" "3.25.36"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "DisplayVersion" "3.25.41"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "Publisher" "ML Lopes Design"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "DisplayIcon" "$INSTDIR\icon.ico"
 
-  ; Regra de firewall — nsExec roda OCULTO (ExecShell abria janela de terminal)
-  nsExec::Exec 'netsh advfirewall firewall delete rule name=SalgueiroRede'
-  nsExec::Exec 'netsh advfirewall firewall add rule name=SalgueiroRede dir=in action=allow protocol=TCP localport=8750'
+  ; Regra de firewall - PRECISA DE ADMINISTRADOR.
+  ; O instalador roda como usuario comum (RequestExecutionLevel user), entao o
+  ; netsh via nsExec FALHA EM SILENCIO e o terminal em rede nunca conecta.
+  ; Por isso pedimos elevacao explicita aqui (UAC). Se o cliente recusar, o
+  ; DIAGNOSTICO-REDE.bat cria a regra depois.
+  ExecShell "runas" "powershell.exe" '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "netsh advfirewall firewall delete rule name=SalgueiroRede; netsh advfirewall firewall add rule name=SalgueiroRede dir=in action=allow protocol=TCP localport=8750 profile=any"' SW_HIDE
+  Sleep 1200
 
   Exec '"$INSTDIR\Salgueiro Gestao.exe"'
 SectionEnd

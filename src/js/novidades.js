@@ -3,6 +3,44 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.26.5',
+    data: '2026-09-16',
+    itens: [
+      '📐 Tela de Estoque alinhada. Cada loja virou uma COLUNA de verdade, com o número à direita e dígitos de largura fixa — agora 9 e 11 batem na vertical. Antes os saldos eram texto solto numa célula só e nada se alinhava entre as linhas.',
+      '🔘 Os botões Entrada, Saída e Ajustar ficam na mesma linha, sem quebrar.',
+      '📱 A tela se adapta ao tamanho do monitor: a rolagem horizontal fica dentro da tabela e nunca empurra o layout. Em telas menores sai primeiro o código de barras, depois a foto.',
+      '📷 As fotos voltaram: cada variação mostra a miniatura, e a linha do produto usa a primeira foto que existir entre as variações — antes pegava a da primeira variação e, se ela estivesse sem foto, o produto aparecia com o ícone genérico.',
+    ],
+  },
+  {
+    versao: '3.26.3',
+    data: '2026-09-16',
+    itens: [
+      '🖨️ AS LOJAS EM REDE VOLTARAM A IMPRIMIR ETIQUETA. Nos terminais a etiqueta saía no tamanho do cupom (80mm) e sem formatação — o sistema usava a impressão da página, que carrega o @page do cupom. Agora a folha de etiquetas abre numa janela própria, com o tamanho 60×40mm correto, e imprime na impressora daquela loja.',
+      '🏷️ Etiqueta direto do Estoque: ao confirmar uma Entrada pelo produto, a prévia de etiquetas abre sozinha já com as peças que acabaram de entrar e a quantidade de cada uma.',
+    ],
+  },
+  {
+    versao: '3.26.2',
+    data: '2026-09-16',
+    itens: [
+      '📦 Entrada, Saída e Ajustar agora são do PRODUTO. Clicando em qualquer um dos três, abre uma janela só com TODAS as variações do produto — você mexe no que quiser e confirma uma vez. Acabou o abre-fecha variação por variação.',
+      '⚖️ No Ajuste você digita a contagem real de cada variação naquele estoque. Linha em branco não é tocada; 0 zera a peça naquele local.',
+      '📋 A lista continua agrupada por produto, com o total do produto e o saldo de cada variação em cada loja.',
+    ],
+  },
+  {
+    versao: '3.26.1',
+    data: '2026-09-16',
+    itens: [
+      '📦 ESTOQUE PELO PRÓPRIO PRODUTO. O administrador agora corrige a quantidade direto na grade do produto: o número é o TOTAL da variação — tem 10, chegaram 10, escreva 20. Antes esse campo ficava travado e era preciso sair, abrir o módulo Estoque e ajustar variação por variação.',
+      '🏷️ ETIQUETA SÓ DAS PEÇAS QUE ENTRARAM. Ao salvar o produto, a tela de etiquetas abre sozinha já com as peças acrescentadas e a quantidade certa de cada uma. Não precisa mais desmarcar tudo na mão.',
+      '🚫 NÃO EXISTE MAIS ESTOQUE NEGATIVO NA VENDA. Se faltar a peça no estoque daquela loja, a venda é recusada dizendo o nome da peça, o local e quanto tem. Antes a venda passava assim mesmo e o saldo da loja ficava abaixo de zero.',
+      '📋 A recusa ensina o caminho: se a peça está na arara mas não no sistema, é porque a descida do Almoxarifado não foi registrada — basta lançar em Estoques → Transferir.',
+      '🧾 Toda correção feita pela grade do produto fica registrada no Kardex, com quem fez e o total informado.',
+    ],
+  },
+  {
     versao: '3.25.41',
     data: '2026-09-10',
     itens: [

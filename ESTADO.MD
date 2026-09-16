@@ -9,12 +9,73 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.25.41 |
-| **Data do último build** | 2026-09-10 |
+| **Versão atual** | 3.26.1 |
+| **Data do último build** | 2026-09-16 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.25.41 em 2026-09-10 ✓ |
-| **5 lugares da versão** | todos em 3.25.41 ✓ (config, app.js, ambiente.js, .nsi, novidades.js) |
+| **GRAPHIFY** | atualizado para 3.26.1 em 2026-09-16 ✓ (27 módulos core · 157 rotas · 37 tabelas) |
+| **5 lugares da versão** | config, app.js, ambiente.js, novidades.js em 3.26.1 ✓ · **`.nsi` ainda em 3.25.41** ⚠ |
+
+---
+
+## 1.1 v3.26.1 — pronta no disco, FALTA PUBLICAR (2026-09-16)
+
+> **ARMADILHA QUE JÁ CUSTOU UM REEMPACOTAMENTO:** a v3.26.0 foi construída inteira e o
+> GitHub recusou na publicação — `v3.26.0 is used by another release`. A tag já estava
+> ocupada por uma release anterior, e `git tag -f` NÃO resolve isso (mexe só na tag local).
+> Por isso a versão virou 3.26.1. **Antes de escolher número de versão, abrir
+> `/releases` e `/tags` no GitHub e ler o que já está publicado.** Ver `REGRAS-CRITICAS.md`.
+
+**Dados da release (quem publica é o Marcio):**
+
+| Campo | Valor |
+|---|---|
+| Tag | `v3.26.1` |
+| Título | v3.26.1 — Estoque pelo produto, etiqueta das peças que entraram, fim do estoque negativo |
+| Asset | `Portable\resources.neu` — sha256 `dc82208f22f3c3205efedec43b380352c91f787d384ddceaa58e0a1adc00a4d0` |
+| Notas | `release-notes.md` na raiz |
+
+**O que entrou:**
+
+| Área | Mudança |
+|---|---|
+| `core/produtos.js` | Grade do produto editável por ADMIN. O número é o TOTAL da variação; a diferença vira movimento no Kardex. Entradas vão para o Almoxarifado Central. Devolve `entradas[]` para as etiquetas. |
+| `app.js` | Campo de estoque liberado para admin (era `disabled`), aviso vivo da diferença sem redesenhar a grade, e prévia de etiquetas ao salvar. |
+| `etiquetas.js` | `abrirEtiquetasLote(itens, {entrada:true})` — modo "só as peças que entraram". |
+| `core/pdv.js` | Venda confere o saldo do LOCAL, não o total geral. Sem saldo = RECUSA com peça, local e quantidade. Removido o bloco que aplicava a baixa mesmo faltando peça. |
+| `core/importar-vendas.js` | Mesma conferência por local, tudo-ou-nada, com a lista do que falta. |
+| `core/estoques.js` | `aplicarEstrito()`, `conferirSaldo()`, `negativos()`, `mapaLocais()`. |
+| `estoque.js` | Lista agrupada por produto com saldo por loja; Entrada/Saída do produto inteiro numa tela só. |
+| `servidor.js` | Rota `estoques:mapaLocais` (permissão `estoque.ver`). |
+
+**Decisões que NÃO podem ser "consertadas" por engano:**
+
+- A regra de saldo não-negativo está em `aplicarEstrito()`, **fora** do `aplicar()`, de
+  propósito — uma trava global mudaria troca e devolução, que o Marcio tirou do escopo
+  em 15/09/2026 (ordem repetida 3x). `trocas.js` e `devolucoes.js` conferidos por `diff`
+  como idênticos aos originais, inclusive dentro do bundle empacotado.
+- Venda sem saldo **trava** (opção A escolhida pelo Marcio). Não foi feita descida
+  automática do almoxarifado. Isso cria assimetria proposital: venda trava, troca não.
+
+**Verificação:** `testes/teste-estoque-grade.mjs` — 32 asserções contra SQLite real.
+Inclui o caso do furo antigo: venda de 5 numa loja com 2, tendo 15 no total geral, é recusada.
+
+**Backup antes das alterações:** `backups\pre-v3.26.0-2026-09-15\` (18 arquivos, os dois
+`resources.neu` inclusive). Restaurar = devolver os dois `resources.neu` de lá.
+
+---
+
+## 1.2 Bug conhecido, ADIADO a pedido do Marcio
+
+A troca grava uma linha em `vendas`, e o `resumoCaixa` (`core/pdv.js`) soma
+`SUM(total) FROM vendas WHERE caixa_id=?` sem separar troca — **o fechamento de caixa
+infla**, mesmo sem dinheiro ter entrado. O faturamento dos relatórios está CORRETO
+(subtrai devoluções). Correção já desenhada, NÃO aplicada:
+
+1. `trocas.js` gravar `tipo_venda='troca'` (a coluna existe desde a v3.19.0)
+2. `resumoCaixa` separar Vendas de Trocas
+3. dar nome a `'troca'` no mapa de formas em `relatorios.js:298`, onde ela não existe
+4. backfill pelas vendas com `obs` começando em `"Troca — venda origem #"`
 
 ---
 
@@ -29,8 +90,16 @@ Commitado e tagueado até **v3.25.41**. O histórico voltou a acompanhar o disco
 - `7c37a1e` — push-github.bat para v3.25.38
 - `aa4061c` — v3.25.38
 
-> **Falta apenas dar o push.** O sandbox Linux não tem as credenciais do GitHub;
-> rodar `push-github.bat` no Windows envia commits, tags e cria a release.
+> **ATENÇÃO — nada da v3.26.1 está commitado.** O mount da pasta está quebrado desde a
+> atualização do Windows de 08/09 (KB5124008 quebrou o Plan9 do Hyper-V), então esta
+> sessão não teve `git` nenhum: os arquivos foram escritos direto no disco pela ponte de
+> arquivos. O `push-github.bat` foi reescrito para commitar, tagear, enviar e — na
+> primeira execução — ligar o `SalgueiroAutoCommit` (`tools/auto-commit.ps1`), que passa
+> a commitar sozinho qualquer alteração na pasta 45s depois da última gravação.
+>
+> A correção do Windows (KB5129195, 14/09) **não se aplica a esta máquina**: build
+> 26220.9472, canal Beta do Insider — ramo 26220, enquanto o pacote é do ramo 26200.
+> Depende do próximo flight do Beta.
 
 ---
 
@@ -86,7 +155,14 @@ Commitado e tagueado até **v3.25.41**. O histórico voltou a acompanhar o disco
   personalizadas (JSON em `usuarios.permissoes`) ficam sem `mensagens.usar` e o
   chat não abre. Não afeta perfis padrão.
 - **Impressão silenciosa do cupom** — aguardando nome da impressora do cliente.
-- **Rede multiterminal no cliente** — testar após firewall liberar porta 8750 TCP.
+- **Rede multiterminal no cliente** — **CAUSA RAIZ IDENTIFICADA (2026-09-11):** o
+  `salgueiro-setup.nsi` roda com `RequestExecutionLevel user`, mas o
+  `netsh advfirewall firewall add rule` EXIGE administrador — o `nsExec::Exec`
+  falhava **em silêncio** e a regra `SalgueiroRede` nunca existiu na máquina do
+  cliente. Corrigido no .nsi (agora `ExecShell "runas"` com UAC + `profile=any`).
+  Para as instalações já feitas: rodar `DIAGNOSTICO-REDE.bat` (raiz do projeto)
+  como administrador — ele audita tudo, cria a regra, tira a rede do perfil
+  "Público" e salva `RELATORIO-REDE-SALGUEIRO.txt` na Área de Trabalho.
 - **Teste visual E2E bloqueado** — sandbox sem GTK/WebKit. Substituto: jsdom.
 - **Troca rápida não confere dupla devolução** — sem venda de origem não há
   `venda_itens` para comparar. O crédito é limitado ao preço de tabela e a peça

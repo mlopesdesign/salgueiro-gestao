@@ -8,15 +8,45 @@ import { qrSvg } from './vendor/qrcode.js';
 // Layout: esquerda=nome/cor/barcode · direita=badge tamanho em destaque
 const CSS_ETQ = `*{box-sizing:border-box;margin:0;padding:0}@page{size:60mm 40mm;margin:0}body{background:#fff}.etq-grid{display:flex;flex-direction:column}.etiqueta{width:60mm;height:40mm;padding:2mm 2mm 2mm 5mm;font-family:Arial,Helvetica,sans-serif;overflow:hidden;display:flex;flex-direction:row;gap:2mm;page-break-after:always;break-after:page}.et-left{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}.et-nome{font-size:13px;font-weight:700;line-height:1.2;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;flex-shrink:0}.et-cor,.et-info{font-size:11px;color:#000;margin-top:1mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0}.et-ref{font-size:9px;color:#555;margin-top:.5mm;flex-shrink:0}.et-preco{font-size:12px;font-weight:700;margin-top:1mm;flex-shrink:0}.et-bc-wrap{margin-top:auto;flex-shrink:0}.et-bc-wrap>svg{width:100%;max-width:35mm;height:10mm;display:block}.et-bc-wrap .qrbox{display:flex}.et-bc-wrap .qrbox svg{width:14mm;height:14mm}.et-num{font-family:Consolas,monospace;font-size:7px;letter-spacing:.03em;margin-top:.5mm}.et-right{width:15mm;flex-shrink:0;display:flex;align-items:center;justify-content:center}.et-tam-badge{width:13mm;height:26mm;border:2px solid #000;border-radius:2.5mm;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;line-height:1;text-align:center;word-break:break-all;overflow:hidden}`;
 
+// Abre a folha de etiquetas numa janela própria, com o CSS 60×40mm embutido,
+// e manda imprimir. (v3.26.3)
+//
+// POR QUE ISSO EXISTE: `app.css` tem `@page { size: 80mm auto }` global — o
+// tamanho do CUPOM térmico. Quem caía em `window.print()` imprimia a página do
+// app com esse @page e SEM o CSS da etiqueta, que só era injetado na janela de
+// fallback do computador principal. Na prática, terminal em rede não conseguia
+// imprimir etiqueta: saía no tamanho do cupom e sem formatação.
+//
+// Agora qualquer caminho sem impressão silenciosa — terminal em rede incluído —
+// passa por aqui e recebe o layout correto.
+export function imprimirFolhaEtiquetas(htmlEtiquetas, logoUri = '') {
+  const html = String(htmlEtiquetas || '').replace(/__LOGO_URI__/g, logoUri);
+  const w = window.open('about:blank', '_blank', 'width=640,height=480,toolbar=0,menubar=0');
+  if (!w) {
+    toast('O navegador bloqueou a janela de impressão. Libere os pop-ups deste endereço e tente de novo.', true);
+    return false;
+  }
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">`
+    + `<title>Etiquetas</title><style>${CSS_ETQ}</style></head><body>${html}</body></html>`);
+  w.document.close();
+  setTimeout(() => { try { w.print(); } catch { /* ok */ } }, 350);
+  return true;
+}
+
 // itens: [{ produto, variacoes: [...] }, ...]
-export function abrirEtiquetasLote(itens) {
+// opts.entrada = true  → as variações trazem em `estoque` a QUANTIDADE QUE
+// ENTROU (não o saldo). Usado pela tela de Produtos logo depois de salvar, para
+// imprimir etiqueta só das peças acrescentadas. (v3.26.0)
+export function abrirEtiquetasLote(itens, opts = {}) {
   if (!itens || !itens.length) { toast('Selecione ao menos um produto.', true); return; }
   const totalVar = itens.reduce((s, it) => s + it.variacoes.length, 0);
   const totalEstoque = itens.reduce((s, it) =>
     s + it.variacoes.reduce((a, v) => a + Math.max(0, Math.round(v.estoque)), 0), 0);
 
   const corpo = `
-    <p style="margin-bottom:14px">Etiquetas para <b>${itens.length} produto(s)</b> · ${totalVar} variação(ões).</p>
+    <p style="margin-bottom:14px">${opts.entrada
+      ? `Entraram <b>${totalEstoque} peça(s)</b> em ${totalVar} variação(ões). As etiquetas abaixo são só dessas peças.`
+      : `Etiquetas para <b>${itens.length} produto(s)</b> · ${totalVar} variação(ões).`}</p>
     <div class="linha-2">
       <div class="campo"><label>Tipo de código</label>
         <select id="et-tipo">
@@ -25,7 +55,9 @@ export function abrirEtiquetasLote(itens) {
         </select></div>
       <div class="campo"><label>Quantidade de etiquetas</label>
         <select id="et-qtd">
-          <option value="estoque">1 por peça em estoque (${totalEstoque})</option>
+          <option value="estoque">${opts.entrada
+            ? `1 por peça que entrou (${totalEstoque})`
+            : `1 por peça em estoque (${totalEstoque})`}</option>
           <option value="variacao">1 por variação (${totalVar})</option>
           <option value="fixa">Quantidade fixa por variação…</option>
         </select></div>
@@ -45,7 +77,7 @@ export function abrirEtiquetasLote(itens) {
       ⚠️ O QR Code só é lido por leitores 2D (de imagem). Leitores de laser comuns leem apenas código de barras.</p>
     <div class="erro" id="et-erro"></div>`;
 
-  const m = modal('Imprimir etiquetas em lote', corpo, (mm, fechar) => {
+  const m = modal(opts.entrada ? 'Imprimir etiquetas das peças que entraram' : 'Imprimir etiquetas em lote', corpo, (mm, fechar) => {
     const tipo = mm.querySelector('#et-tipo').value;
     const modo = mm.querySelector('#et-qtd').value;
     const fixa = Math.max(1, Number(mm.querySelector('#et-fixa').value) || 1);
@@ -126,20 +158,11 @@ async function imprimirFolha(itens, opts) {
     logoUri = `data:image/jpeg;base64,${btoa(bin)}`;
   } catch { /* sem logo */ }
 
-  // Terminal em rede: imprime pelo diálogo do navegador (impressora desta máquina)
-  if (EM_REDE) { window.print(); return; }
+  // Terminal em rede: não há impressão silenciosa (config:imprimir é SOMENTE_LOCAL),
+  // então abre a janela com o CSS 60×40mm e usa a impressora DESTA máquina.
+  if (EM_REDE) { imprimirFolhaEtiquetas(area.innerHTML, logoUri); return; }
 
   // Computador principal: impressão silenciosa via extensão
   const r = await api('config:imprimir', { tipo: 'etiqueta' });
-  if (!r.ok) {
-    // Fallback: abre janela com CSS correto (60×40mm, @page configurado)
-    // Garante layout correto mesmo sem impressão silenciosa
-    const htmlFinal = area.innerHTML.replace(/__LOGO_URI__/g, logoUri);
-    const w = window.open('about:blank', '_blank', 'width=640,height=480,toolbar=0,menubar=0');
-    if (w) {
-      w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS_ETQ}</style></head><body>${htmlFinal}</body></html>`);
-      w.document.close();
-      setTimeout(() => { try { w.print(); } catch { /* ok */ } }, 350);
-    }
-  }
+  if (!r.ok) imprimirFolhaEtiquetas(area.innerHTML, logoUri);
 }

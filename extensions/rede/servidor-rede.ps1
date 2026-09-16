@@ -70,6 +70,7 @@ function Bombear-WS([int]$timeoutMs) {
   $m = $null
   try { $m = $msg | ConvertFrom-Json } catch { return }
   if (-not $m -or -not $m.event) { return }
+  try { Add-Content -Path $logErro -Value ("[ws-recv] " + (Get-Date -Format s) + " evt=" + $m.event) } catch {}
   if ($m.event -eq 'rede.resposta' -and $m.data -and $m.data.reqId) {
     $respostas[[string]$m.data.reqId] = ($m.data.corpo | ConvertTo-Json -Depth 14 -Compress)
   }
@@ -367,8 +368,10 @@ function Tratar-Cliente($cliente) {
       $canal = ''; $payload = $null
       try { $c = $req.corpo | ConvertFrom-Json; $canal = [string]$c.canal; $payload = $c.payload } catch {}
       Enviar-Evento 'rede.api' @{ reqId = $reqId; canal = $canal; payload = $payload; token = $token }
+      try { Add-Content -Path $logErro -Value ("[api-send] " + (Get-Date -Format s) + " reqId=" + $reqId + " canal=" + $canal + " ws=" + $ws.State) } catch {}
       $limite = [DateTime]::UtcNow.AddSeconds(20)
       while (-not $respostas.ContainsKey($reqId) -and [DateTime]::UtcNow -lt $limite) { Bombear-WS 60 }
+      try { Add-Content -Path $logErro -Value ("[api-done] " + (Get-Date -Format s) + " reqId=" + $reqId + " ok=" + $respostas.ContainsKey($reqId) + " ws=" + $ws.State) } catch {}
       if ($respostas.ContainsKey($reqId)) {
         $json = $respostas[$reqId]; $respostas.Remove($reqId)
         Responder $stream 200 'application/json; charset=utf-8' $enc.GetBytes($json)
