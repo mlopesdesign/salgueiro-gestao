@@ -3,97 +3,95 @@ chcp 65001 >nul
 setlocal
 cd /d "E:\Projetos\LOJA FISICA SALGUEIRO V2"
 title Salgueiro - publicar release
+set "VERSAO=3.26.5"
+set "TAG=v%VERSAO%"
 
 rem ============================================================
-rem  1. Destravar o git se sobrou lock de um processo morto.
-rem     "cannot lock ref HEAD: HEAD.lock: File exists" acontece
-rem     quando um git anterior foi fechado no meio. O arquivo fica
-rem     para tras e trava TODOS os comandos seguintes.
+rem  1. PAUSAR o commit automatico.
+rem     Ele commita sozinho a cada 45s e segurava o .git/HEAD.lock
+rem     bem na hora do commit da release -> "cannot lock ref HEAD".
+rem     Era o vigia brigando com este script. (corrigido em 16/09/2026)
 rem ============================================================
+echo. > "tools\.pausar-autocommit"
+schtasks /end /tn "SalgueiroAutoCommit" >nul 2>&1
+timeout /t 2 /nobreak >nul
+
+rem  Locks orfaos de um git que morreu no meio
 if exist ".git\HEAD.lock"  del /f /q ".git\HEAD.lock"  >nul 2>&1
 if exist ".git\index.lock" del /f /q ".git\index.lock" >nul 2>&1
-
-rem Silencia o aviso de LF/CRLF, que enche a tela e nao e erro.
 git config core.safecrlf false >nul 2>&1
 
-rem ============================================================
-rem  2. Commit automatico da pasta, SEM precisar de administrador.
-rem     Antes isto usava `schtasks /sc onlogon`, que exige elevacao
-rem     e dava "Acesso negado". Agora e um atalho na pasta Inicializar
-rem     do proprio usuario: sobe junto com o Windows, sem UAC.
-rem ============================================================
-set "INICIALIZAR=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup"
-if not exist "%INICIALIZAR%\SalgueiroAutoCommit.lnk" (
-  echo === Ligando o commit automatico da pasta ===
-  powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-    "$s=(New-Object -ComObject WScript.Shell).CreateShortcut('%INICIALIZAR%\SalgueiroAutoCommit.lnk');" ^
-    "$s.TargetPath='powershell.exe';" ^
-    "$s.Arguments='-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"E:\Projetos\LOJA FISICA SALGUEIRO V2\tools\auto-commit.ps1\"';" ^
-    "$s.WorkingDirectory='E:\Projetos\LOJA FISICA SALGUEIRO V2';" ^
-    "$s.WindowStyle=7; $s.Save()"
-  if exist "%INICIALIZAR%\SalgueiroAutoCommit.lnk" (
-    start "" powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "E:\Projetos\LOJA FISICA SALGUEIRO V2\tools\auto-commit.ps1"
-    echo Commit automatico ligado. Registro em tools\auto-commit.log
-  ) else (
-    echo AVISO: nao consegui ligar o commit automatico. O resto continua normal.
-  )
-  echo.
-)
-
-rem ============================================================
-rem  3. Commit, tag, envio e release
-rem ============================================================
 echo === O que mudou ===
 git status --short
 echo.
 
-echo === Commit e tag da v3.26.5 ===
+echo === Commit ===
 git add -A
-git -c user.name="ML Lopes Design" -c user.email="mlopesdesign@gmail.com" commit -m "v3.26.5 - estoque pelo produto, etiquetas, impressao em rede, tela alinhada e responsiva"
+git -c user.name="ML Lopes Design" -c user.email="mlopesdesign@gmail.com" commit -m "%TAG% - estoque pelo produto, etiquetas, impressao em rede, tela alinhada"
 if errorlevel 1 echo (nada novo para commitar - seguindo)
-git tag -f v3.26.5
-if errorlevel 1 goto :erro_git
+
+rem ============================================================
+rem  2. Sincronizar com o remoto ANTES de enviar.
+rem     "main -> main (non-fast-forward)" = o GitHub tem commits que
+rem     este PC nao tem. Sem o rebase, o push e sempre recusado.
+rem ============================================================
+echo.
+echo === Sincronizando com o GitHub ===
+git pull --rebase origin main
+if errorlevel 1 goto :erro_pull
 
 echo.
-echo === Enviando para o GitHub ===
+echo === Enviando ===
 git push origin main
 if errorlevel 1 goto :erro_push
-git push origin v3.26.5 --force
+git tag -f %TAG%
+git push origin %TAG% --force
 if errorlevel 1 goto :erro_push
 
+rem ============================================================
+rem  3. Release: cria se nao existir, atualiza o arquivo se existir.
+rem ============================================================
 echo.
 echo === Publicando a release ===
-gh release create v3.26.5 "Portable\resources.neu" ^
-  --title "v3.26.5 - Estoque pelo produto, etiquetas e tela alinhada" ^
-  --notes-file "release-notes.md"
-if errorlevel 1 goto :erro_release
+gh release view %TAG% >nul 2>&1
+if errorlevel 1 (
+  gh release create %TAG% "Portable\resources.neu" --title "%TAG% - Estoque pelo produto, etiquetas e tela alinhada" --notes-file "release-notes.md"
+  if errorlevel 1 goto :erro_release
+  echo Release criada.
+) else (
+  echo A release %TAG% ja existe - atualizando o arquivo e as notas.
+  gh release upload %TAG% "Portable\resources.neu" --clobber
+  if errorlevel 1 goto :erro_release
+  gh release edit %TAG% --notes-file "release-notes.md" >nul
+  echo Arquivo e notas atualizados.
+)
 
 echo.
 echo ============================================
-echo  PRONTO. Release publicada.
+echo  PRONTO. Codigo versionado e release no ar.
 echo  O app instalado vai oferecer a atualizacao.
 echo ============================================
 goto :fim
 
-:erro_git
+:erro_pull
 echo.
-echo FALHOU no git (tag/commit). Manda esta tela para o Claude.
+echo FALHOU ao sincronizar com o GitHub.
+echo Se aparecer conflito, manda esta tela para o Claude - NAO continue sozinho.
 goto :fim
 
 :erro_push
 echo.
 echo FALHOU ao enviar. Causas comuns: sem internet, ou o git pedindo login.
-echo Manda esta tela para o Claude.
 goto :fim
 
 :erro_release
 echo.
-echo FALHOU ao publicar a release. Causas comuns:
-echo   - o gh nao esta logado  ..:  rode  gh auth login
-echo   - a tag v3.26.5 ja tem release publicada
-echo Manda esta tela para o Claude.
+echo FALHOU na release. Causas comuns: o gh nao esta logado (rode: gh auth login).
 goto :fim
 
 :fim
+rem  Religa o commit automatico, aconteca o que acontecer
+if exist "tools\.pausar-autocommit" del /f /q "tools\.pausar-autocommit" >nul 2>&1
+schtasks /run /tn "SalgueiroAutoCommit" >nul 2>&1
 echo.
 pause
