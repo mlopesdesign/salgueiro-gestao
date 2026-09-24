@@ -74,10 +74,21 @@ function resumoCaixa(db, caixaId) {
   const cx = db.prepare('SELECT * FROM caixas WHERE id=?').get(caixaId);
   if (!cx) return { ok: false, erro: 'Caixa não encontrado.' };
 
+  // v3.27.0 — TROCA NÃO É DINHEIRO ENTRANDO.
+  // Numa troca de uma peça de R$ 80 por outra de R$ 250, a venda nova é gravada
+  // com total R$ 250 e recebe dois pagamentos: R$ 80 na forma 'troca' (o crédito
+  // da peça que voltou) e R$ 170 na forma que a cliente pagou. Só os R$ 170
+  // entraram na gaveta. Por isso:
+  //   · a forma 'troca' sai da lista de formas (é crédito, não recebimento);
+  //   · vendas com tipo_venda='troca' saem da contagem e do total de vendas;
+  //   · a diferença recebida nessas trocas volta ao total, que é o que de fato
+  //     entrou. Peças de valor igual não mexem em nada — só ficam registradas.
+  // O excedente devolvido em dinheiro já sai pela sangria, que o fechamento
+  // mostra na linha própria.
   const porForma = db.prepare(`
     SELECT vp.forma, SUM(vp.valor - vp.troco) AS total, COUNT(DISTINCT v.id) AS vendas
     FROM venda_pagamentos vp JOIN vendas v ON v.id = vp.venda_id
-    WHERE v.caixa_id = ? AND v.status = 'concluida'
+    WHERE v.caixa_id = ? AND v.status = 'concluida' AND vp.forma <> 'troca'
     GROUP BY vp.forma
   `).all(caixaId);
 
@@ -85,15 +96,31 @@ function resumoCaixa(db, caixaId) {
     SELECT tipo, SUM(valor) AS total FROM caixa_movimentos WHERE caixa_id=? GROUP BY tipo
   `).all(caixaId);
 
-  const nVendas = db.prepare(
-    "SELECT COUNT(*) n, COALESCE(SUM(total),0) t FROM vendas WHERE caixa_id=? AND status='concluida'"
-  ).get(caixaId);
+  const nVendas = db.prepare(`
+    SELECT COUNT(*) n, COALESCE(SUM(total),0) t FROM vendas
+     WHERE caixa_id=? AND status='concluida' AND COALESCE(tipo_venda,'normal') <> 'troca'
+  `).get(caixaId);
 
-  // Vendas por loja neste caixa
+  // Trocas do caixa: quantas foram, quanto de crédito das peças que voltaram e
+  // quanto a cliente pagou de diferença (o único dinheiro que entrou).
+  const trc = db.prepare(`
+    SELECT COUNT(DISTINCT v.id) AS qtd,
+           COALESCE(SUM(CASE WHEN vp.forma =  'troca' THEN vp.valor - vp.troco ELSE 0 END),0) AS credito,
+           COALESCE(SUM(CASE WHEN vp.forma <> 'troca' THEN vp.valor - vp.troco ELSE 0 END),0) AS recebido
+      FROM vendas v LEFT JOIN venda_pagamentos vp ON vp.venda_id = v.id
+     WHERE v.caixa_id = ? AND v.status = 'concluida' AND COALESCE(v.tipo_venda,'normal') = 'troca'
+  `).get(caixaId);
+  const trocas = {
+    qtd: trc.qtd || 0,
+    credito: arred(trc.credito),
+    recebido: arred(trc.recebido)
+  };
+
+  // Vendas por loja neste caixa — trocas ficam de fora pelo mesmo motivo.
   const porLoja = db.prepare(`
     SELECT COALESCE(l.nome, 'Loja Principal') AS loja, COUNT(*) AS qtd, COALESCE(SUM(v.total),0) AS total
     FROM vendas v LEFT JOIN lojas l ON l.id = v.loja_id
-    WHERE v.caixa_id = ? AND v.status = 'concluida'
+    WHERE v.caixa_id = ? AND v.status = 'concluida' AND COALESCE(v.tipo_venda,'normal') <> 'troca'
     GROUP BY v.loja_id ORDER BY total DESC
   `).all(caixaId);
 
@@ -127,8 +154,11 @@ function resumoCaixa(db, caixaId) {
     por_loja: porLoja,
     consignados,
     sangrias, suprimentos,
+    trocas,
     qtd_vendas: nVendas.n,
-    total_vendas: arred(nVendas.t),
+    // Vendas de verdade + só a diferença que as trocas trouxeram.
+    total_vendas: arred(nVendas.t + trocas.recebido),
+    total_vendas_normais: arred(nVendas.t),
     esperado_dinheiro: esperadoDinheiro
   };
 }
@@ -212,19 +242,32 @@ function registrarVenda(db, p, quem) {
   //
   // Peça sem custo cadastrado é RECUSADA, com o nome na mensagem. Se passasse,
   // `preco_custo` nulo viraria zero e a peça sairia de graça sem ninguém notar.
+  //
+  // PEÇA CONSIGNADA NÃO SAI A PREÇO DE CUSTO (v3.27.0). A peça não é da loja:
+  // o fornecedor recebe o custo dele MAIS a fatia do lucro. Vendendo pelo custo
+  // não existe lucro nenhum para repartir, então a loja pagaria o repasse do
+  // próprio bolso. A recusa é aqui no backend, não só na tela, porque um
+  // terminal em rede pode montar o payload à mão.
   const aCusto = String(p.tipo_venda || '') === 'custo';
   if (aCusto) {
     const semCusto = [];
-    const buscaCusto = db.prepare(`SELECT p.nome, p.preco_custo
+    const consignadas = [];
+    const buscaCusto = db.prepare(`SELECT p.nome, p.preco_custo, p.consignado
                                      FROM variacoes v JOIN produtos p ON p.id = v.produto_id
                                     WHERE v.id = ?`);
     for (const i of itens) {
       const pr = buscaCusto.get(i.variacao_id);
       if (!pr) return { ok: false, erro: 'Peça não encontrada no estoque.' };
+      if (pr.consignado) { consignadas.push(pr.nome); continue; }
       const custo = Number(pr.preco_custo);
       if (!Number.isFinite(custo) || custo <= 0) { semCusto.push(pr.nome); continue; }
       i.preco_unit = arred(custo);
       i.desconto = 0;                       // custo é o piso: não abate mais nada
+    }
+    if (consignadas.length) {
+      return { ok: false, erro: 'Peça consignada não pode ser vendida a preço de custo: ' +
+        [...new Set(consignadas)].join(', ') +
+        '. A peça é do fornecedor — venda pelo preço normal ou tire a peça desta venda.' };
     }
     if (semCusto.length) {
       return { ok: false, erro: 'Sem preço de custo cadastrado: ' +

@@ -354,6 +354,66 @@ function transferirTudo(db, p, quem) {
   } catch (e) { db.exec('ROLLBACK'); return { ok: false, erro: e.message }; }
 }
 
+// ── Zerar estoque (v3.27.0) ─────────────────────────────────────────────────
+//
+// Zera o SALDO. Os produtos, as variações, os preços e o cadastro continuam
+// intactos — o que vai a zero é a quantidade em prateleira. Serve para começar
+// um inventário do zero ou para abrir uma loja nova sem herdar número errado.
+//
+// Só administrador. Cada peça zerada vira um movimento 'ajuste' no kardex com
+// a quantidade NEGATIVA do que havia, então o histórico mostra de onde saiu e
+// quem mandou — zerar sem rastro seria peça sumindo do sistema.
+//
+// `variacoes.estoque` é o total geral e tem de continuar sendo a soma dos
+// locais: por isso é recalculado a partir de `estoque_saldos` no fim, em vez de
+// simplesmente zerado (zerar tudo quebraria o total quando só uma loja é limpa).
+function zerar(db, p, quem) {
+  if (!quem || quem.perfil !== 'admin') return { ok: false, erro: 'Apenas administradores podem zerar estoque.' };
+  const todos = !!(p && p.todos);
+  const estoqueId = Number(p && p.estoque_id) || 0;
+  if (!todos && !estoqueId) return { ok: false, erro: 'Escolha o estoque que vai ser zerado.' };
+
+  let alvo = null;
+  if (!todos) {
+    alvo = db.prepare('SELECT * FROM estoques WHERE id=?').get(estoqueId);
+    if (!alvo) return { ok: false, erro: 'Estoque não encontrado.' };
+  }
+
+  const rows = todos
+    ? db.prepare('SELECT estoque_id, variacao_id, qtd FROM estoque_saldos WHERE qtd <> 0').all()
+    : db.prepare('SELECT estoque_id, variacao_id, qtd FROM estoque_saldos WHERE estoque_id=? AND qtd <> 0').all(estoqueId);
+
+  const onde = todos ? 'todos os estoques' : alvo.nome;
+  if (!rows.length) return { ok: false, erro: `Não há saldo para zerar em ${onde}.` };
+
+  const motivo = String((p && p.motivo) || '').trim() || `Zeragem de estoque (${onde})`;
+
+  db.exec('BEGIN');
+  try {
+    const insMov = db.prepare(`INSERT INTO movimentos_estoque
+      (variacao_id, tipo, qtd, motivo, usuario_id, estoque_id) VALUES (?,?,?,?,?,?)`);
+    let pecas = 0;
+    for (const row of rows) {
+      const q = arred(row.qtd);
+      pecas = arred(pecas + q);
+      insMov.run(row.variacao_id, 'ajuste', -q, motivo, quem ? quem.id : null, row.estoque_id);
+    }
+    if (todos) db.prepare('UPDATE estoque_saldos SET qtd = 0 WHERE qtd <> 0').run();
+    else db.prepare('UPDATE estoque_saldos SET qtd = 0 WHERE estoque_id=? AND qtd <> 0').run(estoqueId);
+
+    // Total geral volta a ser exatamente a soma dos locais.
+    db.prepare(`
+      UPDATE variacoes SET estoque = COALESCE(
+        (SELECT SUM(qtd) FROM estoque_saldos WHERE variacao_id = variacoes.id), 0)
+    `).run();
+
+    db.exec('COMMIT');
+    auditar(db, quem, 'estoque_zerado',
+      `${onde} — ${rows.length} item(ns), ${pecas} peça(s)`);
+    return { ok: true, onde, itens: rows.length, pecas, todos };
+  } catch (e) { db.exec('ROLLBACK'); return { ok: false, erro: e.message }; }
+}
+
 function listarTransferencias(db, p) {
   const limite = Number(p && p.limite) || 50;
   const linhas = db.prepare(`
@@ -409,4 +469,5 @@ export {
   listar, principal, daLoja, salvar, desativar, garantirDaLoja,
   saldo, aplicar, aplicarEstrito, porVariacao, conteudo, mapaLocais,
   transferir, transferirTudo, listarTransferencias, obterTransferencia, arred, conferirSaldo, negativos,
+  zerar,
 };

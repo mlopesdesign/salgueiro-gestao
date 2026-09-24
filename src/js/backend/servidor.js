@@ -796,6 +796,8 @@ const rotas = {
   'estoques:mapaLocais': () => ({ ok: true, ...estoques.mapaLocais(db) }),
   'estoques:transferir': (p) => estoques.transferir(db, p || {}, sessao.usuario),
   'estoques:transferirTudo': (p) => estoques.transferirTudo(db, p || {}, sessao.usuario),
+  // Zera o SALDO de um estoque ou de todos. Produtos continuam cadastrados.
+  'estoques:zerar': (p) => estoques.zerar(db, p || {}, sessao.usuario),
   'estoques:transferencias': (p) => estoques.listarTransferencias(db, p || {}),
   'estoques:romaneio': (p) => estoques.obterTransferencia(db, p.id),
   'estoques:conteudoXlsx': (p) => {
@@ -2197,6 +2199,7 @@ const ROTAS_SO_ADMIN = new Set([
   'estoques:salvar',         // criar/editar local de estoque
   'estoques:desativar',      // desativar local
   'estoques:transferir',     // transferência entre locais (romaneio)
+  'estoques:zerar',          // zerar o saldo de um estoque ou de todos
   'mensagens:terminais'      // "Quem está online agora"
 ]);
 
@@ -2352,6 +2355,7 @@ const PERM_ROTA = {
   'estoques:romaneio-pdf': 'estoque.ver', 'estoques:relatorio-transferencias-pdf': 'estoque.ver',
   'estoques:salvar': 'estoque.movimentar', 'estoques:desativar': 'estoque.movimentar',
   'estoques:transferir': 'estoque.movimentar', 'estoques:transferirTudo': 'estoque.movimentar',
+  'estoques:zerar': 'estoque.movimentar',
   'pdv:caixaAtual': 'pdv.ver', 'pdv:resumoCaixa': 'pdv.ver', 'pdv:listarVendas': 'pdv.ver', 'pdv:listarVendasGeral': 'pdv.ver', 'pdv:obterVenda': 'pdv.ver',
   'pdv:venda': 'pdv.vender',
   'pdv:abrirCaixa': 'caixa.abrir_fechar', 'pdv:fecharCaixa': 'caixa.abrir_fechar',
@@ -2594,6 +2598,25 @@ async function _iniciar() {
       }
     }
   } catch (e) { console.error('[reparo-fotos] falhou (banco intacto):', e && e.message); }
+
+  // Migração v3.27.0: marcar como 'troca' as vendas de troca já gravadas.
+  // Até aqui a troca entrava em `vendas` como venda normal e o fechamento de
+  // caixa somava o valor CHEIO da peça nova, mesmo quando só a diferença tinha
+  // entrado na gaveta. A marca nova (`tipo_venda='troca'`) resolve daqui para a
+  // frente; este passo conserta o que já está no banco. Identificação pela obs,
+  // que os dois caminhos de troca sempre gravaram.
+  try {
+    const migrKey = 'migr_tipo_venda_troca_v3270';
+    if (!db.prepare("SELECT valor FROM config WHERE chave=?").get(migrKey)) {
+      const r = db.prepare(`
+        UPDATE vendas SET tipo_venda='troca'
+         WHERE COALESCE(tipo_venda,'normal') <> 'troca'
+           AND (obs LIKE 'Troca — venda origem #%' OR obs LIKE 'Troca rápida — devolução #%')
+      `).run();
+      db.prepare('INSERT INTO config (chave, valor) VALUES (?,?)').run(migrKey, '1');
+      if (r && r.changes) console.log(`[migração] ${r.changes} troca(s) antigas marcadas como tipo_venda='troca'`);
+    }
+  } catch (e) { console.error('[migração] tipo_venda troca:', e.message); }
 
   // Migration v2.0.48: recalcular valor_devolvido em devoluções de vendas com desconto geral.
   // O bug pré-v2.0.48 usava o total bruto do item (sem proporcionar desconto_geral da venda).

@@ -295,7 +295,11 @@ function taxaPagamento(forma, parcelas, taxas, pixNaMaquina) {
 
 const _ROTULO_FORMA = {
   dinheiro: 'Dinheiro', pix: 'Pix', debito: 'Débito',
-  credito: 'Crédito', crediario: 'Crediário', vale: 'Vale-troca', cortesia: 'Cortesia'
+  credito: 'Crédito', crediario: 'Crediário', vale: 'Vale-troca', cortesia: 'Cortesia',
+  // v3.27.0 — 'troca' existia nos dados desde a v3.2.0 mas não tinha nome aqui:
+  // saía como "troca" cru no relatório. Não é dinheiro recebido, é o crédito da
+  // peça que a cliente devolveu abatendo a peça nova.
+  troca: 'Crédito de troca'
 };
 
 // Relatório de um evento/plantão delimitado por DATA + HORA.

@@ -161,9 +161,12 @@ function registrar(db, p, quem) {
       // Gravar assim mantém o mesmo formato de pdv.registrarVenda, então
       // `devolucoes.itensVenda` recalcula o fator certo se ESTA venda for
       // trocada de novo — o desconto se propaga por toda a cadeia de trocas.
+      // v3.27.0 — `tipo_venda='troca'` é o que separa troca de venda no caixa.
+      // Sem essa marca, `resumoCaixa` somava os R$ 250 da peça nova como
+      // faturamento mesmo quando só R$ 170 de diferença entraram na gaveta.
       const rv = db.prepare(`
-        INSERT INTO vendas (caixa_id, loja_id, cliente_id, usuario_id, subtotal, desconto, total, obs, status)
-        VALUES (?,?,?,?,?,?,?,?,?)
+        INSERT INTO vendas (caixa_id, loja_id, cliente_id, usuario_id, subtotal, desconto, total, obs, status, tipo_venda)
+        VALUES (?,?,?,?,?,?,?,?,?,'troca')
       `).run(caixa.id, venda.loja_id || caixa.loja_id || null,
              p.cliente_id || venda.cliente_id || null, quem?.id || null,
              subtotalNovo, descontoNovo, totalNovo,
@@ -355,9 +358,10 @@ function registrarRapida(db, p, quem) {
 
     let novaVendaId = null, vale = null;
     if (novosInfos.length) {
+      // Mesma marca da troca com venda de origem — ver comentário em registrar().
       const rv = db.prepare(`
-        INSERT INTO vendas (caixa_id, loja_id, cliente_id, usuario_id, subtotal, desconto, total, obs, status)
-        VALUES (?,?,?,?,?,?,?,?,?)
+        INSERT INTO vendas (caixa_id, loja_id, cliente_id, usuario_id, subtotal, desconto, total, obs, status, tipo_venda)
+        VALUES (?,?,?,?,?,?,?,?,?,'troca')
       `).run(caixa.id, caixa.loja_id || null, clienteId, quem?.id || null,
              totalNovo, 0, totalNovo, `Troca rápida — devolução #${devId}`, 'concluida');
       novaVendaId = Number(rv.lastInsertRowid);
