@@ -21,6 +21,7 @@ export async function viewConfiguracoes(alvo) {
         <button data-aba="aparencia" class="ativa">Aparência</button>
         <button data-aba="loja">Dados da loja</button>
         <button data-aba="lojas">🏬 Lojas</button>
+        ${ehAdmin() ? '<button data-aba="estoques">📦 Estoques</button>' : ''}
         ${setorAtivo('pontos') ? '<button data-aba="pontos">🎁 Pontos</button>' : ''}
         ${setorAtivo('nuvem') ? '<button data-aba="nuvem">☁️ Nuvem</button>' : ''}
         <button data-aba="backup">💾 Backup</button>
@@ -36,7 +37,7 @@ export async function viewConfiguracoes(alvo) {
       <div id="aba-conteudo"></div>
     </div>`);
   const corpo = tela.querySelector('#aba-conteudo');
-  const abas = { aparencia: abaAparencia, loja: abaLoja, lojas: abaLojas, pontos: abaPontos, usuarios: abaUsuarios, nuvem: abaNuvem, backup: abaBackup, rede: abaRede, licenca: abaLicenca, pdv: abaPdv, relatorios: abaRelatorios, impressoras: abaImpressoras, atualizacao: abaAtualizacao, clientes: abaCategoriaClientes };
+  const abas = { aparencia: abaAparencia, loja: abaLoja, lojas: abaLojas, estoques: abaEstoques, pontos: abaPontos, usuarios: abaUsuarios, nuvem: abaNuvem, backup: abaBackup, rede: abaRede, licenca: abaLicenca, pdv: abaPdv, relatorios: abaRelatorios, impressoras: abaImpressoras, atualizacao: abaAtualizacao, clientes: abaCategoriaClientes };
   tela.querySelectorAll('.abas button').forEach(b => {
     b.onclick = () => {
       tela.querySelectorAll('.abas button').forEach(x => x.classList.toggle('ativa', x === b));
@@ -598,6 +599,107 @@ async function formLoja(l, aoConcluir) {
     if (!r.ok) { wrap.querySelector('#lj-erro').textContent = r.erro; return; }
     toast('Loja salva.'); fechar(); aoConcluir && aoConcluir();
   }, 'Salvar');
+}
+
+// ---- Aba: Estoques (v3.27.0) ----
+// Zerar SALDO, não cadastro. É o que se usa para começar um inventário do zero
+// ou abrir uma loja nova sem herdar número errado. O produto, as variações e os
+// preços ficam exatamente como estão — some só a quantidade em prateleira.
+// Cada peça zerada deixa movimento no kardex, então dá para ver depois de onde
+// saiu, quanto era e quem mandou.
+async function abaEstoques(corpo) {
+  const painel = el(`<div class="painel" style="padding:22px;max-width:680px">
+    <h3 style="margin:0 0 8px">📦 Zerar estoque</h3>
+    <p style="color:var(--texto-suave);margin:0 0 4px">
+      Zera a <b>quantidade em estoque</b>. Os produtos, as variações e os preços
+      continuam cadastrados — some só o saldo.
+    </p>
+    <p style="color:var(--texto-suave);margin:0 0 18px;font-size:12.5px">
+      Tudo que for zerado fica registrado no histórico de movimentações, com a
+      quantidade que havia e quem mandou zerar.
+    </p>
+    <div id="ze-corpo"><p style="color:var(--texto-suave)">Carregando estoques…</p></div>
+    <div class="erro" id="ze-erro" style="margin-top:12px"></div>
+  </div>`);
+  corpo.appendChild(painel);
+
+  const r = await api('estoques:listar', {});
+  const div = painel.querySelector('#ze-corpo');
+  if (!r.ok) { div.innerHTML = `<p style="color:var(--vermelho)">${esc(r.erro || 'Erro ao listar estoques.')}</p>`; return; }
+
+  const locais = r.estoques || r.locais || [];
+  if (!locais.length) { div.innerHTML = '<p style="color:var(--texto-suave)">Nenhum estoque cadastrado.</p>'; return; }
+
+  const totalPecas = locais.reduce((a, l) => a + (Number(l.pecas) || 0), 0);
+
+  div.innerHTML = `
+    <div class="campo" style="max-width:380px">
+      <label><b>Zerar o estoque de uma loja</b></label>
+      <select id="ze-local">${locais.map(l =>
+        `<option value="${l.id}">${esc(l.nome)}${l.tipo === 'almoxarifado' ? ' (central)' : ''} — ${Number(l.pecas) || 0} peça(s)</option>`
+      ).join('')}</select>
+      <small style="color:var(--texto-suave)">Só o estoque escolhido é zerado. Os outros não são tocados.</small>
+    </div>
+    <button class="btn btn-suave" id="ze-um" type="button" style="margin-top:4px">Zerar este estoque</button>
+
+    <hr style="border:none;border-top:1px solid var(--borda);margin:22px 0">
+
+    <p style="margin:0 0 4px"><b>Zerar todos os estoques de uma vez</b></p>
+    <p style="color:var(--texto-suave);margin:0 0 10px;font-size:12.5px">
+      Põe em zero o saldo de <b>todos</b> os ${locais.length} estoques — ${totalPecas} peça(s) no total.
+    </p>
+    <button class="btn" id="ze-todos" type="button"
+      style="background:var(--vinho);color:#fff">Zerar todos os estoques</button>`;
+
+  const $erro = painel.querySelector('#ze-erro');
+
+  // Zerar não tem volta. A confirmação exige digitar a palavra ZERAR — clicar
+  // sem querer num botão acontece; digitar seis letras sem querer, não.
+  function confirmar(titulo, aviso, aoConfirmar) {
+    const m = modal(titulo, `
+      <p style="margin:0 0 12px">${aviso}</p>
+      <p style="margin:0 0 14px;color:var(--texto-suave);font-size:13px">
+        Os produtos <b>não</b> são apagados. O que vai a zero é a quantidade em estoque.
+        <b>Esta ação não tem volta.</b>
+      </p>
+      <div class="campo"><label>Digite <b>ZERAR</b> para confirmar</label>
+        <input id="ze-ok" autocomplete="off" placeholder="ZERAR"></div>
+      <div class="campo"><label>Motivo (opcional)</label>
+        <input id="ze-motivo" placeholder="Início de inventário"></div>
+      <div class="erro" id="ze-merro"></div>`,
+      async (mm, fechar) => {
+        if (mm.querySelector('#ze-ok').value.trim().toUpperCase() !== 'ZERAR') {
+          mm.querySelector('#ze-merro').textContent = 'Digite ZERAR para confirmar.';
+          return;
+        }
+        await aoConfirmar(mm.querySelector('#ze-motivo').value.trim() || null, fechar, mm);
+      }, 'Zerar');
+    return m;
+  }
+
+  async function executar(payload, motivo, fechar, mm) {
+    const res = await api('estoques:zerar', { ...payload, motivo });
+    if (!res.ok) { mm.querySelector('#ze-merro').textContent = res.erro || 'Não foi possível zerar.'; return; }
+    fechar();
+    toast(`${res.onde}: ${res.pecas} peça(s) zeradas em ${res.itens} item(ns).`);
+    corpo.innerHTML = ''; abaEstoques(corpo);
+  }
+
+  painel.querySelector('#ze-um').onclick = () => {
+    $erro.textContent = '';
+    const sel = painel.querySelector('#ze-local');
+    const nome = sel.options[sel.selectedIndex].textContent;
+    confirmar('Zerar estoque da loja',
+      `O saldo de <b>${esc(nome)}</b> vai para zero.`,
+      (motivo, fechar, mm) => executar({ estoque_id: Number(sel.value) }, motivo, fechar, mm));
+  };
+
+  painel.querySelector('#ze-todos').onclick = () => {
+    $erro.textContent = '';
+    confirmar('Zerar TODOS os estoques',
+      `O saldo de <b>todos os ${locais.length} estoques</b> vai para zero — ${totalPecas} peça(s).`,
+      (motivo, fechar, mm) => executar({ todos: true }, motivo, fechar, mm));
+  };
 }
 
 async function abaUsuarios(corpo) {

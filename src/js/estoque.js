@@ -473,6 +473,13 @@ function abaMovimentar(corpo) {
 // lugar. O padrão é o Almoxarifado Central na entrada e, na saída, o local com
 // mais saldo daquele produto.
 export async function formMovimentoProduto(prod, tipo, aoConcluir) {
+  // v3.27.0 — UMA JANELA, TODAS AS LOJAS.
+  // Antes havia um seletor de local e a grade mostrava só aquele estoque: para
+  // acertar três lojas era preciso abrir a janela três vezes. Agora cada loja é
+  // uma COLUNA e dá para lançar tudo de uma vez.
+  // A coluna "tem aqui" saiu de propósito (pedido do Marcio): o saldo atual já
+  // está na tela de trás. O saldo continua sendo usado por baixo para travar a
+  // saída — estoque negativo não existe.
   const rv = await api('produtos:obter', { id: prod.produto_id });
   if (!rv.ok) { toast(rv.erro, true); return; }
   const rl = await api('estoques:listar', {});
@@ -482,42 +489,48 @@ export async function formMovimentoProduto(prod, tipo, aoConcluir) {
   const variacoes = rv.variacoes || [];
   if (!variacoes.length) { toast('Este produto não tem variações ativas.', true); return; }
 
-  // saldo de cada variação em cada local, para montar a grade e limitar a saída
   const rm = await api('estoques:mapaLocais');
   const mapa = new Map(((rm && rm.ok ? rm.saldos : []) || [])
     .map(x => [`${x.variacao_id}:${x.estoque_id}`, x.qtd]));
   const saldo = (vid, lid) => mapa.get(`${vid}:${lid}`) || 0;
 
-  const totalNoLocal = (lid) => variacoes.reduce((a, v) => a + saldo(v.id, lid), 0);
-  const ordenados = locais.slice().sort((a, b) => totalNoLocal(b.id) - totalNoLocal(a.id));
-  const padrao = tipo === 'entrada'
-    ? (locais.find(l => l.tipo === 'almoxarifado') || locais[0]).id
-    : (ordenados[0] || locais[0]).id;
-
   const ehEntrada = tipo === 'entrada';
   const ehAjuste  = tipo === 'ajuste';
+  const rotulo = ehEntrada ? 'Entra' : ehAjuste ? 'Contagem real' : 'Sai';
+
+  // Na saída, loja sem NENHUMA peça deste produto não entra na grade: coluna
+  // inteira travada só ocupa espaço.
+  const colunas = tipo === 'saida'
+    ? locais.filter(l => variacoes.some(v => saldo(v.id, l.id) > 0))
+    : locais.slice();
+  if (!colunas.length) {
+    toast('Este produto não tem saldo em nenhum estoque.', true);
+    return;
+  }
+
+  const thLojas = colunas.map(l =>
+    `<th class="num" style="min-width:92px">${esc(l.nome)}${l.tipo === 'almoxarifado' ? '<br><small style="font-weight:400;color:var(--texto-suave)">central</small>' : ''}</th>`
+  ).join('');
+
   const corpo = `
-    <p style="margin:0 0 12px"><b style="font-size:15px">${esc(prod.produto)}</b>
+    <p style="margin:0 0 4px"><b style="font-size:15px">${esc(prod.produto)}</b>
       ${prod.referencia ? `<small style="color:var(--texto-suave)"> · Ref. ${esc(prod.referencia)}</small>` : ''}</p>
-    <div class="campo" style="max-width:340px">
-      <label>${ehEntrada ? 'Entra em qual estoque' : ehAjuste ? 'Qual estoque está sendo contado' : 'Sai de qual estoque'}</label>
-      <select id="mp-local">${locais.map(l =>
-        `<option value="${l.id}" ${l.id === padrao ? 'selected' : ''}>${esc(l.nome)}${l.tipo === 'almoxarifado' ? ' (central)' : ''}</option>`
-      ).join('')}</select>
-    </div>
-    <div style="display:flex;gap:8px;margin:4px 0 8px">
-      ${ehEntrada || ehAjuste ? '' : '<button type="button" class="btn btn-suave" id="mp-tudo">Baixar tudo</button>'}
+    <p style="margin:0 0 12px;color:var(--texto-suave);font-size:12.5px">
+      ${ehEntrada ? 'Quantas peças estão entrando em cada loja.'
+        : ehAjuste ? 'Contagem real de cada variação em cada loja. Campo em branco não é tocado — e 0 zera.'
+        : 'Quantas peças estão saindo de cada loja.'}
+    </p>
+    <div style="display:flex;gap:8px;margin:0 0 8px;flex-wrap:wrap">
+      ${tipo === 'saida' ? '<button type="button" class="btn btn-suave" id="mp-tudo">Baixar tudo</button>' : ''}
       <button type="button" class="btn btn-suave" id="mp-limpar">Limpar</button>
       <span style="margin-left:auto;align-self:center;font-size:13px" id="mp-resumo"></span>
     </div>
-    <table style="width:100%">
-      <thead><tr><th>Cor</th><th>Tamanho</th><th class="num" style="width:110px">Tem aqui</th>
-        <th style="width:120px">${ehEntrada ? 'Entra' : ehAjuste ? 'Contagem real' : 'Sai'}</th></tr></thead>
-      <tbody id="mp-corpo"></tbody>
-    </table>
-    ${ehAjuste ? `<p style="margin:8px 2px 0;font-size:12.5px;color:var(--texto-suave)">
-      Digite a <b>contagem real</b> de cada variação neste estoque. Linha em branco não é tocada —
-      e <b>0 zera</b> o saldo daquela peça aqui.</p>` : ''}
+    <div class="tab-scroll">
+      <table class="tab-mov" style="width:100%">
+        <thead><tr><th>Cor</th><th>Tamanho</th>${thLojas}</tr></thead>
+        <tbody id="mp-corpo"></tbody>
+      </table>
+    </div>
     ${ehEntrada ? `<div class="campo" style="max-width:220px;margin-top:10px">
       <label>Custo unitário (R$) — opcional</label>
       <input id="mp-custo" type="number" min="0" step="0.01"></div>` : ''}
@@ -526,33 +539,39 @@ export async function formMovimentoProduto(prod, tipo, aoConcluir) {
     <div class="erro" id="mp-erro"></div>`;
 
   const m = modal(
-    ehEntrada ? 'Entrada de mercadoria — produto inteiro'
-      : ehAjuste ? 'Ajuste de inventário — produto inteiro'
-      : 'Saída — produto inteiro',
+    ehEntrada ? 'Entrada de mercadoria — produto inteiro, todas as lojas'
+      : ehAjuste ? 'Ajuste de inventário — produto inteiro, todas as lojas'
+      : 'Saída — produto inteiro, todas as lojas',
     corpo, async (mm, fechar) => {
       const erro = mm.querySelector('#mp-erro');
-      const localId = Number(mm.querySelector('#mp-local').value);
-      // No ajuste, 0 é um valor VÁLIDO (zera a peça naquele local), então o que
-      // separa "mexer" de "não mexer" é o campo estar preenchido — não ser > 0.
+      // No ajuste, 0 é valor VÁLIDO (zera a peça naquele local): o que separa
+      // "mexer" de "não mexer" é o campo estar preenchido, não ser > 0.
       const linhas = [...mm.querySelectorAll('[data-var]')]
-        .map(i => ({ variacao_id: Number(i.dataset.var), bruto: i.value.trim(), qtd: Number(i.value) || 0 }))
+        .map(i => ({
+          variacao_id: Number(i.dataset.var),
+          estoque_id: Number(i.dataset.loja),
+          bruto: i.value.trim(),
+          qtd: Number(i.value) || 0
+        }))
         .filter(x => ehAjuste ? x.bruto !== '' : x.qtd > 0);
       if (!linhas.length) {
         erro.textContent = ehAjuste
           ? 'Informe a contagem de pelo menos uma variação.'
-          : 'Informe a quantidade em pelo menos uma variação.';
+          : 'Informe a quantidade em pelo menos um estoque.';
         return;
       }
       const motivo = mm.querySelector('#mp-motivo').value.trim() || null;
       const custo = ehEntrada ? (Number(mm.querySelector('#mp-custo').value) || null) : null;
       // Sem motivo a saída em lote vira um punhado de baixas sem justificativa
-      // no kardex — e é justamente aí que some peça sem ninguém saber por quê.
+      // no kardex — e é aí que some peça sem ninguém saber por quê.
       if (tipo === 'saida' && !motivo) { erro.textContent = 'Informe o motivo da saída.'; return; }
+
       let feitas = 0, pecas = 0, iguais = 0;
+      const lojasTocadas = new Set();
       for (const l of linhas) {
         const r = await api('estoque:movimentar', {
           variacao_id: l.variacao_id, tipo, qtd: l.qtd,
-          estoque_id: localId, custo_unit: custo, motivo,
+          estoque_id: l.estoque_id, custo_unit: custo, motivo,
         });
         if (!r.ok) {
           // "o saldo já é esse valor" não é erro: é linha que não precisou mudar.
@@ -561,18 +580,23 @@ export async function formMovimentoProduto(prod, tipo, aoConcluir) {
           if (feitas) aoConcluir();
           return;
         }
-        feitas++; pecas += l.qtd;
+        feitas++; pecas += l.qtd; lojasTocadas.add(l.estoque_id);
       }
+      const nLojas = lojasTocadas.size;
       toast(ehAjuste
-        ? `${feitas} variação(ões) ajustada(s)${iguais ? ` · ${iguais} já estava(m) certa(s)` : ''}.`
-        : `${ehEntrada ? 'Entrada' : 'Saída'} de ${pecas} peça(s) em ${feitas} variação(ões).`);
+        ? `${feitas} lançamento(s) ajustado(s) em ${nLojas} estoque(s)${iguais ? ` · ${iguais} já estava(m) certo(s)` : ''}.`
+        : `${ehEntrada ? 'Entrada' : 'Saída'} de ${pecas} peça(s) em ${nLojas} estoque(s).`);
       fechar(); aoConcluir();
-      // Etiquetas do que acabou de entrar, igual à tela de Produtos (v3.26.3).
-      // `estoque` aqui é a QUANTIDADE QUE ENTROU, não o saldo.
+
+      // Etiquetas do que acabou de entrar (v3.26.3). Uma variação pode ter
+      // entrado em mais de uma loja: as quantidades somam, senão a etiqueta
+      // sairia só para a última loja lançada.
       if (ehEntrada && linhas.length) {
-        const entradas = linhas.map(l => {
-          const v = variacoes.find(x => x.id === l.variacao_id);
-          return v ? { ...v, estoque: l.qtd } : null;
+        const porVar = new Map();
+        for (const l of linhas) porVar.set(l.variacao_id, (porVar.get(l.variacao_id) || 0) + l.qtd);
+        const entradas = [...porVar.entries()].map(([vid, qtd]) => {
+          const v = variacoes.find(x => x.id === vid);
+          return v ? { ...v, estoque: qtd } : null;   // `estoque` = quanto entrou
         }).filter(Boolean);
         if (entradas.length) {
           abrirEtiquetasLote([{ produto: rv.produto, variacoes: entradas }], { entrada: true });
@@ -580,49 +604,52 @@ export async function formMovimentoProduto(prod, tipo, aoConcluir) {
       }
     }, 'Confirmar');
 
+  // A janela cresce com o número de lojas, mas nunca passa da tela (o
+  // max-width:94vw do .modal continua valendo).
+  const cx = m.querySelector('.modal');
+  if (cx) cx.style.width = Math.min(1180, 260 + colunas.length * 104) + 'px';
+
   const corpoTab = m.querySelector('#mp-corpo');
-  const selLocal = m.querySelector('#mp-local');
   const resumo   = m.querySelector('#mp-resumo');
 
   function atualizarResumo() {
-    const tot = [...m.querySelectorAll('[data-var]')].reduce((a, i) => a + (Number(i.value) || 0), 0);
-    const n = [...m.querySelectorAll('[data-var]')].filter(i => Number(i.value) > 0).length;
-    resumo.textContent = tot ? `${tot} peça(s) em ${n} variação(ões)` : '';
+    const campos = [...m.querySelectorAll('[data-var]')];
+    const tot = campos.reduce((a, i) => a + (Number(i.value) || 0), 0);
+    const lojas = new Set(campos.filter(i => i.value.trim() !== '').map(i => i.dataset.loja));
+    resumo.textContent = lojas.size
+      ? `${tot} peça(s) em ${lojas.size} estoque(s)`
+      : '';
   }
 
-  function desenharGrade() {
-    const lid = Number(selLocal.value);
-    corpoTab.innerHTML = '';
-    for (const v of variacoes) {
-      const tem = saldo(v.id, lid);
-      // Na saída, variação sem saldo AQUI não pode ser preenchida (não existe
-      // estoque negativo). Na entrada, pode — é a peça que está chegando.
+  for (const v of variacoes) {
+    const tds = colunas.map(l => {
+      const tem = saldo(v.id, l.id);
+      // Na saída, loja sem saldo desta variação não pode ser preenchida —
+      // estoque negativo não existe em hipótese alguma.
       const trava = tipo === 'saida' && tem <= 0;
-      const tr = el(`<tr${trava ? ' style="opacity:.4"' : ''}>
-        <td>${esc(v.cor)}</td>
-        <td><b>${esc(v.tamanho)}</b></td>
-        <td class="num">${tem}</td>
-        <td><input type="number" min="0" ${tipo === 'saida' ? `max="${tem}"` : ''} step="1" inputmode="numeric"
-          data-var="${v.id}" placeholder="0" style="width:100%" onfocus="this.select()" ${trava ? 'disabled' : ''}></td>
-      </tr>`);
-      const inp = tr.querySelector('input');
+      return `<td class="num"><input type="number" min="0" ${tipo === 'saida' ? `max="${tem}"` : ''}
+        step="1" inputmode="numeric" data-var="${v.id}" data-loja="${l.id}" data-tem="${tem}"
+        placeholder="0" style="width:100%" onfocus="this.select()" ${trava ? 'disabled' : ''}></td>`;
+    }).join('');
+    const tr = el(`<tr><td>${esc(v.cor)}</td><td><b>${esc(v.tamanho)}</b></td>${tds}</tr>`);
+    for (const inp of tr.querySelectorAll('input')) {
       inp.addEventListener('input', () => {
-        // clamp na saída, sem redesenhar a grade (mataria o cursor — armadilha
-        // registrada na v3.2.0 e repetida na v3.5.0)
-        if (tipo === 'saida' && Number(inp.value) > tem) inp.value = tem;
+        // Clamp na saída SEM redesenhar a grade — redesenhar mataria o cursor
+        // (armadilha registrada na v3.2.0 e repetida na v3.5.0).
+        if (tipo === 'saida') {
+          const tem = Number(inp.dataset.tem) || 0;
+          if (Number(inp.value) > tem) inp.value = tem;
+        }
         atualizarResumo();
       });
-      corpoTab.appendChild(tr);
     }
-    atualizarResumo();
+    corpoTab.appendChild(tr);
   }
 
-  selLocal.addEventListener('change', desenharGrade);
   const bTudo = m.querySelector('#mp-tudo');
   if (bTudo) bTudo.onclick = () => {
-    const lid = Number(selLocal.value);
     for (const i of m.querySelectorAll('[data-var]')) {
-      if (!i.disabled) i.value = saldo(Number(i.dataset.var), lid);
+      if (!i.disabled) i.value = Number(i.dataset.tem) || 0;
     }
     atualizarResumo();
   };
@@ -630,7 +657,7 @@ export async function formMovimentoProduto(prod, tipo, aoConcluir) {
     for (const i of m.querySelectorAll('[data-var]')) i.value = '';
     atualizarResumo();
   };
-  desenharGrade();
+  atualizarResumo();
 }
 
 // Movimentação de estoque (entrada / saída / ajuste).
