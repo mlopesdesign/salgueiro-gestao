@@ -1245,6 +1245,15 @@ async function modalFechamento(caixa, aoConcluir) {
       r.por_loja.map(l =>
         `<div class="tot-linha"><span>🏬 ${esc(l.loja)} (${l.qtd})</span><b>${moeda(l.total)}</b></div>`).join('')
     : '';
+  // v3.27.0 — a troca aparece como registro, não como faturamento. O que entra
+  // no caixa é só a diferença que a cliente pagou.
+  const t = r.trocas || { qtd: 0 };
+  const trocasHtml = t.qtd > 0 ? `
+    <div class="tot-linha" style="margin-top:8px"><span><b>Trocas (${t.qtd})</b></span><span></span></div>
+    <div class="tot-linha"><span>&nbsp;&nbsp;Crédito das peças que voltaram</span><b>${moeda(t.credito)}</b></div>
+    <div class="tot-linha"><span>&nbsp;&nbsp;Diferença recebida da cliente</span><b style="color:var(--verde)">${moeda(t.recebido)}</b></div>
+    <div class="tot-linha"><span style="color:var(--texto-suave);font-size:12.5px">&nbsp;&nbsp;O crédito não entra no caixa — só a diferença.</span><span></span></div>` : '';
+
   const c = r.consignados || { pecas: 0 };
   const consigHtml = c.pecas > 0 ? `
     <div class="tot-linha" style="margin-top:8px"><span><b>Consignados (${c.pecas} peça${c.pecas > 1 ? 's' : ''})</b></span><b>${moeda(c.venda)}</b></div>
@@ -1257,6 +1266,7 @@ async function modalFechamento(caixa, aoConcluir) {
     ${formasHtml || '<p style="color:var(--texto-suave)">Nenhuma venda neste caixa.</p>'}
     <div class="tot-linha"><span><b>Total de vendas (${r.qtd_vendas})</b></span><b>${moeda(r.total_vendas)}</b></div>
     ${lojasHtml}
+    ${trocasHtml}
     ${consigHtml}
     <div class="tot-linha" style="margin-top:8px"><span>Suprimentos</span><b>${moeda(r.suprimentos)}</b></div>
     <div class="tot-linha"><span>Sangrias</span><b>-${moeda(r.sangrias)}</b></div>
