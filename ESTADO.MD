@@ -9,16 +9,85 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.26.1 |
-| **Data do último build** | 2026-09-16 |
+| **Versão atual** | 3.27.0 |
+| **Data do último build** | 2026-09-24 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.26.1 em 2026-09-16 ✓ (27 módulos core · 157 rotas · 37 tabelas) |
-| **5 lugares da versão** | config, app.js, ambiente.js, novidades.js em 3.26.1 ✓ · **`.nsi` ainda em 3.25.41** ⚠ |
+| **GRAPHIFY** | atualizado para 3.27.0 em 2026-09-24 ✓ (27 módulos core · 158 rotas · 37 tabelas) |
+| **5 lugares da versão** | os 5 em 3.27.0 ✓ — o `.nsi`, que estava parado na 3.25.41, foi atualizado |
 
 ---
 
-## 1.1 v3.26.1 — pronta no disco, FALTA PUBLICAR (2026-09-16)
+## 1.1 v3.27.0 — pronta no disco, FALTA PUBLICAR (2026-09-24)
+
+**Dados da release (quem publica é o Marcio):**
+
+| Campo | Valor |
+|---|---|
+| Tag | `v3.27.0` |
+| Título | v3.27.0 — Troca certa no caixa, estoque de todas as lojas numa tela só |
+| Asset | `Portable\resources.neu` — sha256 `b08fdacfb63771e0f82dd726c1f1fa784bde644c6f9bd1bf99edb54660441cbd` |
+| Notas | `release-notes.md` na raiz |
+
+Conferido antes de empacotar: a maior tag publicada era `v3.26.5`; `v3.27.0` está livre.
+
+**O que entrou:**
+
+| Área | Mudança |
+|---|---|
+| `core/trocas.js` | A venda gerada pela troca nasce com `tipo_venda='troca'`, nas duas vias (com e sem venda de origem). É a marca que separa troca de venda daqui para a frente. |
+| `core/pdv.js` (`resumoCaixa`) | Total do caixa = vendas normais **+ só a diferença recebida nas trocas**. A forma `troca` saiu da lista de formas recebidas; `por_loja` também ignora a troca. Novo bloco `trocas` {qtd, credito, recebido}. |
+| `core/pdv.js` (venda a custo) | Peça consignada é RECUSADA em venda a preço de custo, com o nome da peça. |
+| `core/estoques.js` | `zerar()` — zera o saldo de um local ou de todos; produtos intactos; movimento `ajuste` negativo no kardex por peça; `variacoes.estoque` recalculado como soma dos locais. Só admin. |
+| `core/relatorios.js` | `_ROTULO_FORMA` ganhou `troca: 'Crédito de troca'` (saía cru). |
+| `servidor.js` | Rota `estoques:zerar` (só-admin, perm `estoque.movimentar`) + migração `migr_tipo_venda_troca_v3270`, que marca as trocas já gravadas pelo texto da `obs`. |
+| `estoque.js` | `formMovimentoProduto`: uma coluna por estoque, sem a coluna "tem aqui". Etiquetas somam quando a variação entra em mais de uma loja. |
+| `configuracoes.js` | Aba `📦 Estoques` (só admin) com zerar uma loja / todas, confirmação digitando ZERAR. Bloco de ajuste da impressão do cupom na aba Impressoras, visível também em rede. |
+| `impressao.js` (novo) | Medidas do cupom em dois níveis: padrão da loja (config) e ajuste só desta máquina (localStorage). Mesma medida vale para a impressão direta e para a do diálogo. |
+
+**Decisões que NÃO podem ser "consertadas" por engano:**
+
+- A troca continua gravando a venda nova com o total CHEIO da peça (R$ 250 no exemplo).
+  Isso é de propósito: `venda_itens`, devolução em cadeia e o desconto herdado dependem
+  desse formato. Quem separa dinheiro de crédito é o `resumoCaixa`, não o INSERT.
+- O excedente devolvido em dinheiro continua saindo por `caixa_movimentos` como sangria.
+  Não somar isso de novo no total de vendas — seria contar a saída duas vezes.
+- A regra de saldo não-negativo segue em `aplicarEstrito()`, **fora** do `aplicar()`.
+  Trocas e devoluções continuam passando pelo `aplicar()` original.
+
+**Verificação:** `testes/teste-troca-caixa.mjs` (31 asserções — inclui o caso 80→250
+provando que entram 170 e não 330) e `testes/teste-zerar-estoque.mjs` (37 asserções).
+`teste-venda-custo.mjs` atualizado: documentava a regra antiga, em que consignado a
+custo era aceito.
+
+**Falhas pré-existentes na suíte** (não são desta versão — conferidas rodando os mesmos
+testes no commit `c99dab5`): `teste-consignado-rel` (26 OK / 6 falhas) e
+`teste-origem-vendas` (25 OK / 4 falhas). Outros 4 testes não rodam por um problema de
+caminho com espaços no nome da pasta, também anterior.
+
+**Backup antes das alterações:** `backups\pre-v3.27.0-2026-09-24\` (os dois `resources.neu`)
+e `backups\pre-v3.27.0-2026-09-17\` (os arquivos da impressão do cupom).
+
+---
+
+## 1.0 INCIDENTE 2026-09-24 — rebase travado apagou 97 arquivos
+
+Um `git pull --rebase` da sessão anterior parou no meio (o git não conseguiu apagar
+`Portable/extensions/rede` porque o app estava aberto segurando os arquivos). O rebase
+ficou pendente em `.git/rebase-merge` e 97 arquivos rastreados sumiram do disco —
+ESTADO.MD, CLAUDE.md, GRAPHIFY.md, AGENTS.md e REGRAS-CRITICAS.md entre eles.
+
+Como foi resolvido: salvar os arquivos alterados fora do repositório → remover os
+`.lock` do `.git` → `git rebase --abort` → repor os arquivos salvos → commitar.
+
+**Para não repetir:** fechar o Salgueiro Gestão antes de qualquer `git pull`/`rebase`,
+e nunca deixar um rebase pendente entre sessões. Se `git status` mostrar dezenas de
+` D` e existir `.git/rebase-merge`, é este incidente — NÃO recriar os arquivos à mão,
+é só abortar o rebase.
+
+---
+
+## 1.1b v3.26.1 — histórico (2026-09-16)
 
 > **ARMADILHA QUE JÁ CUSTOU UM REEMPACOTAMENTO:** a v3.26.0 foi construída inteira e o
 > GitHub recusou na publicação — `v3.26.0 is used by another release`. A tag já estava

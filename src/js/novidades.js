@@ -3,6 +3,17 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.27.0',
+    data: '2026-09-24',
+    itens: [
+      '💱 TROCA NO CAIXA CORRIGIDA. Trocando uma peça de R$ 80 por uma de R$ 250, agora entram no caixa só os R$ 250 − R$ 80 = R$ 170 que a cliente pagou. Antes entravam os R$ 250 inteiros e o fechamento fechava com sobra que nunca existiu. Troca de peças do mesmo valor não mexe mais em nada — fica só registrada. O crédito da peça que voltou deixou de aparecer como dinheiro recebido, e no relatório ele agora se chama "Crédito de troca". As trocas que já estavam no sistema são acertadas sozinhas na primeira vez que o programa abrir.',
+      '🏬 ENTRADA, SAÍDA E AJUSTE EM TODAS AS LOJAS DE UMA VEZ. A janela do produto agora tem uma coluna para cada estoque: dá para lançar Almoxarifado, Centro e Shopping na mesma tela. A coluna "tem aqui" saiu — esse número já está na tela de trás. Loja sem a peça continua travada na saída.',
+      '🧹 ZERAR ESTOQUE. Em Configurações → Estoques dá para zerar o saldo de uma loja ou de todas de uma vez. Os produtos, as variações e os preços continuam cadastrados: some só a quantidade. Para confirmar é preciso digitar ZERAR, e tudo que for zerado fica no histórico com a quantidade que havia e quem mandou.',
+      '🏷️ CONSIGNADO NÃO SAI MAIS A PREÇO DE CUSTO. A peça é do fornecedor: vendida pelo custo não sobra lucro nenhum para dividir e a loja acabava pagando o repasse do próprio bolso. Agora a venda é recusada dizendo qual peça é consignada.',
+      '🖨️ IMPRESSÃO DO CUPOM AJUSTÁVEL. Em Configurações → Impressoras dá para acertar largura do papel, largura do conteúdo, margens, folga das bordas e tamanho da letra — inclusive nos terminais que usam o sistema pela rede, que era onde o cupom saía cortado do lado direito. Tem botão de imprimir um teste com régua e a opção de ajustar só uma máquina, sem desregular as outras.',
+    ],
+  },
+  {
     versao: '3.26.5',
     data: '2026-09-16',
     itens: [
