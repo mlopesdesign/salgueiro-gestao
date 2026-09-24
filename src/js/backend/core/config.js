@@ -23,6 +23,18 @@ const PADRAO = {
   desconto_avista_minimo: '100',  // valor mínimo da venda para o desconto se aplicar
   vale_validade_dias: '90',       // validade do vale-troca em dias ('0' = sem vencimento)
 
+  // Medidas da impressão do cupom (v3.27.0). Nascem com os valores que a
+  // impressão silenciosa já usava fixos no código — quem está com a impressão
+  // certa não vê diferença nenhuma. Ficam editáveis em Configurações →
+  // Impressoras para acertar térmicas de modelos diferentes (e o corte da
+  // borda direita no terminal em rede) sem depender de versão nova do app.
+  cupom_papel_mm: '80',      // largura do papel da bobina, em mm
+  cupom_largura_mm: '76',    // largura útil do conteúdo, em mm
+  cupom_margem_mm: '2',      // margem da página, em mm
+  cupom_esq_mm: '4',         // folga da borda esquerda, em mm
+  cupom_dir_mm: '5',         // folga da borda direita, em mm (evita corte)
+  cupom_fonte_px: '11',      // tamanho da letra do cupom, em px
+
   // Taxas da maquininha, em % (v3.12.0). Nascem com os valores da Mercado Pago
   // Smart 2, que eram fixos no código até aqui — quem já usa o sistema não vê
   // diferença nenhuma. Ficam editáveis para o dia em que a operadora reajustar

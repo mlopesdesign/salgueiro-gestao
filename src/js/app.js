@@ -11,6 +11,7 @@ import { viewEstoques } from './estoques.js';
 import { viewConfiguracoes } from './configuracoes.js';
 import { viewMensagens, iniciarMensagens, pararMensagens, encerrarTelaMensagens } from './mensagens.js';
 import { viewCatalogo } from './catalogo.js';
+import { aplicarEstiloImpressao } from './impressao.js';
 
 const $app = document.getElementById('app');
 let usuario = null;
@@ -96,6 +97,9 @@ function getConfig() { return CONFIG; }
 async function recarregarConfig() {
   const r = await api('config:obter');
   if (r.ok) CONFIG = r.config;
+  // v3.27.0: as medidas do cupom viram CSS aqui. Precisa rodar TODA vez que a
+  // config muda — é o que faz o ajuste valer na hora, sem reabrir o sistema.
+  try { aplicarEstiloImpressao(CONFIG); } catch (_) {}
   return CONFIG;
 }
 function aplicarTema() {

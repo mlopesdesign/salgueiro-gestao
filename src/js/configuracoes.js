@@ -1,6 +1,8 @@
 // Configurações — identidade visual (white-label), dados da loja e usuários
-import { api, el, esc, toast, modal, getConfig, aplicarTema, recarregarConfig, setorAtivo, EM_REDE } from './app.js';
+import { api, el, esc, toast, modal, getConfig, aplicarTema, recarregarConfig, ehAdmin, setorAtivo, EM_REDE } from './app.js';
 import { htmlNovidades, CSS_NOVIDADES } from './novidades.js';
+import { PADRAO as IMP_PADRAO, LIMITES as IMP_LIMITES, lerAjusteLocal, salvarAjusteLocal,
+         medidasDaLoja, medidasAtivas, aplicarEstiloImpressao } from './impressao.js';
 
 const PRESETS = [
   { nome: 'Salgueiro',      primaria: '#B01E23', escura: '#7E1114', destaque: '#F2C14E' },
@@ -1155,6 +1157,7 @@ async function abaImpressoras(corpo) {
         computador principal, nesta mesma aba.
       </p>
     </div>`));
+    blocoAjusteCupom(corpo);
     return;
   }
   const cfg = getConfig();
@@ -1234,6 +1237,168 @@ async function abaImpressoras(corpo) {
     await recarregarConfig();
     toast('Impressoras salvas.');
   };
+
+  blocoAjusteCupom(corpo);
+}
+
+// ---- Ajuste da impressão do cupom (v3.27.0) ----
+// Aparece nos DOIS modos: no computador principal e no terminal em rede. É o
+// que faltava para acertar o corte da borda direita pela web sem versão nova.
+// Dois níveis: padrão da loja (config, só admin) e ajuste só desta máquina
+// (guardado no próprio terminal, vence o padrão).
+function blocoAjusteCupom(corpo) {
+  const cfg = getConfig();
+  const loja  = medidasDaLoja(cfg);
+  const local = lerAjusteLocal();
+  const atual = medidasAtivas(cfg);
+  const admin = ehAdmin();
+
+  const CAMPOS = [
+    ['papel',   'Largura do papel',     'mm', 'Largura da bobina. Térmica comum é 80. Bobina pequena é 58.'],
+    ['largura', 'Largura do conteúdo',  'mm', 'Quanto o texto ocupa dentro do papel. Sempre menor que a largura do papel.'],
+    ['margem',  'Margem da página',     'mm', 'Respiro geral em volta do cupom.'],
+    ['esq',     'Folga à esquerda',     'mm', 'Aumente se estiver cortando ou colando no lado esquerdo.'],
+    ['dir',     'Folga à direita',      'mm', 'Aumente se os valores estiverem cortados no lado direito.'],
+    ['fonte',   'Tamanho da letra',     'px', 'Letra menor cabe mais coisa na linha.']
+  ];
+
+  const campoHtml = ([k, rotulo, un, dica]) => `
+    <div class="campo" style="margin:0">
+      <label><b>${esc(rotulo)}</b> <span style="color:var(--texto-suave);font-weight:400">(${un})</span></label>
+      <input id="aj-${k}" type="number" step="${k === 'fonte' ? '1' : '0.5'}"
+             min="${IMP_LIMITES[k][0]}" max="${IMP_LIMITES[k][1]}" value="${atual[k]}">
+      <small style="color:var(--texto-suave)">${esc(dica)}</small>
+    </div>`;
+
+  const painel = el(`<div class="painel" style="padding:22px;max-width:680px;margin-top:16px">
+    <h3 style="margin:0 0 8px">📐 Ajuste da impressão do cupom</h3>
+    <p style="color:var(--texto-suave);margin:0 0 16px">
+      Se o cupom sai cortado, desalinhado ou pequeno demais, acerte as medidas aqui e imprima um
+      teste. Vale para a impressão do computador principal e para a dos terminais pela rede.
+    </p>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px">
+      ${CAMPOS.map(campoHtml).join('')}
+    </div>
+
+    <label style="display:flex;align-items:flex-start;gap:10px;margin:20px 0 4px;cursor:pointer">
+      <input type="checkbox" id="aj-local" style="margin-top:3px;width:auto" ${local ? 'checked' : ''}>
+      <span>
+        <b>Usar este ajuste só nesta máquina</b><br>
+        <small style="color:var(--texto-suave)">
+          Marcado: vale só para a impressora deste computador e não mexe nos outros.
+          Desmarcado: vira o padrão da loja e vale para todas as máquinas.
+        </small>
+      </span>
+    </label>
+    ${!admin ? `<p style="color:var(--texto-suave);font-size:12.5px;margin:6px 0 0">
+      🔒 Só administrador muda o padrão da loja. Você pode ajustar esta máquina normalmente.
+    </p>` : ''}
+
+    <div class="erro" id="aj-erro" style="margin-top:12px"></div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px">
+      <button class="btn btn-primario" id="aj-salvar" type="button">Salvar ajuste</button>
+      <button class="btn btn-suave" id="aj-testar" type="button">🖨 Salvar e imprimir teste</button>
+      <button class="btn btn-suave" id="aj-padrao" type="button">↺ Voltar ao padrão</button>
+    </div>
+  </div>`);
+
+  corpo.appendChild(painel);
+
+  const $ = (id) => painel.querySelector(id);
+  const $erro = $('#aj-erro');
+
+  // Lê o formulário já dentro dos limites — não deixa salvar medida impossível.
+  function lerCampos() {
+    const o = {};
+    for (const [k] of CAMPOS) {
+      const bruto = Number(String($('#aj-' + k).value).replace(',', '.'));
+      const [min, max] = IMP_LIMITES[k];
+      if (!isFinite(bruto)) return { erro: 'Preencha todos os campos com números.' };
+      if (bruto < min || bruto > max) {
+        return { erro: `Valor fora do limite em "${CAMPOS.find(c => c[0] === k)[1]}" (de ${min} a ${max}).` };
+      }
+      o[k] = bruto;
+    }
+    if (o.largura > o.papel) {
+      return { erro: 'A largura do conteúdo não pode ser maior que a largura do papel.' };
+    }
+    return { valores: o };
+  }
+
+  async function salvar() {
+    $erro.textContent = '';
+    const r = lerCampos();
+    if (r.erro) { $erro.textContent = r.erro; return false; }
+    const soAqui = $('#aj-local').checked;
+
+    if (soAqui) {
+      if (!salvarAjusteLocal(r.valores)) {
+        $erro.textContent = 'Não consegui guardar o ajuste neste navegador.';
+        return false;
+      }
+      aplicarEstiloImpressao(getConfig());
+      toast('Ajuste salvo só nesta máquina.');
+      return true;
+    }
+
+    if (!admin) { $erro.textContent = 'Só administrador pode mudar o padrão da loja.'; return false; }
+    const r2 = await api('config:salvar', {
+      cupom_papel_mm:   String(r.valores.papel),
+      cupom_largura_mm: String(r.valores.largura),
+      cupom_margem_mm:  String(r.valores.margem),
+      cupom_esq_mm:     String(r.valores.esq),
+      cupom_dir_mm:     String(r.valores.dir),
+      cupom_fonte_px:   String(r.valores.fonte)
+    });
+    if (!r2.ok) { $erro.textContent = r2.erro || 'Não foi possível salvar.'; return false; }
+    salvarAjusteLocal(null);          // o padrão passa a valer aqui também
+    await recarregarConfig();          // recarregarConfig já reaplica o estilo
+    toast('Ajuste salvo como padrão da loja.');
+    return true;
+  }
+
+  $('#aj-salvar').onclick = () => { salvar(); };
+
+  $('#aj-testar').onclick = async () => {
+    if (!(await salvar())) return;
+    imprimirCupomTeste();
+  };
+
+  $('#aj-padrao').onclick = async () => {
+    for (const [k] of CAMPOS) $('#aj-' + k).value = IMP_PADRAO[k];
+    $('#aj-local').checked = false;
+    $erro.textContent = '';
+    toast('Medidas de fábrica preenchidas. Clique em Salvar para valer.');
+  };
+}
+
+// Cupom de teste com régua: a barra tem exatamente a largura do conteúdo, então
+// dá para ver na tira de papel onde a impressora está cortando.
+async function imprimirCupomTeste() {
+  let area = document.getElementById('area-impressao');
+  if (!area) { area = document.createElement('div'); area.id = 'area-impressao'; document.body.appendChild(area); }
+  const cfg = getConfig();
+  area.innerHTML = `
+    <div class="cupom">
+      <div class="c-centro"><b>TESTE DE IMPRESSAO</b><br>${esc(cfg.loja_nome || 'Minha Loja')}</div>
+      <div class="c-sep"></div>
+      <table>
+        <tr><td>Peca de exemplo A</td><td style="text-align:right">1.234,56</td></tr>
+        <tr><td>Peca de exemplo B</td><td style="text-align:right">99,90</td></tr>
+        <tr><td><b>TOTAL</b></td><td style="text-align:right"><b>1.334,46</b></td></tr>
+      </table>
+      <div class="c-sep"></div>
+      <div style="border:1px solid #000;padding:2px 0;text-align:center">|&lt;-- esta barra e a largura do conteudo --&gt;|</div>
+      <div style="text-align:right;margin-top:3px">fim da linha da direita --&gt;|</div>
+      <div class="c-sep"></div>
+      <div class="c-centro">Se a barra e a seta sairem inteiras,<br>a medida esta certa.</div>
+    </div>`;
+
+  if (EM_REDE) { window.print(); return; }
+  const r = await api('config:imprimir', { tipo: 'cupom' });
+  if (!r.ok) window.print();   // sem impressora silenciosa: cai no dialogo
 }
 
 // ---- Aba: Atualização ----

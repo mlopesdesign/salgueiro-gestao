@@ -28,6 +28,7 @@ import * as estoques from './core/estoques.js';
 import * as rede from './core/rede.js';
 import * as nuvem from './core/nuvem.js';
 import * as updater from './core/updater.js';
+import { cssCupomArquivo, medidasAtivas } from '../impressao.js';
 import * as trocas from './core/trocas.js';
 import * as mensagens from './core/mensagens.js';
 import { LOGO_DEFAULT } from './core/logo-default.js';
@@ -203,8 +204,10 @@ const rotas = {
     // CSS mínimo embutido para que o arquivo HTML temporário renderize corretamente
     // body{width:76mm} dentro de @page{margin:2mm} → content area=76mm; padding-right:5mm garante que
     // valores alinhados à direita não sejam cortados pela margem física da impressora térmica.
-    const cssCupomBase = '*{box-sizing:border-box;margin:0;padding:0}body{background:#fff;width:76mm;padding-left:4mm;padding-right:5mm}@page{size:80mm auto;margin:2mm}';
-    const cssCupom = `${cssCupomBase}.cupom{width:100%;font-family:Consolas,'Courier New',monospace;font-size:11px;color:#000;word-break:break-word}.cupom table{width:100%;border-collapse:collapse}.cupom td{padding:1px 0;border:none;font-size:11px;vertical-align:top}.cupom .c-centro{text-align:center}.cupom .c-sep{border-top:1px dashed #000;margin:5px 0}.cupom b{font-weight:700}`;
+    // v3.27.0: as medidas saíram do código e vieram para a configuração
+    // (Configurações → Impressoras). Os padrões são exatamente os valores que
+    // estavam fixos aqui, então nada muda para quem já imprime certo.
+    const cssCupom = cssCupomArquivo(medidasAtivas(cfg));
     // Etiqueta 60x40mm paisagem (Pimaco TR6040: 60mm largura, 40mm altura)
     // Layout: et-left (nome/cor/ref/preço/barcode) + et-right (badge tamanho)
     // padding-left:5mm evita corte na borda física da impressora
