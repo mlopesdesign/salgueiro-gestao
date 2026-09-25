@@ -16,7 +16,7 @@ import { aplicarEstiloImpressao } from './impressao.js';
 const $app = document.getElementById('app');
 let usuario = null;
 let categoriasCache = [];
-let APP_VERSION = '3.27.4'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
+let APP_VERSION = '3.27.5'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
 
 // API dupla: no aplicativo usa IPC (preload); num terminal em rede (navegador),
 // conversa com o servidor do computador principal via HTTP com token de sessão.
@@ -750,6 +750,7 @@ async function viewDashboard(alvo) {
         <div class="rotulo">Lucro bruto do mês</div>
         <div class="valor">${moeda(d.mes.lucro_bruto)}</div>
         <div class="card-rodape">margem de ${d.mes.margem}%</div>
+        ${d.mes.lucro_trocas ? `<div class="card-rodape" style="font-size:11px">🔁 sendo ${moeda(d.mes.lucro_trocas)} de trocas</div>` : ''}
       </div>
       <div class="card">
         <div class="rotulo">Estoque a preço de venda</div>

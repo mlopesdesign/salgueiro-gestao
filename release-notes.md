@@ -1,21 +1,18 @@
-## v3.27.4 — Troca não é venda, em toda tela
+## v3.27.5 — Lucro bruto da troca com a conta certa
 
-O painel mostrava **"1 venda(s) · R$ 180,00"** para uma operação que foi uma **troca**. O caixa já tinha sido corrigido na v3.27.0 e o relatório na v3.27.3 — o painel não. O problema ia sendo tapado num lugar e reaparecendo em outro.
+Depois da v3.27.4 o painel passou a mostrar **LUCRO BRUTO −R$ 90,00**. Meia correção: a receita da troca saiu de "vendas" (certo), mas o **custo da peça que saiu na troca continuou sendo contado**. Zero de venda menos noventa de custo.
 
-### 🔁 Troca deixou de contar como venda
+### 📉 A conta da troca
 
-Em lugar nenhum: painel, relatório, fechamento de caixa, gráfico dos 14 dias, ticket médio, vendas por dia, por vendedor(a), por hora, por loja, por categoria e os cartões Vendas do Salgueiro / Vendas de consignados.
+Numa troca **entra peça e sai peça**. O custo que vale é a **diferença** entre o custo da peça que saiu e o da que voltou — a devolvida volta para a prateleira e pode ser vendida de novo, então não é perda.
 
-### 💰 A diferença entra como troca, não como venda
+Lucro da troca = diferença recebida − esse custo líquido.
 
-O dinheiro que a cliente paga a mais **continua entrando no total** — entrou no caixa —, mas **identificado como troca**, em linha própria:
+Exemplo conferido à mão: camisa de R$ 80 (custo 30) trocada por uma de R$ 250 (custo 90), cliente paga R$ 170.
+Entrou na loja: 80 + 170 = **R$ 250**. Saiu uma peça que custou **R$ 90**. Lucro bruto = **R$ 160** — sendo R$ 50 da venda e R$ 110 da troca.
 
-- **Fechamento de caixa:** Vendas → Trocas (crédito das peças que voltaram e diferença recebida) → **Total recebido**
-- **Relatórios:** cartões **Diferença de trocas** e **Total recebido**, ao lado de Faturamento
-- **Painel:** a diferença aparece embaixo do valor, sem entrar na contagem de vendas
+O painel mostra, embaixo da margem, quanto do lucro veio de troca.
 
-Troca de peças do mesmo valor continua não mexendo em nada além do registro.
+### 🏆 "Mais vendidos no mês"
 
-### 🧱 Virou uma regra só
-
-A conta estava repetida em cada consulta do sistema — por isso era corrigida num arquivo e continuava errada nos outros. Agora existe um único lugar (`core/vendas-sql.js`) que define o que conta como venda e o que conta como dinheiro recebido, usado pelo caixa, pelo relatório, pelo painel e pelo financeiro.
+Deixou de listar a peça que saiu numa troca. Troca não é venda, nem ali.

@@ -63,9 +63,15 @@ function resumo(db, usuario) {
     JOIN variacoes va ON va.id=di.variacao_id
     JOIN produtos pr ON pr.id=va.produto_id
     WHERE date(d.criado_em) BETWEEN ? AND ?
+      AND COALESCE(d.tipo,'') <> 'troca'
   `).get(mesIni, hojeStr);
   // mes.total = bruto; mes.devolvido é exibido separado no frontend
   const mes = { qtd: mesRaw.qtd, total: arred(mesRaw.total), trocas: arred(mesTroca.total), devolvido: arred(mesDevol.v) };
+  // CMV — custo das peças VENDIDAS. A troca fica de fora aqui e é calculada
+  // logo abaixo, senão acontece o que o Marcio pegou em 25/09/2026: a receita
+  // da troca saiu de "vendas" (certo) mas o custo da peça que saiu continuou
+  // dentro do CMV, e o lucro bruto ficou NEGATIVO — R$ 0,00 de venda menos
+  // R$ 90,00 de custo = −R$ 90,00. Meia correção é pior que nenhuma.
   const cmv = db.prepare(`
     SELECT COALESCE(SUM(vi.qtd*pr.preco_custo),0) custo
     FROM venda_itens vi
@@ -73,11 +79,40 @@ function resumo(db, usuario) {
     JOIN variacoes va ON va.id=vi.variacao_id
     JOIN produtos pr ON pr.id=va.produto_id
     WHERE v.status='concluida' AND date(v.criado_em) BETWEEN ? AND ?
+      ${NAO_TROCA('v')}
   `).get(mesIni, hojeStr);
+
+  // TROCA: entra peça e sai peça. O custo que conta é a DIFERENÇA entre o custo
+  // da peça que saiu e o da que voltou — a peça devolvida volta para a
+  // prateleira e pode ser vendida de novo, então o custo dela não é perda.
+  // Lucro da troca = diferença recebida − esse custo líquido.
+  const trocaCustoSaiu = db.prepare(`
+    SELECT COALESCE(SUM(vi.qtd*pr.preco_custo),0) custo
+    FROM venda_itens vi
+    JOIN vendas v ON v.id=vi.venda_id
+    JOIN variacoes va ON va.id=vi.variacao_id
+    JOIN produtos pr ON pr.id=va.produto_id
+    WHERE v.status='concluida' AND date(v.criado_em) BETWEEN ? AND ?
+      AND COALESCE(v.tipo_venda,'normal') = 'troca'
+  `).get(mesIni, hojeStr);
+  const trocaCustoVoltou = db.prepare(`
+    SELECT COALESCE(SUM(di.qtd*pr.preco_custo),0) custo
+    FROM devolucoes d
+    JOIN devolucao_itens di ON di.devolucao_id=d.id
+    JOIN variacoes va ON va.id=di.variacao_id
+    JOIN produtos pr ON pr.id=va.produto_id
+    WHERE d.tipo='troca' AND date(d.criado_em) BETWEEN ? AND ?
+  `).get(mesIni, hojeStr);
+  const custoLiqTroca = arred((trocaCustoSaiu.custo || 0) - (trocaCustoVoltou.custo || 0));
+  const lucroTroca = arred((mes.trocas || 0) - custoLiqTroca);
+
+  // Devolução comum (fora da troca) já é abatida do CMV das vendas.
   const custoLiq = arred(cmv.custo - (mesDevol.custo_dev || 0));
-  const receitaLiq = arred(mesRaw.total - mesDevol.v); // net para margem (só venda)
-  const lucroBruto = arred(receitaLiq - custoLiq);
-  const margem = receitaLiq > 0 ? Math.round((lucroBruto / receitaLiq) * 1000) / 10 : 0;
+  const receitaLiq = arred(mesRaw.total - mesDevol.v); // só venda
+  // Lucro bruto = margem das vendas + margem das trocas.
+  const lucroBruto = arred((receitaLiq - custoLiq) + lucroTroca);
+  const baseMargem = arred(receitaLiq + (mes.trocas || 0));
+  const margem = baseMargem > 0 ? Math.round((lucroBruto / baseMargem) * 1000) / 10 : 0;
 
   // --- Série dos últimos 14 dias (preenche buracos com zero) ---
   const linhas = db.prepare(`
@@ -132,6 +167,7 @@ function resumo(db, usuario) {
       GROUP BY va2.produto_id
     ) dev ON dev.produto_id=pr.id
     WHERE v.status='concluida' AND date(v.criado_em) BETWEEN ? AND ?
+      ${NAO_TROCA('v')}
     GROUP BY pr.id HAVING pecas > 0
     ORDER BY receita DESC LIMIT 5
   `).all(mesIni, hojeStr, mesIni, hojeStr).map(t => ({ nome: t.nome, pecas: t.pecas, receita: arred(t.receita) }));
@@ -203,8 +239,8 @@ function resumo(db, usuario) {
   const verFin = pode(usuario, 'dashboard.financeiro');
   const verFinanceiro = pode(usuario, 'financeiro.ver');
   const mesOut = verFin
-    ? { qtd: mes.qtd, total: mes.total, trocas: mes.trocas, devolvido: mes.devolvido, custo: custoLiq, lucro_bruto: lucroBruto, margem }
-    : { qtd: mes.qtd, total: null, trocas: null, devolvido: null, custo: null, lucro_bruto: null, margem: null };
+    ? { qtd: mes.qtd, total: mes.total, trocas: mes.trocas, lucro_trocas: lucroTroca, devolvido: mes.devolvido, custo: custoLiq, lucro_bruto: lucroBruto, margem }
+    : { qtd: mes.qtd, total: null, trocas: null, lucro_trocas: null, devolvido: null, custo: null, lucro_bruto: null, margem: null };
 
   // top_produtos: sem receita para quem não tem permissão financeira
   const topOut = top.map(t => verFin

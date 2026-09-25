@@ -9,16 +9,58 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.27.4 |
+| **Versão atual** | 3.27.5 |
 | **Data do último build** | 2026-09-25 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.27.4 em 2026-09-25 ✓ (27 módulos core · 158 rotas · 37 tabelas) |
-| **5 lugares da versão** | os 5 em 3.27.4 ✓ |
+| **GRAPHIFY** | atualizado para 3.27.5 em 2026-09-25 ✓ (27 módulos core · 158 rotas · 37 tabelas) |
+| **5 lugares da versão** | os 5 em 3.27.5 ✓ |
 
 ---
 
-## 1.1 v3.27.4 — pronta no disco, FALTA PUBLICAR (2026-09-25)
+## 1.1 v3.27.5 — pronta no disco, FALTA PUBLICAR (2026-09-25)
+
+| Campo | Valor |
+|---|---|
+| Tag | `v3.27.5` |
+| Título | v3.27.5 — Lucro bruto da troca com a conta certa |
+| Asset | `Portable\resources.neu` — 6.415.416 bytes — sha256 `5c37a8f5d020af3e7d302a430f073d75f3b07f17f658b8607bc2a6f8c004008f` |
+| Notas | `release-notes.md` na raiz |
+
+**Reprovação:** painel com LUCRO BRUTO −R$ 90,00. Na v3.27.4 tirei a troca da
+RECEITA e esqueci do CUSTO: a peça que saiu na troca seguia dentro do CMV.
+Zero de venda − 90 de custo = −90. **Meia correção é pior que nenhuma.**
+
+**A conta certa da troca** (`dashboard.js`):
+
+    custo líquido da troca = custo da peça que SAIU − custo da que VOLTOU
+    lucro da troca         = diferença recebida − custo líquido
+    lucro bruto do mês     = (receita de vendas − CMV de vendas) + lucro das trocas
+
+A peça devolvida volta à prateleira, então o custo dela não é perda. E o CMV das
+vendas passou a excluir `tipo_venda='troca'`; `mesDevol.custo_dev` passou a
+excluir `devolucoes.tipo='troca'`, senão o custo da peça devolvida era abatido
+duas vezes. `top_produtos` também ganhou `NAO_TROCA`.
+
+**Conferência à mão do caso limpo** (está no teste, como comentário):
+camisa 80 (custo 30) → camisa 250 (custo 90), cliente paga 170.
+Entrou 80 + 170 = 250; saiu peça de custo 90; **lucro = 160** (50 da venda +
+110 da troca). O sistema dá 160.
+
+**ARMADILHA: eu escrevi a asserção errada antes de conferir a conta.** Esperava
+110 e o sistema deu 160 — eu tinha esquecido o lucro da venda de origem. Quase
+"consertei" código que estava certo. **Fazer a conta à mão ANTES de escrever a
+asserção, e deixar a conta escrita no teste.**
+
+**Verificação:** `teste-troca-caixa.mjs` — 61 asserções (caixa, relatório,
+painel, lucro bruto e mais vendidos).
+
+**Falhas pré-existentes da suíte**, iguais antes e depois: `teste-consignado-rel`
+(26 OK / 6) e `teste-origem-vendas` (25 OK / 4).
+
+---
+
+## 1.1b v3.27.4 — histórico (2026-09-25)
 
 **Dados da release (quem publica é o Marcio):**
 

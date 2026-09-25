@@ -3,7 +3,7 @@
 > Mapa técnico gerado automaticamente por `tools/graphify.js`.
 > **Não edite à mão.** Regere com `node tools/graphify.js` a cada alteração estrutural.
 
-**Versão:** 3.27.4 · **Gerado em:** 2026-09-25
+**Versão:** 3.27.5 · **Gerado em:** 2026-09-25
 **Aplicação:** `br.com.mllopes.salgueirogestao` (Neutralino 6 + WebView2)
 **Cliente:** Boutique do Salgueiro · **Autor:** ML Lopes Design
 
@@ -76,7 +76,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `config.js` | 85 | 2 | obter, salvar |
 | `consignacao.js` | 95 | 3 | acertar, listar, resumo |
 | `crediario.js` | 108 | 5 | aniversariantes, excluirCliente, obterCliente, parcelasAbertas, receberParcela |
-| `dashboard.js` | 237 | 2 | resumo |
+| `dashboard.js` | 273 | 2 | resumo |
 | `devolucoes.js` | 127 | 3 | itensVenda, listar, registrar |
 | `estoque.js` | 176 | 5 | buscarVariacoes, kardex, listarCompleto, movimentar, reposicao |
 | `estoques.js` | 474 | 20 | aplicar, aplicarEstrito, arred, conferirSaldo, conteudo, daLoja, desativar, garantirDaLoja, +13 |
@@ -112,7 +112,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 
 | Arquivo | Linhas | Exporta |
 |---|---|---|
-| `app.js` | 1806 | EM_REDE, ajustarLarguraModal, api, aplicarTema, ehAdmin |
+| `app.js` | 1807 | EM_REDE, ajustarLarguraModal, api, aplicarTema, ehAdmin |
 | `catalogo.js` | 262 | viewCatalogo |
 | `clientes.js` | 528 | viewClientes |
 | `compras.js` | 229 | viewCompras |
@@ -124,7 +124,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `impressao.js` | 141 | LIMITES, PADRAO, aplicarEstiloImpressao, cssCupomArquivo, cssCupomTela |
 | `mensagens.js` | 758 | abrirBalao, encerrarTelaMensagens, iniciarMensagens, pararMensagens, viewMensagens |
 | `neutralino.js` | 2 | — |
-| `novidades.js` | 969 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
+| `novidades.js` | 977 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
 | `pdv.js` | 2357 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
 | `ranking.js` | 361 | viewRanking |
 | `relatorios.js` | 1696 | viewRelatorios |

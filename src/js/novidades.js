@@ -3,6 +3,14 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.27.5',
+    data: '2026-09-25',
+    itens: [
+      '📉 LUCRO BRUTO NEGATIVO NO PAINEL, CORRIGIDO. Depois da 3.27.4 o painel mostrava LUCRO BRUTO -R$ 90,00. A receita da troca tinha saído de "vendas" (certo), mas o CUSTO da peça que saiu na troca continuou sendo contado — zero de venda menos noventa de custo. Agora a troca tem a conta certa: entra peça e sai peça, então o custo que vale é a diferença entre o custo da que saiu e o da que voltou, e o lucro da troca é a diferença que a cliente pagou menos esse custo. O painel mostra, embaixo da margem, quanto do lucro veio de troca.',
+      '🏆 "Mais vendidos no mês" deixou de listar a peça que saiu numa troca. Troca não é venda, nem ali.',
+    ],
+  },
+  {
     versao: '3.27.4',
     data: '2026-09-25',
     itens: [
