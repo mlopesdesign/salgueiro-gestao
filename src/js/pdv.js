@@ -319,6 +319,11 @@ function telaVenda(alvo, caixa) {
     if (existente) {
       if (existente.qtd + 1 > v.estoque) { toast('Estoque insuficiente.', true); return; }
       existente.qtd++;
+    } else if (tela._vendaCusto && v.consignado) {
+      // Barrado ja na entrada do carrinho: so peca do Salgueiro sai a custo.
+      toast(`${v.produto} e consignada — so peca do Salgueiro pode sair a preco de custo.`, true);
+      $sug.innerHTML = ''; $busca.value = ''; $busca.focus();
+      return;
     } else {
       // preco_custo vem de estoque:buscar e PRECISA ser copiado para o item:
       // é ele que a venda a preço de custo usa para mostrar o valor na tela e
@@ -326,7 +331,11 @@ function telaVenda(alvo, caixa) {
       // toda peça era acusada de não ter custo. (bug da v3.19.1)
       itens.push({ variacao_id: v.id, produto: v.produto, cor: v.cor, tamanho: v.tamanho,
                    qtd: 1, preco_unit: v.preco_venda, desconto: 0, estoque: v.estoque,
-                   preco_custo: Number(v.preco_custo) || 0, nome: v.produto });
+                   preco_custo: Number(v.preco_custo) || 0, nome: v.produto,
+                   // v3.27.0 — a peca consignada nao pode sair a preco de custo.
+                   // A marca vem de estoque:buscar e precisa ser copiada aqui,
+                   // senao a tela so descobre no fim, quando o servidor recusa.
+                   consignado: !!v.consignado });
     }
     $sug.innerHTML = ''; $busca.value = ''; $busca.focus();
     desenhar();
@@ -508,6 +517,16 @@ function telaVenda(alvo, caixa) {
       return;
     }
     if (!itens.length) { toast('Coloque as peças no carrinho antes.', true); return; }
+    // Só peça do Salgueiro sai a preço de custo. A consignada é do fornecedor:
+    // vendida pelo custo não sobra lucro para dividir e a loja paga o repasse
+    // do próprio bolso. Barrado aqui e também no servidor.
+    const consignadas = itens.filter(i => i.consignado);
+    if (consignadas.length) {
+      const nomes = [...new Set(consignadas.map(i => i.produto || i.nome || 'peça sem nome'))];
+      toast('Peça consignada não vende a preço de custo: ' + nomes.join(', ') +
+            '. Tire do carrinho — só peça do Salgueiro sai a custo.', true);
+      return;
+    }
     const semCusto = itens.filter(i => !(Number(i.preco_custo) > 0));
     if (semCusto.length) {
       // `produto` é o nome que vem da busca; `nome` é cópia dele. Usar os dois

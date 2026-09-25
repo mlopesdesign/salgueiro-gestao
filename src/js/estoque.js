@@ -604,10 +604,17 @@ export async function formMovimentoProduto(prod, tipo, aoConcluir) {
       }
     }, 'Confirmar');
 
-  // A janela cresce com o número de lojas, mas nunca passa da tela (o
-  // max-width:94vw do .modal continua valendo).
+  // A janela usa a tela. A conta anterior (260 + 104 por loja) dava menos que os
+  // 640px padrão do modal e a grade nascia com barra de rolagem tendo espaço
+  // sobrando ao lado — reprovado. Agora: o que a grade precisa, limitado a 90%
+  // da janela, e nunca menor que o padrão.
   const cx = m.querySelector('.modal');
-  if (cx) cx.style.width = Math.min(1180, 260 + colunas.length * 104) + 'px';
+  if (cx) {
+    const precisa = 300 + colunas.length * 130;        // 2 colunas fixas + campos
+    const teto = Math.floor(window.innerWidth * 0.90);
+    cx.style.width = Math.max(640, Math.min(precisa, teto)) + 'px';
+    cx.style.maxWidth = '90vw';
+  }
 
   const corpoTab = m.querySelector('#mp-corpo');
   const resumo   = m.querySelector('#mp-resumo');

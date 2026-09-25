@@ -9,16 +9,43 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.27.0 |
-| **Data do último build** | 2026-09-24 |
+| **Versão atual** | 3.27.1 |
+| **Data do último build** | 2026-09-25 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.27.0 em 2026-09-24 ✓ (27 módulos core · 158 rotas · 37 tabelas) |
-| **5 lugares da versão** | os 5 em 3.27.0 ✓ — o `.nsi`, que estava parado na 3.25.41, foi atualizado |
+| **GRAPHIFY** | atualizado para 3.27.1 em 2026-09-25 ✓ (27 módulos core · 158 rotas · 37 tabelas) |
+| **5 lugares da versão** | os 5 em 3.27.1 ✓ |
 
 ---
 
-## 1.1 v3.27.0 — pronta no disco, FALTA PUBLICAR (2026-09-24)
+## 1.1 v3.27.1 — pronta no disco, FALTA PUBLICAR (2026-09-25)
+
+**Dados da release (quem publica é o Marcio):**
+
+| Campo | Valor |
+|---|---|
+| Tag | `v3.27.1` |
+| Título | v3.27.1 — Consignado barrado na tela e janela de estoque no tamanho certo |
+| Asset | `Portable\resources.neu` — sha256 `78f6b2b5dfc09522e9b3829ddd88565fb844c9a8863976e00fd149afc6dea517` |
+| Notas | `release-notes.md` na raiz |
+
+Conferido no GitHub antes de escolher o número: `v3.27.0` **está publicada** (o Marcio já
+estava rodando ela), então rebuild exigia número novo. `v3.27.1` estava livre.
+
+**Duas reprovações da v3.27.0, corrigidas aqui:**
+
+| Reprovação | Correção |
+|---|---|
+| "pedi para retirar a possibilidade de venda de consignado a preço de custo" — a v3.27.0 só recusava no servidor, na hora de fechar a venda. O operador montava o carrinho inteiro para descobrir no fim. | `pdv.js`: o item do carrinho passou a carregar `consignado` (já vinha de `estoque:buscar`). Com o modo custo ligado a peça consignada não entra; com ela no carrinho o modo custo não liga. A trava do servidor continua. |
+| Janela de Entrada/Saída/Ajuste abria estreita e com rolagem lateral tendo espaço sobrando. | `estoque.js`: a conta era `260 + 104×lojas`, que dava MENOS que os 640px padrão do modal. Agora `300 + 130×lojas`, limitado a 90% da janela e nunca menor que 640. |
+
+**Regra de layout (Marcio, 25/09/2026):** janela não usa barra de rolagem tendo espaço na
+tela. Antes de fixar largura de modal, conferir se o conteúdo cabe — 80–90% da janela é o
+teto natural, não os 640px padrão.
+
+---
+
+## 1.1b v3.27.0 — publicada em 2026-09-24
 
 **Dados da release (quem publica é o Marcio):**
 

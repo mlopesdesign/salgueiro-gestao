@@ -3,6 +3,14 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.27.1',
+    data: '2026-09-25',
+    itens: [
+      '🏷️ Peça consignada agora é barrada NA TELA, não só na hora de fechar. Com o preço de custo ligado, a peça consignada não entra no carrinho — e se já estiver no carrinho, o preço de custo não liga, dizendo qual peça é. Só peça do Salgueiro sai a preço de custo.',
+      '🪟 A janela de Entrada / Saída / Ajuste deixou de nascer estreita. Ela agora usa até 90% da tela e abre no tamanho que a grade precisa — acabou a barra de rolagem lateral aparecendo com espaço sobrando do lado.',
+    ],
+  },
+  {
     versao: '3.27.0',
     data: '2026-09-24',
     itens: [
