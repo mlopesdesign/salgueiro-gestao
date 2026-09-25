@@ -1268,7 +1268,7 @@ async function modalFechamento(caixa, aoConcluir) {
   // no caixa é só a diferença que a cliente pagou.
   const t = r.trocas || { qtd: 0 };
   const trocasHtml = t.qtd > 0 ? `
-    <div class="tot-linha" style="margin-top:8px"><span><b>Trocas (${t.qtd})</b></span><span></span></div>
+    <div class="tot-linha"><span><b>Trocas (${t.qtd})</b></span><span></span></div>
     <div class="tot-linha"><span>&nbsp;&nbsp;Crédito das peças que voltaram</span><b>${moeda(t.credito)}</b></div>
     <div class="tot-linha"><span>&nbsp;&nbsp;Diferença recebida da cliente</span><b style="color:var(--verde)">${moeda(t.recebido)}</b></div>
     <div class="tot-linha"><span style="color:var(--texto-suave);font-size:12.5px">&nbsp;&nbsp;O crédito não entra no caixa — só a diferença.</span><span></span></div>` : '';
@@ -1283,9 +1283,11 @@ async function modalFechamento(caixa, aoConcluir) {
   modal('Fechar caixa', `
     <div class="tot-linha"><span>Abertura</span><b>${moeda(r.caixa.valor_abertura)}</b></div>
     ${formasHtml || '<p style="color:var(--texto-suave)">Nenhuma venda neste caixa.</p>'}
-    <div class="tot-linha"><span><b>Total de vendas (${r.qtd_vendas})</b></span><b>${moeda(r.total_vendas)}</b></div>
-    ${lojasHtml}
+    <div class="tot-linha"><span><b>Vendas (${r.qtd_vendas})</b></span><b>${moeda(r.total_vendas)}</b></div>
     ${trocasHtml}
+    ${(r.trocas || {}).qtd > 0 ? `<div class="tot-linha" style="border-top:1px solid var(--borda);margin-top:6px;padding-top:8px">
+      <span><b>Total recebido (vendas + trocas)</b></span><b>${moeda(r.total_recebido)}</b></div>` : ''}
+    ${lojasHtml}
     ${consigHtml}
     <div class="tot-linha" style="margin-top:8px"><span>Suprimentos</span><b>${moeda(r.suprimentos)}</b></div>
     <div class="tot-linha"><span>Sangrias</span><b>-${moeda(r.sangrias)}</b></div>

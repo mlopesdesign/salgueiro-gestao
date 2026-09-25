@@ -129,6 +129,12 @@ async function abaVendas(corpo, per) {
       <div class="cards">
         <div class="card"><div class="rotulo">Vendas</div><div class="valor">${r.resumo.qtd}</div></div>
         <div class="card"><div class="rotulo">Faturamento</div><div class="valor">${moeda(r.resumo.total)}</div></div>
+        ${(r.resumo.qtd_trocas || 0) > 0 ? `<div class="card"><div class="rotulo">Diferença de trocas</div>
+          <div class="valor">${moeda(r.resumo.trocas || 0)}</div>
+          <div class="card-rodape">${r.resumo.qtd_trocas} troca(s) · entra no total como troca</div></div>
+        <div class="card"><div class="rotulo">Total recebido</div>
+          <div class="valor">${moeda(r.resumo.total_geral || 0)}</div>
+          <div class="card-rodape">vendas + diferença de trocas</div></div>` : ''}
         <div class="card ev-card-salgueiro"><div class="rotulo">Vendas do Salgueiro</div>
           <div class="valor">${moeda((r.resumo.origem || {}).proprio?.total || 0)}</div>
           ${_subCard ? `<div class="ev-card-sub">${(r.resumo.origem || {}).proprio?.pecas || 0} peça(s) próprias · tabela ${moeda((r.resumo.origem || {}).proprio?.tabela || 0)}</div>` : ''}</div>

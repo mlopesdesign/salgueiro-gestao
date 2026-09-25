@@ -3,6 +3,15 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.27.4',
+    data: '2026-09-25',
+    itens: [
+      '🔁 TROCA NÃO É VENDA — em toda tela do sistema. O painel mostrava "1 venda(s) · R$ 180,00" quando aquilo tinha sido uma troca. Agora a troca não conta como venda em lugar nenhum: nem no painel, nem no relatório, nem no fechamento de caixa, nem no gráfico dos 14 dias, nem no ticket médio.',
+      '💰 A DIFERENÇA DA TROCA ENTRA COMO TROCA. O dinheiro que a cliente paga a mais continua entrando no total — afinal entrou no caixa — mas em linha própria, identificado como troca. O fechamento de caixa agora mostra Vendas, depois Trocas, e no fim o Total recebido somando os dois. O relatório ganhou os cartões Diferença de trocas e Total recebido, e o painel mostra a diferença embaixo do valor de vendas.',
+      '🧱 A regra virou UMA SÓ, num arquivo do sistema, em vez de estar repetida em cada consulta. Era por isso que o problema ia sendo corrigido num lugar e reaparecendo em outro — caixa, depois relatório, depois painel.',
+    ],
+  },
+  {
     versao: '3.27.3',
     data: '2026-09-25',
     itens: [

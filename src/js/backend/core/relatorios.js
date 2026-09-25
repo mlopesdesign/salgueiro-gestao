@@ -1,4 +1,6 @@
 // Relatórios — vendas por período, curva ABC, peças paradas
+// Troca não é venda — regra única do sistema. Ver core/vendas-sql.js.
+import { NAO_TROCA, RECEBIDO } from './vendas-sql.js';
 const arred = (n) => Math.round(n * 100) / 100;
 
 // Subquery que retorna o total já devolvido de uma venda (alias v)
@@ -18,10 +20,7 @@ const _devSub = `COALESCE((SELECT SUM(d.valor_devolvido) FROM devolucoes d WHERE
 //
 // Usar em TODO lugar do relatório que fala em faturamento. Não recalcular
 // `v.total - devolvido` solto numa consulta nova: é assim que o furo volta.
-const _recebido = `CASE WHEN COALESCE(v.tipo_venda,'normal') = 'troca'
-       THEN COALESCE((SELECT SUM(vp.valor - vp.troco) FROM venda_pagamentos vp
-                       WHERE vp.venda_id = v.id AND vp.forma <> 'troca'),0)
-       ELSE v.total - ${_devSub} END`;
+const _recebido = RECEBIDO('v');
 
 // p: { de: 'YYYY-MM-DD', ate: 'YYYY-MM-DD' }
 function vendasPeriodo(db, p) {
@@ -34,15 +33,20 @@ function vendasPeriodo(db, p) {
   // Subtrai devoluções do total de cada venda (valor líquido)
   // COUNT só conta vendas com valor líquido > 0 (exclui totalmente devolvidas)
   const resumo = db.prepare(`
-    SELECT COUNT(CASE WHEN (${_recebido}) > 0 THEN 1 END) qtd,
-           COALESCE(SUM(${_recebido}),0) total,
-           COALESCE(AVG(CASE WHEN (${_recebido}) > 0 THEN (${_recebido}) END),0) ticket
+    SELECT COUNT(CASE WHEN (${_recebido}) > 0 AND COALESCE(v.tipo_venda,'normal') <> 'troca' THEN 1 END) qtd,
+           COALESCE(SUM(CASE WHEN COALESCE(v.tipo_venda,'normal') <> 'troca' THEN (${_recebido}) ELSE 0 END),0) total,
+           COALESCE(SUM(CASE WHEN COALESCE(v.tipo_venda,'normal') =  'troca' THEN (${_recebido}) ELSE 0 END),0) trocas,
+           COUNT(CASE WHEN COALESCE(v.tipo_venda,'normal') = 'troca' THEN 1 END) qtd_trocas,
+           COALESCE(AVG(CASE WHEN (${_recebido}) > 0 AND COALESCE(v.tipo_venda,'normal') <> 'troca' THEN (${_recebido}) END),0) ticket
     FROM vendas v WHERE v.status='concluida' AND date(v.criado_em) BETWEEN ? AND ? ${fLoja}
   `).get(...ar);
 
+  // Venda + diferença de troca = o que entrou no período (a troca identificada).
+  resumo.total_geral = arred((resumo.total || 0) + (resumo.trocas || 0));
+
   const porDia = db.prepare(`
     SELECT date(v.criado_em) dia,
-           COUNT(CASE WHEN (${_recebido}) > 0 THEN 1 END) qtd,
+           COUNT(CASE WHEN (${_recebido}) > 0 AND COALESCE(v.tipo_venda,'normal') <> 'troca' THEN 1 END) qtd,
            SUM(${_recebido}) total
     FROM vendas v WHERE v.status='concluida' AND date(v.criado_em) BETWEEN ? AND ? ${fLoja}
     GROUP BY dia ORDER BY dia
@@ -50,7 +54,7 @@ function vendasPeriodo(db, p) {
 
   const porVendedor = db.prepare(`
     SELECT u.nome vendedor,
-           COUNT(CASE WHEN (${_recebido}) > 0 THEN 1 END) qtd,
+           COUNT(CASE WHEN (${_recebido}) > 0 AND COALESCE(v.tipo_venda,'normal') <> 'troca' THEN 1 END) qtd,
            SUM(${_recebido}) total
     FROM vendas v LEFT JOIN usuarios u ON u.id = v.usuario_id
     WHERE v.status='concluida' AND date(v.criado_em) BETWEEN ? AND ? ${fLoja}
@@ -83,6 +87,7 @@ function vendasPeriodo(db, p) {
       GROUP BY p2.categoria_id
     ) dev ON dev.cat_id = COALESCE(p.categoria_id, -1)
     WHERE v.status='concluida' AND date(v.criado_em) BETWEEN ? AND ? ${fLoja}
+      ${NAO_TROCA('v')}
     GROUP BY COALESCE(c.id, -1), COALESCE(c.nome,'Sem categoria')
     ORDER BY total DESC
   `).all(...arCat);
@@ -119,6 +124,7 @@ function vendasPeriodo(db, p) {
       JOIN variacoes va ON va.id = vi.variacao_id
       JOIN produtos p ON p.id = va.produto_id
      WHERE v.status='concluida' AND date(v.criado_em) BETWEEN ? AND ? ${fLoja}
+       ${NAO_TROCA('v')}
      GROUP BY COALESCE(p.consignado,0)
   `).all(...ar);
   const acha = (c) => split.find(x => x.consignado === c) || { pecas: 0, tabela: 0, recebido: 0 };
@@ -130,7 +136,10 @@ function vendasPeriodo(db, p) {
   if (Math.abs(_difO) > 0.005) origem.proprio.total = arred(origem.proprio.total + _difO);
 
   return { ok: true, de, ate,
-    resumo: { qtd: resumo.qtd, total: arred(resumo.total), ticket: arred(resumo.ticket), origem },
+    resumo: { qtd: resumo.qtd, total: arred(resumo.total), ticket: arred(resumo.ticket),
+              // Troca é troca: contada e somada à parte, e o total geral é a soma das duas.
+              trocas: arred(resumo.trocas || 0), qtd_trocas: resumo.qtd_trocas || 0,
+              total_geral: arred(resumo.total_geral || 0), origem },
     por_dia: porDia, por_vendedor: porVendedor, por_categoria: porCategoria };
 }
 
@@ -972,7 +981,8 @@ function _rankClientes(db, de, ate) {
 function _porHora(db, de, ate) {
   return db.prepare(`
     SELECT CAST(strftime('%H', v.criado_em) AS INTEGER) hora,
-           COUNT(*) vendas, COALESCE(SUM(${_recebido}),0) receita
+           COUNT(CASE WHEN COALESCE(v.tipo_venda,'normal') <> 'troca' THEN 1 END) vendas,
+           COALESCE(SUM(${_recebido}),0) receita
     FROM vendas v
     WHERE v.status='concluida' AND v.criado_em BETWEEN ? AND ?
     GROUP BY hora ORDER BY hora

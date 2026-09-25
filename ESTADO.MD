@@ -9,16 +9,83 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.27.3 |
+| **Versão atual** | 3.27.4 |
 | **Data do último build** | 2026-09-25 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.27.3 em 2026-09-25 ✓ (27 módulos core · 158 rotas · 37 tabelas) |
-| **5 lugares da versão** | os 5 em 3.27.3 ✓ |
+| **GRAPHIFY** | atualizado para 3.27.4 em 2026-09-25 ✓ (27 módulos core · 158 rotas · 37 tabelas) |
+| **5 lugares da versão** | os 5 em 3.27.4 ✓ |
 
 ---
 
-## 1.1 v3.27.3 — pronta no disco, FALTA PUBLICAR (2026-09-25)
+## 1.1 v3.27.4 — pronta no disco, FALTA PUBLICAR (2026-09-25)
+
+**Dados da release (quem publica é o Marcio):**
+
+| Campo | Valor |
+|---|---|
+| Tag | `v3.27.4` |
+| Título | v3.27.4 — Troca não é venda, em toda tela |
+| Asset | `Portable\resources.neu` — sha256 `8ea576470ba4b77e195f7b73d7df2bc3486e59a412fce934b44327a5eb9db5e7` |
+| Notas | `release-notes.md` na raiz |
+
+### A REGRA, nas palavras do Marcio
+
+> "troca não é venda"
+> "se eu troco um produto de 80,00 por um de 250, entrou apenas 170"
+> "a diferença tem que entrar como diferença de uma troca e não como uma venda"
+> "ele pode até entrar no total no final, porque como é a mais é um lucro — mas
+>  tem que entrar como troca"
+
+Traduzido para o sistema, e vale em TODA tela:
+
+1. **Contagem** — a troca NÃO conta como venda. Fora de "1 venda(s)", do ticket
+   médio e de qualquer número de vendas.
+2. **Dinheiro** — da troca entra só a DIFERENÇA, nunca o valor cheio da peça.
+3. **Apresentação** — a diferença aparece em LINHA PRÓPRIA, identificada como
+   troca, e só então soma no total geral. Nunca embutida em "vendas".
+
+### Onde isso mora agora: `core/vendas-sql.js` (NOVO)
+
+`NAO_TROCA(alias)` → filtro para contagem · `RECEBIDO(alias)` → dinheiro líquido
+de devolução · `RECEBIDO_BRUTO(alias)` → dinheiro sem descontar devolução (painel,
+que mostra devolvido em linha separada).
+
+Usado por `pdv.js` (resumoCaixa), `relatorios.js`, `dashboard.js` e `financeiro.js`.
+**NUNCA escrever `SUM(v.total)` ou `COUNT(*) FROM vendas` solto numa consulta nova.**
+
+### Campos novos
+
+| Onde | Campos |
+|---|---|
+| `resumoCaixa` | `trocas {qtd, credito, recebido}` · `total_vendas` (só venda) · `total_recebido` |
+| `vendasPeriodo` | `resumo.trocas` · `resumo.qtd_trocas` · `resumo.total_geral` |
+| `dashboard.resumo` | `hoje.trocas` · `mes.trocas` |
+
+**ARMADILHA que custou uma rodada:** os três módulos REMONTAM o objeto de saída
+escolhendo campo a campo (`return { resumo: { qtd, total, ticket, origem } }`).
+Acrescentar coluna na query não basta — tem de acrescentar no `return` também,
+senão o campo some sem erro nenhum.
+
+### O erro que se repetiu 4 VEZES nesta semana
+
+Estoque → largura de janela → faturamento → painel. Sempre o mesmo: **corrigi o
+lugar reclamado em vez da regra.** A pergunta obrigatória antes de fechar
+qualquer correção: **"isto é regra do sistema? quem mais faz essa mesma conta ou
+tem esse mesmo comportamento?"** — e `grep` no projeto inteiro. Se for regra, ela
+vai para um ponto comum (`modal()`, `app.css`, `vendas-sql.js`), nunca para a
+tela apontada.
+
+**Verificação:** `teste-troca-caixa.mjs` com 50 asserções — caixa, relatório e
+painel, incluindo 80→250 (vendas 80 · troca 170 · total 250), troca de valor
+igual (nada muda) e troca com excedente (sai por sangria).
+
+**Falhas pré-existentes da suíte**, conferidas iguais antes e depois:
+`teste-consignado-rel` (26 OK / 6) e `teste-origem-vendas` (25 OK / 4).
+
+---
+
+## 1.1b v3.27.3 — histórico (2026-09-25)
 
 **Dados da release (quem publica é o Marcio):**
 

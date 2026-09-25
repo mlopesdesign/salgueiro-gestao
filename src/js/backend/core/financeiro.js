@@ -1,3 +1,5 @@
+// Troca não é venda — regra única do sistema. Ver core/vendas-sql.js.
+import { RECEBIDO } from './vendas-sql.js';
 // Financeiro — contas a pagar/receber e fluxo de caixa
 import { auditar } from './util.js';
 const arred = (n) => Math.round(n * 100) / 100;
@@ -74,8 +76,9 @@ function fluxo(db, p) {
 
   // Vendas líquidas: subtrai devoluções do total
   const vendas = db.prepare(`
-    SELECT COALESCE(SUM(v.total - COALESCE(v.valor_devolvido, 0)), 0) AS total,
-           COUNT(CASE WHEN COALESCE(v.valor_devolvido, 0) < v.total THEN 1 END) AS qtd
+    SELECT COALESCE(SUM(${RECEBIDO('v')}), 0) AS total,
+           COUNT(CASE WHEN COALESCE(v.valor_devolvido, 0) < v.total
+                       AND COALESCE(v.tipo_venda,'normal') <> 'troca' THEN 1 END) AS qtd
     FROM vendas v WHERE v.status = 'concluida' AND strftime('%Y-%m', v.criado_em) = ?
   `).get(mes);
 
@@ -83,6 +86,7 @@ function fluxo(db, p) {
     SELECT vp.forma, SUM(vp.valor - vp.troco) AS total
     FROM venda_pagamentos vp JOIN vendas v ON v.id = vp.venda_id
     WHERE v.status = 'concluida' AND strftime('%Y-%m', v.criado_em) = ?
+      AND vp.forma <> 'troca'
     GROUP BY vp.forma ORDER BY total DESC
   `).all(mes);
 

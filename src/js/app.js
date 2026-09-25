@@ -16,7 +16,7 @@ import { aplicarEstiloImpressao } from './impressao.js';
 const $app = document.getElementById('app');
 let usuario = null;
 let categoriasCache = [];
-let APP_VERSION = '3.27.3'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
+let APP_VERSION = '3.27.4'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
 
 // API dupla: no aplicativo usa IPC (preload); num terminal em rede (navegador),
 // conversa com o servidor do computador principal via HTTP com token de sessão.
@@ -735,12 +735,14 @@ async function viewDashboard(alvo) {
         <div class="rotulo">Vendas de hoje</div>
         <div class="valor">${verFin ? moeda(d.hoje.total) : d.hoje.qtd + (d.hoje.qtd === 1 ? ' venda' : ' vendas')}</div>
         <div class="card-rodape">${d.hoje.qtd} venda(s)${verFin ? ' · ticket ' + moeda(d.hoje.ticket) : ''}</div>
+        ${verFin && d.hoje.trocas > 0 ? `<div class="card-rodape" style="font-size:11px">🔁 diferença de trocas: ${moeda(d.hoje.trocas)}</div>` : ''}
         ${verFin && d.hoje.devolvido > 0 ? `<div class="card-rodape" style="color:var(--dourado,#e6a817);font-size:11px">↩ devoluções: ${moeda(d.hoje.devolvido)}</div>` : ''}
       </div>
       <div class="card">
         <div class="rotulo">Vendas do mês</div>
         <div class="valor">${verFin ? moeda(d.mes.total) : d.mes.qtd + (d.mes.qtd === 1 ? ' venda' : ' vendas')}</div>
         <div class="card-rodape">${d.mes.qtd} venda(s) concluída(s)</div>
+        ${verFin && d.mes.trocas > 0 ? `<div class="card-rodape" style="font-size:11px">🔁 diferença de trocas: ${moeda(d.mes.trocas)}</div>` : ''}
         ${verFin && d.mes.devolvido > 0 ? `<div class="card-rodape" style="color:var(--dourado,#e6a817);font-size:11px">↩ devoluções: ${moeda(d.mes.devolvido)}</div>` : ''}
       </div>
       ${verFin ? `

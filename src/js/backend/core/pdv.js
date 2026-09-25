@@ -1,5 +1,7 @@
 // PDV — caixa, vendas, pagamentos, crediário e cupom
 import { auditar } from './util.js';
+// Troca não é venda — regra única do sistema. Ver core/vendas-sql.js.
+import { NAO_TROCA } from './vendas-sql.js';
 import * as valesTroca from './vales_troca.js';
 import * as pontos from './pontos.js';
 import * as estoques from './estoques.js';
@@ -97,8 +99,8 @@ function resumoCaixa(db, caixaId) {
   `).all(caixaId);
 
   const nVendas = db.prepare(`
-    SELECT COUNT(*) n, COALESCE(SUM(total),0) t FROM vendas
-     WHERE caixa_id=? AND status='concluida' AND COALESCE(tipo_venda,'normal') <> 'troca'
+    SELECT COUNT(*) n, COALESCE(SUM(total),0) t FROM vendas v
+     WHERE caixa_id=? AND status='concluida' ${NAO_TROCA('v')}
   `).get(caixaId);
 
   // Trocas do caixa: quantas foram, quanto de crédito das peças que voltaram e
@@ -156,9 +158,12 @@ function resumoCaixa(db, caixaId) {
     sangrias, suprimentos,
     trocas,
     qtd_vendas: nVendas.n,
-    // Vendas de verdade + só a diferença que as trocas trouxeram.
-    total_vendas: arred(nVendas.t + trocas.recebido),
-    total_vendas_normais: arred(nVendas.t),
+    // VENDA É VENDA, TROCA É TROCA. `total_vendas` é só venda; a diferença
+    // recebida nas trocas fica em `trocas.recebido`, em linha própria. As duas
+    // se somam no fim, em `total_recebido` — é dinheiro que entrou, mas entra
+    // identificado como troca, não disfarçado de venda.
+    total_vendas: arred(nVendas.t),
+    total_recebido: arred(nVendas.t + trocas.recebido),
     esperado_dinheiro: esperadoDinheiro
   };
 }

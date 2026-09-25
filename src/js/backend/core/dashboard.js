@@ -1,6 +1,8 @@
 // Dashboard — agregação única para o painel executivo
 const arred = (n) => Math.round((Number(n) || 0) * 100) / 100;
 import { pode } from './permissoes.js';
+// Troca não é venda — regra única do sistema. Ver core/vendas-sql.js.
+import { NAO_TROCA, RECEBIDO_BRUTO } from './vendas-sql.js';
 
 function ymd(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -12,8 +14,15 @@ function resumo(db, usuario) {
 
   // --- Vendas de hoje ---
   const hojeRaw = db.prepare(`
-    SELECT COUNT(*) qtd, COALESCE(SUM(total),0) total, COALESCE(AVG(total),0) ticket
+    SELECT COUNT(*) qtd, COALESCE(SUM(${RECEBIDO_BRUTO('vendas')}),0) total
     FROM vendas WHERE status='concluida' AND date(criado_em)=date('now','localtime')
+      ${NAO_TROCA('vendas')}
+  `).get();
+  // Diferença recebida nas trocas de hoje: entra no dinheiro, não na contagem.
+  const hojeTroca = db.prepare(`
+    SELECT COALESCE(SUM(${RECEBIDO_BRUTO('vendas')}),0) total
+    FROM vendas WHERE status='concluida' AND date(criado_em)=date('now','localtime')
+      AND COALESCE(tipo_venda,'normal') = 'troca'
   `).get();
   // Devoluções de hoje — só de vendas ainda concluídas (canceladas não contam)
   const hojeDevol = db.prepare(`
@@ -22,17 +31,27 @@ function resumo(db, usuario) {
     WHERE date(d.criado_em)=date('now','localtime')
   `).get();
   // hoje.total = bruto (devolução fica em hoje.devolvido — nunca falso negativo no card)
+  // VENDA É VENDA, TROCA É TROCA. `total` é só venda. A diferença da troca vai
+  // em `trocas`, campo próprio, e aparece em linha separada no painel — nunca
+  // somada ao número de vendas.
   const hoje = {
     qtd: hojeRaw.qtd,
     total: arred(hojeRaw.total),
+    trocas: arred(hojeTroca.total),
     devolvido: arred(hojeDevol.v),
     ticket: hojeRaw.qtd > 0 ? arred(hojeRaw.total / hojeRaw.qtd) : 0
   };
 
   // --- Vendas do mês + CMV (custo) para lucro bruto ---
   const mesRaw = db.prepare(`
-    SELECT COUNT(*) qtd, COALESCE(SUM(total),0) total
+    SELECT COUNT(*) qtd, COALESCE(SUM(${RECEBIDO_BRUTO('vendas')}),0) total
     FROM vendas WHERE status='concluida' AND date(criado_em) BETWEEN ? AND ?
+      ${NAO_TROCA('vendas')}
+  `).get(mesIni, hojeStr);
+  const mesTroca = db.prepare(`
+    SELECT COALESCE(SUM(${RECEBIDO_BRUTO('vendas')}),0) total
+    FROM vendas WHERE status='concluida' AND date(criado_em) BETWEEN ? AND ?
+      AND COALESCE(tipo_venda,'normal') = 'troca'
   `).get(mesIni, hojeStr);
   // Devoluções do mês — só de vendas ainda concluídas (canceladas não contam)
   const mesDevol = db.prepare(`
@@ -46,7 +65,7 @@ function resumo(db, usuario) {
     WHERE date(d.criado_em) BETWEEN ? AND ?
   `).get(mesIni, hojeStr);
   // mes.total = bruto; mes.devolvido é exibido separado no frontend
-  const mes = { qtd: mesRaw.qtd, total: arred(mesRaw.total), devolvido: arred(mesDevol.v) };
+  const mes = { qtd: mesRaw.qtd, total: arred(mesRaw.total), trocas: arred(mesTroca.total), devolvido: arred(mesDevol.v) };
   const cmv = db.prepare(`
     SELECT COALESCE(SUM(vi.qtd*pr.preco_custo),0) custo
     FROM venda_itens vi
@@ -56,15 +75,18 @@ function resumo(db, usuario) {
     WHERE v.status='concluida' AND date(v.criado_em) BETWEEN ? AND ?
   `).get(mesIni, hojeStr);
   const custoLiq = arred(cmv.custo - (mesDevol.custo_dev || 0));
-  const receitaLiq = arred(mesRaw.total - mesDevol.v); // net para margem
+  const receitaLiq = arred(mesRaw.total - mesDevol.v); // net para margem (só venda)
   const lucroBruto = arred(receitaLiq - custoLiq);
   const margem = receitaLiq > 0 ? Math.round((lucroBruto / receitaLiq) * 1000) / 10 : 0;
 
   // --- Série dos últimos 14 dias (preenche buracos com zero) ---
   const linhas = db.prepare(`
-    SELECT date(criado_em) dia, COALESCE(SUM(total),0) total, COUNT(*) qtd
+    SELECT date(criado_em) dia,
+           COALESCE(SUM(${RECEBIDO_BRUTO('vendas')}),0) total,
+           COUNT(*) qtd
     FROM vendas
     WHERE status='concluida' AND date(criado_em) >= date('now','localtime','-13 days')
+      ${NAO_TROCA('vendas')}
     GROUP BY dia
   `).all();
   const mapa = {};
@@ -181,8 +203,8 @@ function resumo(db, usuario) {
   const verFin = pode(usuario, 'dashboard.financeiro');
   const verFinanceiro = pode(usuario, 'financeiro.ver');
   const mesOut = verFin
-    ? { qtd: mes.qtd, total: mes.total, devolvido: mes.devolvido, custo: custoLiq, lucro_bruto: lucroBruto, margem }
-    : { qtd: mes.qtd, total: null, devolvido: null, custo: null, lucro_bruto: null, margem: null };
+    ? { qtd: mes.qtd, total: mes.total, trocas: mes.trocas, devolvido: mes.devolvido, custo: custoLiq, lucro_bruto: lucroBruto, margem }
+    : { qtd: mes.qtd, total: null, trocas: null, devolvido: null, custo: null, lucro_bruto: null, margem: null };
 
   // top_produtos: sem receita para quem não tem permissão financeira
   const topOut = top.map(t => verFin
@@ -194,7 +216,8 @@ function resumo(db, usuario) {
 
   return {
     ok: true,
-    hoje: { qtd: hoje.qtd, total: verFin ? hoje.total : null, devolvido: verFin ? hoje.devolvido : null, ticket: verFin ? hoje.ticket : null },
+    hoje: { qtd: hoje.qtd, total: verFin ? hoje.total : null, trocas: verFin ? hoje.trocas : null,
+            devolvido: verFin ? hoje.devolvido : null, ticket: verFin ? hoje.ticket : null },
     mes: mesOut,
     serie: serieOut,
     top_produtos: topOut,
