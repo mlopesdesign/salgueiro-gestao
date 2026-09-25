@@ -18,6 +18,13 @@
 
 ---
 
+## 0. COMO SE PUBLICA (combinado com o Marcio em 25/09/2026)
+
+**Eu:** build → commit → tag → `tools\publicar\pedido.json` → digo "dois cliques em
+`PUBLICAR.bat`". **Ele:** clica e aguarda. **Eu:** confiro no GitHub e confirmo.
+Detalhe completo na regra 3 do `REGRAS-CRITICAS.md`. **v3.27.5 publicada assim** —
+primeira release enviada sem o Marcio abrir o GitHub (25/09/2026 01:04).
+
 ## 1.0 PUBLICAÇÃO AUTOMÁTICA — ligada em 2026-09-25
 
 Decisão do Marcio: *"Eu não aguento mais subir coisa pro GitHub."* → tudo automático,

@@ -70,6 +70,18 @@ tag, cria a Release com o `.neu` e confere que o arquivo está lá. Resultado em
 `tools\publicar\resultado.txt` — **eu leio esse arquivo e digo ao Marcio o que
 aconteceu.** Pedido tratado vai para `feito\` ou `falhou\`, nunca fica em loop.
 
+**O COMBINADO (Marcio, 25/09/2026):** *"toda vez eu vou lá e vai ser assim que vamos
+subir, eu clico e aguardo."* A cada versão:
+
+1. Eu termino o build, comito, crio a tag e gravo `tools\publicar\pedido.json`.
+2. Eu digo a ele: **"dois cliques em `PUBLICAR.bat`"** — e só isso. Junto vão tag e
+   título, para ele saber o que está subindo.
+3. A janela mostra "Enviando vX..." e depois **PRONTO - PUBLICADA** (fecha sozinha em
+   15 s) ou **NAO PUBLICOU** com o motivo (fica aberta para ele me mostrar).
+4. Eu confiro no GitHub (`/releases/tags/vX`) e confirmo: título, arquivo e tamanho.
+
+NÃO voltar a mandar título/notas para ele colar no GitHub. NÃO pedir reinício do PC.
+
 **Continua proibido:** abrir o GitHub no navegador para publicar, e eu subir coisa
 à mão. O caminho é o pedido. O shell do Claude não tem credencial do GitHub — só o
 Windows tem, e é por isso que quem envia é o vigia.

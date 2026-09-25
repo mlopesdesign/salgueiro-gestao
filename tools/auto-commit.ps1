@@ -16,6 +16,13 @@
 # Decisao do Marcio em 25/09/2026: a Release passa a ser publicada
 # automaticamente. Ele nao abre mais o GitHub.
 #
+# COMBINADO COM O MARCIO (25/09/2026): a cada versao ele da dois cliques em
+# PUBLICAR.bat, na raiz do projeto, e aguarda. Isso roda este arquivo com
+# -UmaVez: publica o que estiver na fila e MOSTRA o resultado numa janela que
+# fecha sozinha. O vigia continuo (Inicializacao do Windows) segue existindo
+# como rede de seguranca; os dois nunca publicam a mesma coisa porque o pedido
+# e pego renomeando o arquivo - so um consegue.
+#
 # POR QUE O VIGIA ANTIGO NUNCA FUNCIONOU: ele marcava "algo mudou" dentro do
 # -Action do Register-ObjectEvent usando $script:ultima. Esse bloco roda num
 # escopo proprio; o $script: dele nao e o do laco principal. O laco nunca via
@@ -29,6 +36,7 @@
 # Este arquivo e ASCII puro de proposito: o PowerShell 5 le .ps1 sem BOM como
 # ANSI e acento vira lixo.
 # ---------------------------------------------------------------------------
+param([switch]$UmaVez)
 $ErrorActionPreference = 'Continue'
 $RAIZ  = 'E:\Projetos\LOJA FISICA SALGUEIRO V2'
 $REPO  = 'mlopesdesign/salgueiro-gestao'
@@ -37,10 +45,13 @@ $PED   = Join-Path $DIR 'pedido.json'
 $LOG   = Join-Path $DIR 'publicar.log'
 $RES   = Join-Path $DIR 'resultado.txt'
 $VIVO  = Join-Path $DIR 'vigia-vivo.txt'
+$PROC  = Join-Path $DIR 'pedido.processando.json'
 
 # Uma copia so, mesmo se o atalho disparar duas vezes.
-$mutex = New-Object System.Threading.Mutex($false, 'Local\SalgueiroVigiaPublicacao')
-if (-not $mutex.WaitOne(0)) { exit 0 }
+if (-not $UmaVez) {
+  $mutex = New-Object System.Threading.Mutex($false, 'Local\SalgueiroVigiaPublicacao')
+  if (-not $mutex.WaitOne(0)) { exit 0 }
+}
 
 New-Item -ItemType Directory -Force -Path $DIR | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $DIR 'feito') | Out-Null
@@ -79,11 +90,13 @@ function Falhar($tag, $msg) {
   Log "FALHOU $tag : $msg"
   Resultado ("FALHOU $tag`r`n" + $msg)
   # Tira o pedido do caminho para nao ficar tentando em loop.
-  try { Move-Item -Force $PED (Join-Path $DIR ('falhou\' + $tag + '.json')) } catch {}
+  try { Move-Item -Force $PROC (Join-Path $DIR ('falhou\' + $tag + '.json')) } catch {}
 }
 
 function Publicar {
-  $p = Get-Content $PED -Raw -Encoding UTF8 | ConvertFrom-Json
+  # Pega o pedido renomeando o arquivo. Se outro vigia pegou antes, sai quieto.
+  try { Move-Item -Path $PED -Destination $PROC -ErrorAction Stop } catch { return }
+  $p = Get-Content $PROC -Raw -Encoding UTF8 | ConvertFrom-Json
   $tag = [string]$p.tag
   if ($tag -notmatch '^v\d+\.\d+\.\d+$') { Falhar 'tag-invalida' "tag invalida no pedido: '$tag'"; return }
   if (-not $GIT) { Falhar $tag 'git nao encontrado neste computador.'; return }
@@ -124,12 +137,56 @@ function Publicar {
     return
   }
 
-  Move-Item -Force $PED (Join-Path $DIR ('feito\' + $tag + '.json'))
+  Move-Item -Force $PROC (Join-Path $DIR ('feito\' + $tag + '.json'))
   Log "OK $tag publicada"
   Resultado ("OK $tag publicada`r`nhttps://github.com/$REPO/releases/tag/$tag")
 }
 
+function Recuperar {
+  if ((Test-Path $PROC) -and -not (Test-Path $PED)) {
+    $idade = ((Get-Date) - (Get-Item $PROC).LastWriteTime).TotalMinutes
+    if ($idade -gt 5) { Move-Item -Force $PROC $PED; Log 'pedido que ficou pela metade voltou para a fila' }
+  }
+}
+
+# ---- UM CLIQUE (PUBLICAR.bat): publica o que estiver na fila e mostra na tela ----
+if ($UmaVez) {
+  $Host.UI.RawUI.WindowTitle = 'Salgueiro Gestao - Publicar'
+  Write-Host ''
+  Write-Host '  SALGUEIRO GESTAO - publicando atualizacao' -ForegroundColor Yellow
+  Write-Host '  -----------------------------------------'
+  Recuperar
+  $antes = if (Test-Path $RES) { (Get-Item $RES).LastWriteTime } else { [DateTime]::MinValue }
+  if (Test-Path $PED) {
+    $t = ((Get-Content $PED -Raw -Encoding UTF8 | ConvertFrom-Json).tag)
+    Write-Host "  Enviando $t para o GitHub... (leva uns segundos)"
+    Publicar
+  } elseif (Test-Path $PROC) {
+    Write-Host '  O vigia ja esta publicando. Aguardando...'
+    for ($i = 0; $i -lt 60 -and (Test-Path $PROC); $i++) { Start-Sleep -Seconds 2 }
+  }
+  $depois = if (Test-Path $RES) { (Get-Item $RES).LastWriteTime } else { [DateTime]::MinValue }
+  Write-Host ''
+  if ($depois -gt $antes) {
+    $linhas = Get-Content $RES -Encoding UTF8
+    $ok = ($linhas | Select-Object -Skip 1 -First 1) -like 'OK*'
+    if ($ok) { Write-Host '  PRONTO - PUBLICADA.' -ForegroundColor Green }
+    else     { Write-Host '  NAO PUBLICOU. Nada foi enviado pela metade. Me mostre esta tela:' -ForegroundColor Red }
+    $linhas | Select-Object -Skip 1 | ForEach-Object { Write-Host ('  ' + $_) }
+    Write-Host ''
+    if ($ok) { Write-Host '  Pode atualizar o programa. Esta janela fecha em 15 segundos.'; Start-Sleep -Seconds 15 }
+    else     { Write-Host '  Esta janela fica aberta. Feche quando quiser.'; Read-Host | Out-Null }
+  } else {
+    Write-Host '  Nada na fila para publicar - a ultima versao ja foi enviada.' -ForegroundColor Cyan
+    if (Test-Path $RES) { Get-Content $RES -Encoding UTF8 | ForEach-Object { Write-Host ('  ' + $_) } }
+    Write-Host ''
+    Write-Host '  Esta janela fecha em 15 segundos.'; Start-Sleep -Seconds 15
+  }
+  exit 0
+}
+
 while ($true) {
+  Recuperar
   try { Set-Content -Path $VIVO -Value (Agora) -Encoding UTF8 } catch {}
   try { if (Test-Path $PED) { Publicar } } catch { Log ('erro inesperado: ' + $_.Exception.Message) }
   Start-Sleep -Seconds 30
