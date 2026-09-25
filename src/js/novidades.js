@@ -3,6 +3,13 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.27.3',
+    data: '2026-09-25',
+    itens: [
+      '💱 FATURAMENTO DA TROCA CORRIGIDO NOS RELATÓRIOS. Na 3.27.0 a troca foi acertada no fechamento de caixa, mas a aba Relatórios continuava somando o valor cheio: trocando uma peça de R$ 80 por uma de R$ 250, o faturamento aparecia como R$ 250 em vez dos R$ 170 que a cliente pagou. Agora o relatório inteiro conta só a diferença — faturamento, vendas por dia, por vendedor, por hora, e os cartões Vendas do Salgueiro e Vendas de consignados. A conta virou uma regra única usada em todo o relatório, em vez de ficar repetida consulta por consulta.',
+    ],
+  },
+  {
     versao: '3.27.2',
     data: '2026-09-25',
     itens: [

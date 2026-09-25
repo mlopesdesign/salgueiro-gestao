@@ -9,16 +9,61 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.27.2 |
+| **Versão atual** | 3.27.3 |
 | **Data do último build** | 2026-09-25 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.27.2 em 2026-09-25 ✓ (27 módulos core · 158 rotas · 37 tabelas) |
-| **5 lugares da versão** | os 5 em 3.27.2 ✓ |
+| **GRAPHIFY** | atualizado para 3.27.3 em 2026-09-25 ✓ (27 módulos core · 158 rotas · 37 tabelas) |
+| **5 lugares da versão** | os 5 em 3.27.3 ✓ |
 
 ---
 
-## 1.1 v3.27.2 — pronta no disco, FALTA PUBLICAR (2026-09-25)
+## 1.1 v3.27.3 — pronta no disco, FALTA PUBLICAR (2026-09-25)
+
+**Dados da release (quem publica é o Marcio):**
+
+| Campo | Valor |
+|---|---|
+| Tag | `v3.27.3` |
+| Título | v3.27.3 — Faturamento da troca corrigido nos relatórios |
+| Asset | `Portable\resources.neu` — sha256 `cf18c431c487045a6f56443286066ed4879f69c12f7b7776bcdbb06864f14698` |
+| Notas | `release-notes.md` na raiz |
+
+**Reprovação:** troca de 80 por 250 mostrava FATURAMENTO R$ 250,00 em Relatórios → Vendas.
+Na v3.27.0 eu corrigi a troca **só no `resumoCaixa`**. O relatório tem a própria conta de
+faturamento e continuou somando `vendas.total` sem separar troca.
+
+**Correção:** `relatorios.js` ganhou `_recebido`, expressão SQL única no topo do arquivo:
+
+```
+CASE WHEN tipo_venda='troca'
+     THEN soma dos venda_pagamentos com forma <> 'troca'
+     ELSE v.total - devolvido END
+```
+
+Aplicada em TODAS as 11 consultas que falavam em faturamento (resumo, por dia, por
+vendedor, evento, por hora, gasto por cliente) e nos 3 rateios por item
+(`CAST(v.total AS REAL)/v.subtotal` → `CAST((_recebido) AS REAL)/v.subtotal`), que é o
+que faz os cartões Salgueiro × consignado somarem o faturamento.
+
+**NÃO recalcular `v.total - devolvido` solto numa consulta nova** — usar `_recebido`.
+É por aí que o furo volta.
+
+**Este é o MESMO erro pela terceira vez na mesma semana** (estoque, largura de janela,
+faturamento): corrigi o lugar reclamado em vez da regra. Antes de fechar qualquer
+correção, perguntar: **quem mais faz essa mesma conta / tem esse mesmo comportamento?**
+e procurar no projeto inteiro (`grep`), não só na tela apontada.
+
+**Verificação:** `teste-troca-caixa.mjs` subiu para 36 asserções — as 5 novas batem o
+faturamento do relatório, por dia, por vendedor e a soma dos cartões de origem, com o
+caso 80→250 valendo 170 (com o furo daria 580).
+
+**Falhas pré-existentes da suíte** conferidas iguais antes e depois: `teste-consignado-rel`
+(26 OK / 6) e `teste-origem-vendas` (25 OK / 4).
+
+---
+
+## 1.1b v3.27.2 — histórico (2026-09-25)
 
 **Dados da release (quem publica é o Marcio):**
 

@@ -1,7 +1,15 @@
-## v3.27.2 — Nenhuma janela rola tendo espaço na tela
+## v3.27.3 — Faturamento da troca corrigido nos relatórios
 
-Na v3.27.1 eu acertei a largura só na janela de Entrada / Saída / Ajuste. A Troca rápida — e qualquer outra — continuava nascendo estreita, com barra de rolagem lateral e espaço sobrando dos dois lados.
+Na v3.27.0 a troca foi corrigida no **fechamento de caixa**, e só lá. A aba **Relatórios → Vendas** continuava somando o valor cheio: trocando uma peça de **R$ 80** por uma de **R$ 250**, o FATURAMENTO aparecia como **R$ 250,00** em vez dos **R$ 170,00** que a cliente realmente pagou.
 
-A correção saiu de dentro de cada tela e foi para o lugar por onde **todas as janelas passam**. Agora, ao abrir, cada janela mede o próprio conteúdo: se estiver estourando para os lados, ela cresce até caber, com teto de **90% da tela**. Janela pequena continua pequena — só cresce a que precisa.
+Agora o relatório inteiro conta **só a diferença**:
 
-Vale para Troca rápida, Entrada de mercadoria, fechamento de caixa, autorização de desconto, e todas as outras, inclusive as que ainda vierem.
+- Faturamento e ticket médio
+- Vendas por dia
+- Vendas por vendedor(a)
+- Vendas por hora
+- Cartões **Vendas do Salgueiro** e **Vendas de consignados**
+
+A conta deixou de estar repetida consulta por consulta e virou **uma regra única**, usada em todo o relatório — que é o que impede o problema de voltar na próxima tela que for criada.
+
+Nada muda para venda normal, devolução, cortesia ou venda a preço de custo.

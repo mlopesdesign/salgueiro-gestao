@@ -4,6 +4,25 @@ const arred = (n) => Math.round(n * 100) / 100;
 // Subquery que retorna o total já devolvido de uma venda (alias v)
 const _devSub = `COALESCE((SELECT SUM(d.valor_devolvido) FROM devolucoes d WHERE d.venda_id=v.id),0)`;
 
+// O QUE A VENDA TROUXE DE DINHEIRO (v3.27.3) — expressão única do relatório.
+//
+// REGRA DO MARCIO: numa troca, entra só a DIFERENÇA. Trocando uma peça de R$ 80
+// por uma de R$ 250, a cliente paga R$ 170 — é isso que é faturamento, não os
+// R$ 250 da peça que saiu.
+//
+// A troca grava a peça nova em `vendas` com o total CHEIO (R$ 250) de propósito:
+// `venda_itens`, devolução em cadeia e desconto herdado dependem desse formato.
+// Quem separa dinheiro de crédito é esta expressão: para a venda de troca soma
+// os pagamentos que NÃO são crédito de troca; para qualquer outra venda continua
+// sendo o total menos o devolvido — nada do que já estava certo muda.
+//
+// Usar em TODO lugar do relatório que fala em faturamento. Não recalcular
+// `v.total - devolvido` solto numa consulta nova: é assim que o furo volta.
+const _recebido = `CASE WHEN COALESCE(v.tipo_venda,'normal') = 'troca'
+       THEN COALESCE((SELECT SUM(vp.valor - vp.troco) FROM venda_pagamentos vp
+                       WHERE vp.venda_id = v.id AND vp.forma <> 'troca'),0)
+       ELSE v.total - ${_devSub} END`;
+
 // p: { de: 'YYYY-MM-DD', ate: 'YYYY-MM-DD' }
 function vendasPeriodo(db, p) {
   const de = p.de || new Date().toISOString().slice(0, 8) + '01';
@@ -15,24 +34,24 @@ function vendasPeriodo(db, p) {
   // Subtrai devoluções do total de cada venda (valor líquido)
   // COUNT só conta vendas com valor líquido > 0 (exclui totalmente devolvidas)
   const resumo = db.prepare(`
-    SELECT COUNT(CASE WHEN (v.total - ${_devSub}) > 0 THEN 1 END) qtd,
-           COALESCE(SUM(v.total - ${_devSub}),0) total,
-           COALESCE(AVG(CASE WHEN (v.total - ${_devSub}) > 0 THEN (v.total - ${_devSub}) END),0) ticket
+    SELECT COUNT(CASE WHEN (${_recebido}) > 0 THEN 1 END) qtd,
+           COALESCE(SUM(${_recebido}),0) total,
+           COALESCE(AVG(CASE WHEN (${_recebido}) > 0 THEN (${_recebido}) END),0) ticket
     FROM vendas v WHERE v.status='concluida' AND date(v.criado_em) BETWEEN ? AND ? ${fLoja}
   `).get(...ar);
 
   const porDia = db.prepare(`
     SELECT date(v.criado_em) dia,
-           COUNT(CASE WHEN (v.total - ${_devSub}) > 0 THEN 1 END) qtd,
-           SUM(v.total - ${_devSub}) total
+           COUNT(CASE WHEN (${_recebido}) > 0 THEN 1 END) qtd,
+           SUM(${_recebido}) total
     FROM vendas v WHERE v.status='concluida' AND date(v.criado_em) BETWEEN ? AND ? ${fLoja}
     GROUP BY dia ORDER BY dia
   `).all(...ar);
 
   const porVendedor = db.prepare(`
     SELECT u.nome vendedor,
-           COUNT(CASE WHEN (v.total - ${_devSub}) > 0 THEN 1 END) qtd,
-           SUM(v.total - ${_devSub}) total
+           COUNT(CASE WHEN (${_recebido}) > 0 THEN 1 END) qtd,
+           SUM(${_recebido}) total
     FROM vendas v LEFT JOIN usuarios u ON u.id = v.usuario_id
     WHERE v.status='concluida' AND date(v.criado_em) BETWEEN ? AND ? ${fLoja}
     GROUP BY v.usuario_id ORDER BY total DESC
@@ -94,7 +113,7 @@ function vendasPeriodo(db, p) {
            SUM(vi.qtd) pecas,
            SUM(vi.total) tabela,
            SUM((vi.total - ${_devItem})
-               * CASE WHEN v.subtotal > 0 THEN CAST(v.total AS REAL) / v.subtotal ELSE 0 END) recebido
+               * CASE WHEN v.subtotal > 0 THEN CAST((${_recebido}) AS REAL) / v.subtotal ELSE 0 END) recebido
       FROM venda_itens vi
       JOIN vendas v ON v.id = vi.venda_id
       JOIN variacoes va ON va.id = vi.variacao_id
@@ -165,8 +184,8 @@ function receitaPorLoja(db, p) {
   const linhas = db.prepare(`
     SELECT l.id loja_id, l.nome loja,
            COUNT(v.id) qtd,
-           COALESCE(SUM(v.total - ${_devSub}),0) total,
-           COALESCE(AVG(v.total - ${_devSub}),0) ticket
+           COALESCE(SUM(${_recebido}),0) total,
+           COALESCE(AVG(${_recebido}),0) ticket
     FROM lojas l
     LEFT JOIN vendas v ON v.loja_id = l.id AND v.status='concluida'
                        AND date(v.criado_em) BETWEEN ? AND ?
@@ -752,7 +771,7 @@ function relatorioEvento(db, p) {
     SELECT COALESCE(pr.consignado,0) consignado,
            SUM(vi.qtd) pecas,
            SUM(vi.total + vi.desconto) tabela,
-           SUM(vi.total * CASE WHEN v.subtotal > 0 THEN CAST(v.total AS REAL) / v.subtotal ELSE 0 END) recebido
+           SUM(vi.total * CASE WHEN v.subtotal > 0 THEN CAST((${_recebido}) AS REAL) / v.subtotal ELSE 0 END) recebido
       FROM venda_itens vi
       JOIN vendas v ON v.id = vi.venda_id
       JOIN variacoes va ON va.id = vi.variacao_id
@@ -784,7 +803,7 @@ function relatorioEvento(db, p) {
     SELECT pr.id, pr.nome, pr.fornecedor_id, COALESCE(pr.pct_fornecedor,0) pct,
            SUM(vi.qtd) pecas,
            SUM(vi.total + vi.desconto) tabela,
-           SUM(vi.total * CASE WHEN v.subtotal > 0 THEN CAST(v.total AS REAL) / v.subtotal ELSE 0 END) recebido
+           SUM(vi.total * CASE WHEN v.subtotal > 0 THEN CAST((${_recebido}) AS REAL) / v.subtotal ELSE 0 END) recebido
       FROM venda_itens vi
       JOIN vendas v ON v.id = vi.venda_id
       JOIN variacoes va ON va.id = vi.variacao_id
@@ -936,7 +955,7 @@ function _rankClientes(db, de, ate) {
   const linhas = db.prepare(`
     SELECT cl.id, cl.nome, COALESCE(cc.nome,'') categoria,
            COUNT(DISTINCT v.id) compras,
-           SUM(v.total - ${_devSub}) gasto
+           SUM(${_recebido}) gasto
     FROM vendas v
     JOIN clientes cl ON cl.id = v.cliente_id
     LEFT JOIN categorias_clientes cc ON cc.id = cl.categoria_id
@@ -953,7 +972,7 @@ function _rankClientes(db, de, ate) {
 function _porHora(db, de, ate) {
   return db.prepare(`
     SELECT CAST(strftime('%H', v.criado_em) AS INTEGER) hora,
-           COUNT(*) vendas, COALESCE(SUM(v.total),0) receita
+           COUNT(*) vendas, COALESCE(SUM(${_recebido}),0) receita
     FROM vendas v
     WHERE v.status='concluida' AND v.criado_em BETWEEN ? AND ?
     GROUP BY hora ORDER BY hora
