@@ -18,7 +18,28 @@
 
 ---
 
-## 1.1 v3.27.5 — pronta no disco, FALTA PUBLICAR (2026-09-25)
+## 1.0 PUBLICAÇÃO AUTOMÁTICA — ligada em 2026-09-25
+
+Decisão do Marcio: *"Eu não aguento mais subir coisa pro GitHub."* → tudo automático,
+inclusive a Release. Regra 3 do `REGRAS-CRITICAS.md` reescrita.
+
+- `tools\auto-commit.ps1` virou o **vigia de publicação** (ASCII puro, CRLF, sintaxe
+  conferida com o parser do PowerShell 7). Olha `tools\publicar\pedido.json` a cada
+  30 s e publica. Testado com git/gh falsos em 5 casos: publica certo; para ANTES de
+  enviar se o `.neu` mudou, se a versão já existe ou se o GitHub recusa; nunca fica
+  em loop. Vigia antigo guardado em `backups\pre-v3.27.5-2026-09-25\`.
+- **Por que o vigia antigo nunca fez UM commit** (zero, de 16/09 a 25/09): o
+  `$script:ultima` dentro do `-Action` do `Register-ObjectEvent` roda em escopo
+  próprio; o laço principal nunca via a marca. O novo não usa evento.
+- **Ativa no próximo login do Windows.** O processo antigo continua na memória até lá
+  (inofensivo — nunca fez nada). Prova de vida: `tools\publicar\vigia-vivo.txt`.
+- **`main` divergia do GitHub** — o repositório do site nasceu separado, só com um
+  README. Unido com `merge -s ours --allow-unrelated-histories` (nenhum arquivo local
+  mudou; README do site trazido). O push agora é direto, sem rebase. **NUNCA MAIS
+  `git pull --rebase` neste projeto** — foi ele que apagou os 97 arquivos em 16/09.
+- A pausa `tools\.pausar-autocommit` que eu esqueci ligada em 24/09 foi removida.
+
+## 1.1 v3.27.5 — pronta no disco, PEDIDO DE PUBLICAÇÃO GRAVADO (2026-09-25)
 
 | Campo | Valor |
 |---|---|

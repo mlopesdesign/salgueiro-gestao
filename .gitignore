@@ -54,3 +54,8 @@ instalador/*.exe
 # Pastas de descarte e backups locais
 _to_delete/
 *.bak
+
+# vigia de publicacao: arquivos de estado que mudam sozinhos
+tools/publicar/vigia-vivo.txt
+tools/publicar/publicar.log
+tools/publicar/resultado.txt

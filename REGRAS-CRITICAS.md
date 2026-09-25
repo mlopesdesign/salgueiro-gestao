@@ -48,14 +48,35 @@ eu **não consigo rodar git**. Isso não é desculpa — é o motivo de o mínim
 
 ---
 
-## 3. QUEM PUBLICA A RELEASE É SEMPRE O MARCIO
+## 3. A RELEASE É PUBLICADA PELO VIGIA — NÃO PELO MARCIO, NÃO POR MIM À MÃO
 
-**Errei em 16/09/2026:** abri o GitHub e comecei a criar a release sozinho.
+**Mudou em 25/09/2026, decisão do Marcio:** *"Eu não aguento mais subir coisa pro
+GitHub."* Ele escolheu: tudo automático, inclusive a Release.
 
-Eu entrego **tag, título, descrição e caminho do arquivo**. Só isso. Nunca abrir o GitHub
-para publicar, nunca anexar asset, nunca clicar em Publish.
+**Como funciona:** o `tools\auto-commit.ps1` (nome antigo mantido porque é o que o
+atalho da Inicializacao do Windows chama) virou o **vigia de publicação**. Roda no
+Windows, com o login do git e o `gh` do Marcio, e a cada 30 s olha
+`tools\publicar\pedido.json`.
 
----
+**Ao fim de TODO build, depois do commit e da tag, eu gravo o pedido:**
+
+```json
+{ "tag": "vX.Y.Z", "titulo": "vX.Y.Z — ...", "asset": "Portable\\resources.neu",
+  "notas": "release-notes.md", "sha256": "<sha256 do Portable\\resources.neu>" }
+```
+
+O vigia confere o sha256, confere que a versão NÃO está publicada, envia `main` e a
+tag, cria a Release com o `.neu` e confere que o arquivo está lá. Resultado em
+`tools\publicar\resultado.txt` — **eu leio esse arquivo e digo ao Marcio o que
+aconteceu.** Pedido tratado vai para `feito\` ou `falhou\`, nunca fica em loop.
+
+**Continua proibido:** abrir o GitHub no navegador para publicar, e eu subir coisa
+à mão. O caminho é o pedido. O shell do Claude não tem credencial do GitHub — só o
+Windows tem, e é por isso que quem envia é o vigia.
+
+**O vigia está vivo?** `tools\publicar\vigia-vivo.txt` é regravado a cada 30 s. Se
+a hora dele estiver parada, o vigia não está rodando (liga no próximo login do
+Windows).
 
 ## 4. MARCIO NÃO USA O PORTABLE
 
