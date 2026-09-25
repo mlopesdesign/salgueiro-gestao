@@ -85,7 +85,7 @@ function fluxo(db, p) {
   const porForma = db.prepare(`
     SELECT vp.forma, SUM(vp.valor - vp.troco) AS total
     FROM venda_pagamentos vp JOIN vendas v ON v.id = vp.venda_id
-    WHERE v.status = 'concluida' AND strftime('%Y-%m', v.criado_em) = ?
+    WHERE v.status IN ('concluida','troca') AND strftime('%Y-%m', v.criado_em) = ?
       AND vp.forma <> 'troca'
     GROUP BY vp.forma ORDER BY total DESC
   `).all(mes);
@@ -103,7 +103,7 @@ function fluxo(db, p) {
   const custoDevolvido = db.prepare(`
     SELECT COALESCE(SUM(di.qtd * pr.preco_custo), 0) AS total
     FROM devolucao_itens di
-    JOIN devolucoes d ON d.id = di.devolucao_id
+    JOIN devolucoes d ON d.id = di.devolucao_id AND COALESCE(d.tipo,'') <> 'troca'
     JOIN variacoes va ON va.id = di.variacao_id
     JOIN produtos pr ON pr.id = va.produto_id
     WHERE strftime('%Y-%m', d.criado_em) = ?

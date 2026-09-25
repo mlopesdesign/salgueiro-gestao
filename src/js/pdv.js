@@ -1270,8 +1270,10 @@ async function modalFechamento(caixa, aoConcluir) {
   const trocasHtml = t.qtd > 0 ? `
     <div class="tot-linha"><span><b>Trocas (${t.qtd})</b></span><span></span></div>
     <div class="tot-linha"><span>&nbsp;&nbsp;Crédito das peças que voltaram</span><b>${moeda(t.credito)}</b></div>
-    <div class="tot-linha"><span>&nbsp;&nbsp;Diferença recebida da cliente</span><b style="color:var(--verde)">${moeda(t.recebido)}</b></div>
-    <div class="tot-linha"><span style="color:var(--texto-suave);font-size:12.5px">&nbsp;&nbsp;O crédito não entra no caixa — só a diferença.</span><span></span></div>` : '';
+    <div class="tot-linha"><span>&nbsp;&nbsp;Pago a mais pelas clientes</span><b style="color:var(--verde)">${moeda(t.recebido)}</b></div>
+    ${t.devolvido ? `<div class="tot-linha"><span>&nbsp;&nbsp;Troco devolvido (dinheiro/estorno)</span><b style="color:var(--vermelho)">−${moeda(t.devolvido)}</b></div>` : ''}
+    <div class="tot-linha"><span>&nbsp;&nbsp;<b>Saldo das trocas</b></span><b>${t.saldo < 0 ? '−' : ''}${moeda(Math.abs(t.saldo || 0))}</b></div>
+    <div class="tot-linha"><span style="color:var(--texto-suave);font-size:12.5px">&nbsp;&nbsp;Troca não é venda: o crédito não é dinheiro — só o saldo entra.</span><span></span></div>` : '';
 
   const c = r.consignados || { pecas: 0 };
   const consigHtml = c.pecas > 0 ? `
@@ -1311,6 +1313,8 @@ async function modalFechamento(caixa, aoConcluir) {
 
 function _pillVenda(v) {
   if (v.status === 'cancelada') return '<span class="pill pill-baixo">cancelada</span>';
+  // Troca não é venda: identificada na lista para ninguém somar como venda.
+  if (v.status === 'troca') return '<span class="pill" style="background:#2563eb;color:#fff">troca</span>';
   const dev = Number(v.total_devolvido) || 0;
   if (dev > 0 && dev >= Number(v.total)) return '<span class="pill pill-baixo">devolvida</span>';
   if (dev > 0) return '<span class="pill" style="background:#d97706;color:#fff">dev. parcial</span>';
@@ -1321,7 +1325,7 @@ async function modalVendas() {
   const r = await api('pdv:listarVendas', {});
   const linhas = (r.vendas || []).map(v => {
     const dev = Number(v.total_devolvido) || 0;
-    const podeDevolver = v.status === 'concluida' && dev < Number(v.total);
+    const podeDevolver = (v.status === 'concluida' || v.status === 'troca') && dev < Number(v.total);
     return `
     <tr data-id="${v.id}">
       <td>#${v.id}</td><td>${esc(_fmtDataHora(v.criado_em))}</td><td>${esc(v.cliente || '—')}</td>
@@ -1329,7 +1333,7 @@ async function modalVendas() {
       <td class="num"><b>${moeda(v.total)}</b></td>
       <td>${_pillVenda(v)}</td>
       <td class="acoes-linha">
-        ${v.status === 'concluida' ? '<button data-a="cupom">Cupom</button>' : ''}
+        ${(v.status === 'concluida' || v.status === 'troca') ? '<button data-a="cupom">Cupom</button>' : ''}
         ${podeDevolver && pode('pdv.devolucao') ? '<button data-a="devolver">↩ Devolver</button>' : ''}
         ${podeDevolver ? '<button data-a="trocar" style="color:var(--vinho)">🔄 Troca</button>' : ''}
         ${v.status === 'concluida' && pode('pdv.cancelar') ? '<button data-a="cancelar" style="color:var(--vermelho)">Cancelar</button>' : ''}
@@ -1843,7 +1847,7 @@ async function modalBuscarVendaTroca() {
     }
     tbody.innerHTML = vendas.map(v => {
       const dev = Number(v.total_devolvido) || 0;
-      const podeTrocar = v.status === 'concluida' && dev < Number(v.total);
+      const podeTrocar = (v.status === 'concluida' || v.status === 'troca') && dev < Number(v.total);
       return `
       <tr data-id="${v.id}">
         <td>#${v.id}</td>
@@ -2285,7 +2289,7 @@ async function modalHistoricoVendas() {
     }
     container.innerHTML = vendas.map(v => {
       const dev = Number(v.total_devolvido) || 0;
-      const podeDevolver = v.status === 'concluida' && dev < Number(v.total);
+      const podeDevolver = (v.status === 'concluida' || v.status === 'troca') && dev < Number(v.total);
       return `
       <tr data-id="${v.id}">
         <td>#${v.id}</td>

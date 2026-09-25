@@ -3,6 +3,17 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.28.0',
+    data: '2026-09-25',
+    itens: [
+      '🔁 TROCA NÃO É VENDA — DE UMA VEZ POR TODAS. Até aqui a troca era guardada no sistema como se fosse uma venda, e cada tela precisava lembrar de separá-la: o caixa foi corrigido, depois o relatório, depois o painel — e o Relatório de Evento continuava mostrando uma troca como "1 venda de R$ 180". Agora a troca é guardada como TROCA, com situação própria. Nenhuma tela conta troca como venda — nem as que já existem, nem as que ainda forem criadas.',
+      '💰 A DIFERENÇA, POSITIVA OU NEGATIVA. Na troca entra só o saldo: o que a cliente pagou a mais, menos o troco que a loja devolveu em dinheiro ou estorno. Camisa de R$ 80 trocada por uma de R$ 180 com R$ 100 pagos: entra R$ 100, como troca. Camisa de R$ 250 trocada por uma de R$ 80 com R$ 170 devolvidos em dinheiro: sai R$ 170, como troca. Valores iguais: não mexe em nada, só fica registrado.',
+      '🧾 A VENDA ORIGINAL CONTINUA SENDO VENDA. Quando a troca é feita pela venda de origem, a peça que volta não desconta mais aquela venda — o dinheiro dela não voltou para a cliente, virou crédito para a peça nova. Antes, com a venda e a troca no mesmo dia, o relatório mostrava menos dinheiro do que realmente entrou.',
+      '📋 RELATÓRIO DE EVENTO com cartão Trocas, seção "Trocas do período" (o que voltou, o que saiu, crédito, quanto pagou a mais, troco devolvido e saldo) e o fechamento em linhas separadas: líquido das vendas, diferença das trocas e o líquido a receber somando os dois. Na tabela de formas de pagamento, o que foi pago nas trocas aparece em linha própria, para bater com a maquininha.',
+      '🏷️ Nas listas de vendas do caixa e no histórico do cliente, a troca aparece com a etiqueta "troca".',
+    ],
+  },
+  {
     versao: '3.27.5',
     data: '2026-09-25',
     itens: [

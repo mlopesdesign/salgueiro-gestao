@@ -1,7 +1,7 @@
 // PDV — caixa, vendas, pagamentos, crediário e cupom
 import { auditar } from './util.js';
 // Troca não é venda — regra única do sistema. Ver core/vendas-sql.js.
-import { NAO_TROCA } from './vendas-sql.js';
+import { NAO_TROCA, trocasDoPeriodo } from './vendas-sql.js';
 import * as valesTroca from './vales_troca.js';
 import * as pontos from './pontos.js';
 import * as estoques from './estoques.js';
@@ -90,7 +90,7 @@ function resumoCaixa(db, caixaId) {
   const porForma = db.prepare(`
     SELECT vp.forma, SUM(vp.valor - vp.troco) AS total, COUNT(DISTINCT v.id) AS vendas
     FROM venda_pagamentos vp JOIN vendas v ON v.id = vp.venda_id
-    WHERE v.caixa_id = ? AND v.status = 'concluida' AND vp.forma <> 'troca'
+    WHERE v.caixa_id = ? AND v.status IN ('concluida','troca') AND vp.forma <> 'troca'
     GROUP BY vp.forma
   `).all(caixaId);
 
@@ -103,20 +103,10 @@ function resumoCaixa(db, caixaId) {
      WHERE caixa_id=? AND status='concluida' ${NAO_TROCA('v')}
   `).get(caixaId);
 
-  // Trocas do caixa: quantas foram, quanto de crédito das peças que voltaram e
-  // quanto a cliente pagou de diferença (o único dinheiro que entrou).
-  const trc = db.prepare(`
-    SELECT COUNT(DISTINCT v.id) AS qtd,
-           COALESCE(SUM(CASE WHEN vp.forma =  'troca' THEN vp.valor - vp.troco ELSE 0 END),0) AS credito,
-           COALESCE(SUM(CASE WHEN vp.forma <> 'troca' THEN vp.valor - vp.troco ELSE 0 END),0) AS recebido
-      FROM vendas v LEFT JOIN venda_pagamentos vp ON vp.venda_id = v.id
-     WHERE v.caixa_id = ? AND v.status = 'concluida' AND COALESCE(v.tipo_venda,'normal') = 'troca'
-  `).get(caixaId);
-  const trocas = {
-    qtd: trc.qtd || 0,
-    credito: arred(trc.credito),
-    recebido: arred(trc.recebido)
-  };
+  // Trocas do caixa (regra única em vendas-sql.js): quantas, crédito das peças
+  // que voltaram, quanto a cliente pagou a mais, quanto a loja devolveu em
+  // dinheiro/estorno e o saldo — que é o que a troca soma ao caixa.
+  const trocas = trocasDoPeriodo(db, (a) => `${a}.caixa_id = ?`, [caixaId]);
 
   // Vendas por loja neste caixa — trocas ficam de fora pelo mesmo motivo.
   const porLoja = db.prepare(`
@@ -163,7 +153,7 @@ function resumoCaixa(db, caixaId) {
     // se somam no fim, em `total_recebido` — é dinheiro que entrou, mas entra
     // identificado como troca, não disfarçado de venda.
     total_vendas: arred(nVendas.t),
-    total_recebido: arred(nVendas.t + trocas.recebido),
+    total_recebido: arred(nVendas.t + trocas.saldo),
     esperado_dinheiro: esperadoDinheiro
   };
 }
@@ -609,7 +599,7 @@ function cancelarVenda(db, p, quem) {
   if (!quem || quem.perfil !== 'admin') return { ok: false, erro: 'Apenas administradores cancelam vendas.' };
   const d = obterVenda(db, p.venda_id);
   if (!d.ok) return d;
-  if (d.venda.status !== 'concluida') return { ok: false, erro: 'Esta venda não está ativa.' };
+  if (d.venda.status !== 'concluida' && d.venda.status !== 'troca') return { ok: false, erro: 'Esta venda não está ativa.' };
   if (d.parcelas.some(x => x.pago_em)) return { ok: false, erro: 'Há parcelas de crediário já pagas.' };
 
   db.exec('BEGIN');

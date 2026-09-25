@@ -2,7 +2,7 @@
 const arred = (n) => Math.round((Number(n) || 0) * 100) / 100;
 import { pode } from './permissoes.js';
 // Troca não é venda — regra única do sistema. Ver core/vendas-sql.js.
-import { NAO_TROCA, RECEBIDO_BRUTO } from './vendas-sql.js';
+import { NAO_TROCA, RECEBIDO_BRUTO, trocasDoPeriodo } from './vendas-sql.js';
 
 function ymd(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -18,16 +18,12 @@ function resumo(db, usuario) {
     FROM vendas WHERE status='concluida' AND date(criado_em)=date('now','localtime')
       ${NAO_TROCA('vendas')}
   `).get();
-  // Diferença recebida nas trocas de hoje: entra no dinheiro, não na contagem.
-  const hojeTroca = db.prepare(`
-    SELECT COALESCE(SUM(${RECEBIDO_BRUTO('vendas')}),0) total
-    FROM vendas WHERE status='concluida' AND date(criado_em)=date('now','localtime')
-      AND COALESCE(tipo_venda,'normal') = 'troca'
-  `).get();
+  // Saldo das trocas de hoje (pago a mais − troco devolvido). Linha própria.
+  const hojeTroca = { total: trocasDoPeriodo(db, (x) => `date(${x}.criado_em)=date('now','localtime')`).saldo };
   // Devoluções de hoje — só de vendas ainda concluídas (canceladas não contam)
   const hojeDevol = db.prepare(`
     SELECT COALESCE(SUM(d.valor_devolvido),0) v FROM devolucoes d
-    JOIN vendas v ON v.id=d.venda_id AND v.status='concluida'
+    JOIN vendas v ON v.id=d.venda_id AND v.status='concluida' AND COALESCE(d.tipo,'') <> 'troca'
     WHERE date(d.criado_em)=date('now','localtime')
   `).get();
   // hoje.total = bruto (devolução fica em hoje.devolvido — nunca falso negativo no card)
@@ -48,11 +44,7 @@ function resumo(db, usuario) {
     FROM vendas WHERE status='concluida' AND date(criado_em) BETWEEN ? AND ?
       ${NAO_TROCA('vendas')}
   `).get(mesIni, hojeStr);
-  const mesTroca = db.prepare(`
-    SELECT COALESCE(SUM(${RECEBIDO_BRUTO('vendas')}),0) total
-    FROM vendas WHERE status='concluida' AND date(criado_em) BETWEEN ? AND ?
-      AND COALESCE(tipo_venda,'normal') = 'troca'
-  `).get(mesIni, hojeStr);
+  const mesTroca = { total: trocasDoPeriodo(db, (x) => `date(${x}.criado_em) BETWEEN ? AND ?`, [mesIni, hojeStr]).saldo };
   // Devoluções do mês — só de vendas ainda concluídas (canceladas não contam)
   const mesDevol = db.prepare(`
     SELECT COALESCE(SUM(d.valor_devolvido),0) v,
@@ -92,8 +84,7 @@ function resumo(db, usuario) {
     JOIN vendas v ON v.id=vi.venda_id
     JOIN variacoes va ON va.id=vi.variacao_id
     JOIN produtos pr ON pr.id=va.produto_id
-    WHERE v.status='concluida' AND date(v.criado_em) BETWEEN ? AND ?
-      AND COALESCE(v.tipo_venda,'normal') = 'troca'
+    WHERE v.status='troca' AND date(v.criado_em) BETWEEN ? AND ?
   `).get(mesIni, hojeStr);
   const trocaCustoVoltou = db.prepare(`
     SELECT COALESCE(SUM(di.qtd*pr.preco_custo),0) custo
@@ -130,7 +121,7 @@ function resumo(db, usuario) {
   const serieDevol = db.prepare(`
     SELECT date(d.criado_em) dia, COALESCE(SUM(d.valor_devolvido),0) v
     FROM devolucoes d
-    JOIN vendas vc ON vc.id=d.venda_id AND vc.status='concluida'
+    JOIN vendas vc ON vc.id=d.venda_id AND vc.status='concluida' AND COALESCE(d.tipo,'') <> 'troca'
     WHERE date(d.criado_em) >= date('now','localtime','-13 days')
     GROUP BY dia
   `).all();
@@ -159,7 +150,7 @@ function resumo(db, usuario) {
              SUM(di.qtd) dev_qtd,
              SUM(di.qtd * CAST(vi2.total AS REAL) / vi2.qtd) dev_val
       FROM devolucao_itens di
-      JOIN devolucoes d ON d.id=di.devolucao_id
+      JOIN devolucoes d ON d.id=di.devolucao_id AND COALESCE(d.tipo,'') <> 'troca'
       JOIN vendas vs ON vs.id=d.venda_id
       JOIN venda_itens vi2 ON vi2.venda_id=d.venda_id AND vi2.variacao_id=di.variacao_id
       JOIN variacoes va2 ON va2.id=di.variacao_id

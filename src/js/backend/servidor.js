@@ -2610,7 +2610,7 @@ async function _iniciar() {
     if (!db.prepare("SELECT valor FROM config WHERE chave=?").get(migrKey)) {
       const r = db.prepare(`
         UPDATE vendas SET tipo_venda='troca'
-         WHERE COALESCE(tipo_venda,'normal') <> 'troca'
+         WHERE COALESCE(tipo_venda,'normal') <> 'troca' AND status IN ('concluida','troca')
            AND (obs LIKE 'Troca — venda origem #%' OR obs LIKE 'Troca rápida — devolução #%')
       `).run();
       db.prepare('INSERT INTO config (chave, valor) VALUES (?,?)').run(migrKey, '1');

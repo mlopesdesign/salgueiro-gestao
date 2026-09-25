@@ -33,7 +33,8 @@ function registrar(db, p, quem) {
     'SELECT id, status, cliente_id, loja_id, total, subtotal, desconto FROM vendas WHERE id=?'
   ).get(p.venda_id);
   if (!venda) return { ok: false, erro: 'Venda de origem não encontrada.' };
-  if (venda.status !== 'concluida') return { ok: false, erro: 'Só é possível trocar itens de vendas concluídas.' };
+  // 'troca' também: a peça que saiu numa troca pode ser trocada de novo (cadeia).
+  if (venda.status !== 'concluida' && venda.status !== 'troca') return { ok: false, erro: 'Só é possível trocar itens de vendas concluídas.' };
 
   const sub = arred(Number(venda.subtotal) || 0);
   const tot = arred(Number(venda.total) || 0);
@@ -172,7 +173,7 @@ function registrar(db, p, quem) {
              subtotalNovo, descontoNovo, totalNovo,
              `Troca — venda origem #${venda.id}` +
              (descontoNovo > 0 ? ` (desconto de ${pctDesconto}% herdado da compra)` : ''),
-             'concluida');
+             'troca');
       novaVendaId = Number(rv.lastInsertRowid);
 
       for (const it of novosInfos) {
@@ -205,6 +206,11 @@ function registrar(db, p, quem) {
           .run(novaVendaId, pg.forma, v, pg.parcelas || 1, 0);
       }
     }
+
+    // v3.28.0: liga a devolução à venda de troca e guarda o que sobrou do
+    // crédito. É daqui que os relatórios tiram a diferença NEGATIVA da troca.
+    db.prepare('UPDATE devolucoes SET troca_venda_id=?, excedente=? WHERE id=?')
+      .run(novaVendaId, excedente > 0.01 ? excedente : 0, devId);
 
     // 5c. Destino do excedente (crédito > totalNovo)
     let excedentePago = 0;
@@ -363,7 +369,7 @@ function registrarRapida(db, p, quem) {
         INSERT INTO vendas (caixa_id, loja_id, cliente_id, usuario_id, subtotal, desconto, total, obs, status, tipo_venda)
         VALUES (?,?,?,?,?,?,?,?,?,'troca')
       `).run(caixa.id, caixa.loja_id || null, clienteId, quem?.id || null,
-             totalNovo, 0, totalNovo, `Troca rápida — devolução #${devId}`, 'concluida');
+             totalNovo, 0, totalNovo, `Troca rápida — devolução #${devId}`, 'troca');
       novaVendaId = Number(rv.lastInsertRowid);
 
       const insItem = db.prepare(
@@ -386,6 +392,9 @@ function registrarRapida(db, p, quem) {
           .run(novaVendaId, pg.forma, arred(Number(pg.valor)), pg.parcelas || 1, 0);
       }
     }
+
+    db.prepare('UPDATE devolucoes SET troca_venda_id=?, excedente=? WHERE id=?')
+      .run(novaVendaId, excedente > 0.01 ? excedente : 0, devId);
 
     let excedentePago = 0;
     if (excedente > 0.01) {

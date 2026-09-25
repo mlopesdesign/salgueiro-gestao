@@ -8,7 +8,7 @@ const arred = (n) => Math.round((Number(n) || 0) * 100) / 100;
 function itensVenda(db, venda_id) {
   const venda = db.prepare('SELECT id, status, cliente_id, total, subtotal, desconto FROM vendas WHERE id=?').get(venda_id);
   if (!venda) return { ok: false, erro: 'Venda não encontrada.' };
-  if (venda.status !== 'concluida') return { ok: false, erro: 'Só é possível devolver itens de vendas concluídas.' };
+  if (venda.status !== 'concluida' && venda.status !== 'troca') return { ok: false, erro: 'Só é possível devolver itens de vendas concluídas.' };
   const itens = db.prepare(`
     SELECT vi.variacao_id, vi.qtd, vi.total,
            p.nome AS produto, va.cor, va.tamanho,

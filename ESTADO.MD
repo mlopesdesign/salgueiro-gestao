@@ -9,12 +9,12 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.27.5 |
+| **Versão atual** | 3.28.0 |
 | **Data do último build** | 2026-09-25 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.27.5 em 2026-09-25 ✓ (27 módulos core · 158 rotas · 37 tabelas) |
-| **5 lugares da versão** | os 5 em 3.27.5 ✓ |
+| **GRAPHIFY** | atualizado para 3.28.0 em 2026-09-25 ✓ (27 módulos core · 158 rotas · 37 tabelas) |
+| **5 lugares da versão** | os 5 em 3.28.0 ✓ |
 
 ---
 
@@ -24,6 +24,54 @@
 `PUBLICAR.bat`". **Ele:** clica e aguarda. **Eu:** confiro no GitHub e confirmo.
 Detalhe completo na regra 3 do `REGRAS-CRITICAS.md`. **v3.27.5 publicada assim** —
 primeira release enviada sem o Marcio abrir o GitHub (25/09/2026 01:04).
+
+## 0.1 v3.28.0 — TROCA NÃO É VENDA, NA ESTRUTURA (2026-09-25) — pedido de publicação gravado
+
+| Campo | Valor |
+|---|---|
+| Tag | `v3.28.0` |
+| Título | v3.28.0 — Troca não é venda, de uma vez por todas |
+| Asset | `Portable\resources.neu` — 6.443.284 bytes — sha256 `bcf9a6c6160f2235695be60a33e66b409c964602e5cd2349c6dbc6a25d7cbc02` |
+
+### Por que mudou a ESTRUTURA e não só mais uma consulta
+
+Da v3.27.0 à v3.27.5 eu corrigi a troca consulta por consulta — caixa, relatório,
+painel — e cada entrega o Marcio achava mais uma tela contando troca como venda
+(a última: Relatório de Evento, "1 venda de R$ 180"). A varredura mostrou **52
+consultas** que filtram `status='concluida'`. Remendar cada uma não termina nunca.
+
+**Correção na raiz:** a troca é gravada com `vendas.status = 'troca'`. Toda
+consulta que filtra `'concluida'` passa a ignorá-la SOZINHA — inclusive as futuras.
+Quem precisa da troca pede `status='troca'` explicitamente.
+
+### O que isso exigiu
+
+| Onde | O quê |
+|---|---|
+| `db.js` | **Reconstrói `vendas`** para o CHECK aceitar `'troca'` (SQLite não altera CHECK). Definição nova sai da definição VIVA do banco (preserva colunas de migrações antigas). Confere contagem, soma de `total` e maior id antes do DROP; qualquer diferença → ROLLBACK. Converte trocas antigas (`tipo_venda='troca'` ou pelo texto da obs). **Testado numa cópia real** (`backups\salgueiro-backup-2026-09-01...db`): 723 vendas / R$ 104.423,99 / 1.027 itens / 728 pagamentos idênticos; FK e integrity_check ok; próximo id 724. |
+| `db.js` + `schema.sql` | `devolucoes.troca_venda_id` e `devolucoes.excedente` — o troco da troca não era guardado em lugar nenhum. Trocas antigas preenchidas pelo texto da obs. |
+| `trocas.js` | Grava `status='troca'`; aceita trocar/devolver peça que saiu numa troca (cadeia); grava `troca_venda_id` e `excedente`. |
+| `devolucoes.js`, `pdv.js` (core e tela) | Aceitam `'troca'` onde exigiam `'concluida'` (devolver, trocar, reimprimir cupom). Etiqueta "troca" nas listas. |
+| `vendas-sql.js` | `trocasDoPeriodo(db, onde, params)` → `{qtd, credito, recebido, devolvido, saldo}`. **Única** conta da troca — caixa, painel, relatório de vendas usam ela. |
+| 10 consultas de devolução | Ignoram `devolucoes.tipo='troca'` na conta de DINHEIRO (a venda de origem não é desfeita pela troca — o dinheiro virou crédito). As que controlam o que AINDA PODE ser devolvido ficaram como estavam. |
+| `relatorios.js` (Evento) | Cartão Trocas, seção "Trocas do período", fechamento em linhas separadas, formas de pagamento com linha própria da troca. |
+
+### ARMADILHA que o teste pegou e eu tinha criado
+
+Com a troca fora de `'concluida'`, o dinheiro pago a mais na troca SUMIU da conta
+da gaveta (`resumoCaixa.porForma`) e do Financeiro. **Dinheiro de troca é dinheiro
+na gaveta.** Consultas de FORMA DE PAGAMENTO usam `status IN ('concluida','troca')`.
+Regra: *contagem e faturamento de venda* → só `'concluida'`; *dinheiro que entrou* →
+`'concluida'` e `'troca'`.
+
+### Verificação
+
+`teste-troca-caixa.mjs` reescrito — 55 asserções, cada número com a conta à mão ao
+lado. Caso exato do Marcio (80 volta, paga 100, leva 180) em evento, caixa,
+relatório e painel; um dia com as 4 formas de troca no mesmo caixa, total recebido
+510 = dinheiro que entrou; e a conversão de uma troca gravada no formato antigo.
+
+---
 
 ## 1.0 PUBLICAÇÃO AUTOMÁTICA — ligada em 2026-09-25
 

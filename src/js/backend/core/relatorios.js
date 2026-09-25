@@ -1,10 +1,10 @@
 // Relatórios — vendas por período, curva ABC, peças paradas
 // Troca não é venda — regra única do sistema. Ver core/vendas-sql.js.
-import { NAO_TROCA, RECEBIDO } from './vendas-sql.js';
+import { NAO_TROCA, RECEBIDO, trocasDoPeriodo } from './vendas-sql.js';
 const arred = (n) => Math.round(n * 100) / 100;
 
 // Subquery que retorna o total já devolvido de uma venda (alias v)
-const _devSub = `COALESCE((SELECT SUM(d.valor_devolvido) FROM devolucoes d WHERE d.venda_id=v.id),0)`;
+const _devSub = `COALESCE((SELECT SUM(d.valor_devolvido) FROM devolucoes d WHERE COALESCE(d.tipo,'') <> 'troca' AND d.venda_id=v.id),0)`;
 
 // O QUE A VENDA TROUXE DE DINHEIRO (v3.27.3) — expressão única do relatório.
 //
@@ -35,14 +35,20 @@ function vendasPeriodo(db, p) {
   const resumo = db.prepare(`
     SELECT COUNT(CASE WHEN (${_recebido}) > 0 AND COALESCE(v.tipo_venda,'normal') <> 'troca' THEN 1 END) qtd,
            COALESCE(SUM(CASE WHEN COALESCE(v.tipo_venda,'normal') <> 'troca' THEN (${_recebido}) ELSE 0 END),0) total,
-           COALESCE(SUM(CASE WHEN COALESCE(v.tipo_venda,'normal') =  'troca' THEN (${_recebido}) ELSE 0 END),0) trocas,
-           COUNT(CASE WHEN COALESCE(v.tipo_venda,'normal') = 'troca' THEN 1 END) qtd_trocas,
+
            COALESCE(AVG(CASE WHEN (${_recebido}) > 0 AND COALESCE(v.tipo_venda,'normal') <> 'troca' THEN (${_recebido}) END),0) ticket
-    FROM vendas v WHERE v.status='concluida' AND date(v.criado_em) BETWEEN ? AND ? ${fLoja}
+    FROM vendas v WHERE v.status IN ('concluida','troca') AND date(v.criado_em) BETWEEN ? AND ? ${fLoja}
   `).get(...ar);
 
-  // Venda + diferença de troca = o que entrou no período (a troca identificada).
-  resumo.total_geral = arred((resumo.total || 0) + (resumo.trocas || 0));
+  // Trocas do período (regra única em vendas-sql.js). O saldo — pago a mais
+  // menos troco devolvido — soma no total geral, identificado como troca.
+  const _trc = trocasDoPeriodo(db,
+    (x) => `date(${x}.criado_em) BETWEEN ? AND ?` + (lojaId ? ` AND ${x === 'v' ? 'v.loja_id' : '(SELECT loja_id FROM caixas cx WHERE cx.id = d.caixa_id)'} = ?` : ''),
+    lojaId ? [de, ate, lojaId] : [de, ate]);
+  resumo.trocas = _trc.saldo;
+  resumo.qtd_trocas = _trc.qtd;
+  resumo.trocas_detalhe = _trc;
+  resumo.total_geral = arred((resumo.total || 0) + _trc.saldo);
 
   const porDia = db.prepare(`
     SELECT date(v.criado_em) dia,
@@ -78,7 +84,7 @@ function vendasPeriodo(db, p) {
              SUM(di.qtd) dev_qtd,
              SUM(di.qtd * CAST(vi2.total AS REAL) / vi2.qtd) dev_val
       FROM devolucao_itens di
-      JOIN devolucoes d ON d.id=di.devolucao_id
+      JOIN devolucoes d ON d.id=di.devolucao_id AND COALESCE(d.tipo,'') <> 'troca'
       JOIN vendas vs ON vs.id=d.venda_id
       JOIN venda_itens vi2 ON vi2.venda_id=d.venda_id AND vi2.variacao_id=di.variacao_id
       JOIN variacoes va2 ON va2.id=di.variacao_id
@@ -111,7 +117,7 @@ function vendasPeriodo(db, p) {
   const _devItem = `COALESCE((
         SELECT SUM(di.qtd) * (CAST(vi.total AS REAL) / vi.qtd)
           FROM devolucao_itens di
-          JOIN devolucoes d ON d.id = di.devolucao_id
+          JOIN devolucoes d ON d.id = di.devolucao_id AND COALESCE(d.tipo,'') <> 'troca'
          WHERE d.venda_id = vi.venda_id AND di.variacao_id = vi.variacao_id), 0)`;
   const split = db.prepare(`
     SELECT COALESCE(p.consignado,0) consignado,
@@ -139,6 +145,7 @@ function vendasPeriodo(db, p) {
     resumo: { qtd: resumo.qtd, total: arred(resumo.total), ticket: arred(resumo.ticket),
               // Troca é troca: contada e somada à parte, e o total geral é a soma das duas.
               trocas: arred(resumo.trocas || 0), qtd_trocas: resumo.qtd_trocas || 0,
+              trocas_detalhe: resumo.trocas_detalhe,
               total_geral: arred(resumo.total_geral || 0), origem },
     por_dia: porDia, por_vendedor: porVendedor, por_categoria: porCategoria };
 }
@@ -227,7 +234,7 @@ function curvaAbc(db, p) {
              SUM(di.qtd * CAST(vi2.total AS REAL) / vi2.qtd) dev_val,
              SUM(di.qtd * pr2.preco_custo) dev_custo
       FROM devolucao_itens di
-      JOIN devolucoes d ON d.id=di.devolucao_id
+      JOIN devolucoes d ON d.id=di.devolucao_id AND COALESCE(d.tipo,'') <> 'troca'
       JOIN vendas vs ON vs.id=d.venda_id
       JOIN venda_itens vi2 ON vi2.venda_id=d.venda_id AND vi2.variacao_id=di.variacao_id
       JOIN variacoes va2 ON va2.id=di.variacao_id
@@ -843,9 +850,61 @@ function relatorioEvento(db, p) {
   const comissaoTotal = arred([...porFornecedor.values()].reduce((s, g) => s + g.comissao_ajustada, 0));
   const pecasTotal = vendas.reduce((s, v) => s + v.pecas, 0);
 
+  // ── TROCAS DO EVENTO (v3.28.0) ───────────────────────────────────────────
+  // Troca não é venda: desde a v3.28.0 ela tem status 'troca' e NÃO aparece em
+  // nenhuma consulta acima (todas filtram 'concluida'). Aqui ela aparece como o
+  // que é — troca — em bloco próprio, e só o SALDO entra no líquido a receber:
+  // o que a cliente pagou a mais, menos o troco que a loja devolveu em
+  // dinheiro/estorno. Uma linha por troca, com o que voltou e o que saiu.
+  const _fLojaD = lojaId ? 'AND (SELECT loja_id FROM caixas cx WHERE cx.id = d.caixa_id) = ?' : '';
+  const trocasLista = db.prepare(`
+    SELECT d.id, d.criado_em, d.valor_devolvido credito, d.excedente, d.forma_reembolso,
+           d.troca_venda_id, COALESCE(c.nome,'') cliente, COALESCE(u.nome,'') vendedor
+      FROM devolucoes d
+      LEFT JOIN clientes c ON c.id = d.cliente_id
+      LEFT JOIN usuarios u ON u.id = d.usuario_id
+     WHERE d.tipo = 'troca' AND d.criado_em BETWEEN ? AND ? ${_fLojaD}
+     ORDER BY d.criado_em, d.id
+  `).all(...ar);
+  const _voltou = db.prepare(`
+    SELECT di.qtd, pr.nome produto, COALESCE(va.cor,'') cor, COALESCE(va.tamanho,'') tamanho, di.total
+      FROM devolucao_itens di JOIN variacoes va ON va.id = di.variacao_id
+      JOIN produtos pr ON pr.id = va.produto_id WHERE di.devolucao_id = ?`);
+  const _saiu = db.prepare(`
+    SELECT vi.qtd, pr.nome produto, COALESCE(va.cor,'') cor, COALESCE(va.tamanho,'') tamanho, vi.total
+      FROM venda_itens vi JOIN variacoes va ON va.id = vi.variacao_id
+      JOIN produtos pr ON pr.id = va.produto_id WHERE vi.venda_id = ?`);
+  const _pagou = db.prepare(`
+    SELECT forma, valor - troco valor, parcelas FROM venda_pagamentos
+     WHERE venda_id = ? AND forma <> 'troca'`);
+  let trocaTaxa = 0;
+  for (const t of trocasLista) {
+    t.credito = arred(t.credito);
+    t.data = String(t.criado_em).slice(0, 10);
+    t.hora = String(t.criado_em).slice(11, 16);
+    t.voltou = _voltou.all(t.id).map(x => ({ ...x, total: arred(x.total) }));
+    t.saiu = t.troca_venda_id ? _saiu.all(t.troca_venda_id).map(x => ({ ...x, total: arred(x.total) })) : [];
+    t.pagamentos = t.troca_venda_id ? _pagou.all(t.troca_venda_id) : [];
+    t.pagou = arred(t.pagamentos.reduce((a, pg) => a + (Number(pg.valor) || 0), 0));
+    t.taxa = arred(t.pagamentos.reduce((a, pg) =>
+      a + (Number(pg.valor) || 0) * taxaPagamento(pg.forma, pg.parcelas, taxas, pixMaq) / 100, 0));
+    trocaTaxa = arred(trocaTaxa + t.taxa);
+    t.devolveu = ['dinheiro', 'estorno'].includes(t.forma_reembolso) ? arred(t.excedente) : 0;
+    t.saldo = arred(t.pagou - t.devolveu);
+  }
+  const trocasResumo = {
+    qtd: trocasLista.length,
+    credito: arred(trocasLista.reduce((a, t) => a + t.credito, 0)),
+    recebido: arred(trocasLista.reduce((a, t) => a + t.pagou, 0)),
+    devolvido: arred(trocasLista.reduce((a, t) => a + t.devolveu, 0)),
+    taxas: trocaTaxa
+  };
+  trocasResumo.saldo = arred(trocasResumo.recebido - trocasResumo.devolvido);
+
   return {
     ok: true, inicio, fim, pix_maquina: pixMaq, taxas,
     vendas, cortesias, descontos, vendas_custo: vendasCusto,
+    trocas: trocasLista,
     por_produto: prods,
     por_forma: [...porForma.values()],
     por_fornecedor: [...porFornecedor.values()],
@@ -859,12 +918,16 @@ function relatorioEvento(db, p) {
       descontos: descontoResumo,
       vendas_custo: custoResumo,
       conciliacao, origem,
+      trocas: trocasResumo,
       // ticket médio só sobre vendas que geraram receita (ignora cortesias)
       ticket: (() => {
         const pagas = vendas.filter(v => v.liquido > 0);
         return arred(pagas.length ? pagas.reduce((s, v) => s + v.liquido, 0) / pagas.length : 0);
       })(),
-      receber: arred(liquido - taxaTotal - comissaoTotal)
+      // Líquido a receber = vendas − taxas − comissão + SALDO DAS TROCAS − taxa
+      // da maquininha sobre o que foi pago a mais na troca.
+      receber_vendas: arred(liquido - taxaTotal - comissaoTotal),
+      receber: arred(liquido - taxaTotal - comissaoTotal + trocasResumo.saldo - trocasResumo.taxas)
     }
   };
 }
@@ -913,7 +976,7 @@ function _rankProdutos(db, de, ate) {
       SELECT va2.produto_id, SUM(di.qtd) dev_qtd,
              SUM(di.qtd * CAST(vi2.total AS REAL) / vi2.qtd) dev_val
       FROM devolucao_itens di
-      JOIN devolucoes d ON d.id = di.devolucao_id
+      JOIN devolucoes d ON d.id = di.devolucao_id AND COALESCE(d.tipo,'') <> 'troca'
       JOIN vendas vs ON vs.id = d.venda_id
       JOIN venda_itens vi2 ON vi2.venda_id = d.venda_id AND vi2.variacao_id = di.variacao_id
       JOIN variacoes va2 ON va2.id = di.variacao_id

@@ -157,7 +157,8 @@ async function modalHistorico(id) {
   const compras = d.compras.map(v => `
     <tr><td>#${v.id}</td><td>${esc(dataBrH(v.criado_em))}</td><td>${v.itens} item(ns)</td>
       <td class="num">${moeda(v.total)}</td>
-      <td>${v.status === 'cancelada' ? '<span class="pill pill-baixo">cancelada</span>' : ''}</td></tr>`).join('');
+      <td>${v.status === 'cancelada' ? '<span class="pill pill-baixo">cancelada</span>'
+          : v.status === 'troca' ? '<span class="pill" style="background:#2563eb;color:#fff">troca</span>' : ''}</td></tr>`).join('');
   const parcelas = d.parcelas.map(p => `
     <tr><td>Venda #${p.venda_id} — parc. ${p.numero}</td><td>${dataBr(p.vencimento)}</td>
       <td class="num">${moeda(p.valor)}</td>

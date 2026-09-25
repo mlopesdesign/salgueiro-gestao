@@ -329,6 +329,9 @@ async function abaEvento(corpo) {
         <div class="card"><div class="rotulo">Vendas</div><div class="valor">${t.vendas}</div></div>
         <div class="card"><div class="rotulo">Peças vendidas</div><div class="valor">${t.pecas}</div></div>
         <div class="card"><div class="rotulo">Faturamento bruto</div><div class="valor">${moeda(t.bruto)}</div></div>
+        ${(t.trocas || {}).qtd ? `<div class="card ev-card-troca"><div class="rotulo">Trocas</div>
+          <div class="valor">${t.trocas.saldo < 0 ? '−' : ''}${moeda(Math.abs(t.trocas.saldo))}</div>
+          ${_subCard ? `<div class="ev-card-sub">${t.trocas.qtd} troca(s) · não é venda · crédito ${moeda(t.trocas.credito)}</div>` : ''}</div>` : ''}
         <div class="card ev-card-abate"><div class="rotulo">Total em descontos</div>
           <div class="valor">${moeda(_desc.valor)}</div>
           ${_subCard ? `<div class="ev-card-sub">${_desc.qtd} venda(s) com desconto no fechamento</div>` : ''}</div>
@@ -362,6 +365,15 @@ async function abaEvento(corpo) {
             <td class="num"><b>${moeda(t.liquido)}</b></td></tr>
           <tr class="ev-neg"><td>(–) Taxas da maquininha</td><td class="num">${moeda(t.taxas)}</td></tr>
           ${t.comissao ? `<tr class="ev-neg"><td>(–) Comissão de consignados</td><td class="num">${moeda(t.comissao)}</td></tr>` : ''}
+          ${(t.trocas || {}).qtd ? `
+          <tr><td>Líquido das vendas</td><td class="num"><b>${moeda(t.receber_vendas)}</b></td></tr>
+          <tr><td>(+) Diferença paga pelas clientes nas trocas (${t.trocas.qtd})
+            <small style="display:block;opacity:.75">troca não é venda — entra aqui, separada</small></td>
+            <td class="num">${moeda(t.trocas.recebido)}</td></tr>
+          ${t.trocas.devolvido ? `<tr class="ev-neg"><td>(–) Troco devolvido nas trocas (dinheiro/estorno)</td>
+            <td class="num">${moeda(t.trocas.devolvido)}</td></tr>` : ''}
+          ${t.trocas.taxas ? `<tr class="ev-neg"><td>(–) Taxas da maquininha sobre as trocas</td>
+            <td class="num">${moeda(t.trocas.taxas)}</td></tr>` : ''}` : ''}
           <tr class="ev-final"><td><b>Líquido a receber</b></td><td class="num"><b>${moeda(t.receber)}</b></td></tr>
           ${t.cortesias && t.cortesias.qtd ? `<tr class="ev-neg"><td>Cortesias — ${t.cortesias.pecas} peça(s),
             valor de tabela ${moeda(t.cortesias.valor)}</td>
@@ -433,6 +445,34 @@ async function abaEvento(corpo) {
         'ev-vendas', 'ev-s-vendas');
     }
 
+    // Trocas (v3.28.0): seção própria. Troca não é venda — não aparece na lista
+    // de vendas nem em produtos vendidos; aparece aqui, com o que voltou, o que
+    // saiu e quanto entrou ou saiu de dinheiro.
+    if ((r.trocas || []).length) {
+      const _pecas = (lst) => lst.map(x => `${x.qtd > 1 ? x.qtd + '× ' : ''}${esc(x.produto)}`
+        + `${x.cor || x.tamanho ? ` <small>${esc([x.cor, x.tamanho].filter(Boolean).join(' · '))}</small>` : ''}`).join('<br>') || '—';
+      const linhasT = r.trocas.map(tr => `<tr>
+          <td>${dataBr(tr.data)} <small>${esc(tr.hora)}</small></td>
+          <td>${esc(tr.cliente || '—')}</td>
+          <td>${_pecas(tr.voltou)}</td>
+          <td>${_pecas(tr.saiu)}</td>
+          <td class="num">${moeda(tr.credito)}</td>
+          <td class="num">${tr.pagou ? moeda(tr.pagou) + (tr.pagamentos.length ? `<br><small>${tr.pagamentos.map(g => esc(g.forma)).join(', ')}</small>` : '') : '—'}</td>
+          <td class="num">${tr.devolveu ? '−' + moeda(tr.devolveu) + `<br><small>${esc(tr.forma_reembolso)}</small>` : '—'}</td>
+          <td class="num"><b>${tr.saldo < 0 ? '−' : ''}${moeda(Math.abs(tr.saldo))}</b></td></tr>`).join('');
+      const tt = t.trocas || { credito: 0, recebido: 0, devolvido: 0, saldo: 0 };
+      _addNav('ev-s-trocas', '🔁 Trocas');
+      secH += tabela('Trocas do período',
+        `<th>Data / hora</th><th>Cliente</th><th>Voltou</th><th>Levou</th>
+         <th class="num">Crédito</th><th class="num">Pagou a mais</th><th class="num">Troco devolvido</th><th class="num">Saldo</th>`,
+        linhasT + `<tr class="ev-final"><td colspan="4"><b>Total das trocas</b></td>
+          <td class="num">${moeda(tt.credito)}</td><td class="num">${moeda(tt.recebido)}</td>
+          <td class="num">${tt.devolvido ? '−' + moeda(tt.devolvido) : '—'}</td>
+          <td class="num"><b>${tt.saldo < 0 ? '−' : ''}${moeda(Math.abs(tt.saldo))}</b></td></tr>`,
+        '<span class="ev-dica" style="margin-left:auto">Troca não é venda: o crédito não é dinheiro; só o saldo entra no líquido a receber</span>',
+        'ev-trocas', 'ev-s-trocas');
+    }
+
     if (s.pagamentos) {
       _addNav('ev-s-pagamentos', '💳 Pagamentos');
       secH += tabela('Formas de pagamento e taxas',
@@ -443,6 +483,28 @@ async function abaEvento(corpo) {
           <td class="num">${String(g.taxa_pct).replace('.', ',')}%</td>
           <td class="num">${moeda(g.taxa_valor)}</td>
           <td class="num"><b>${moeda(g.valor - g.taxa_valor)}</b></td></tr>`).join('')
+        // Diferença paga nas trocas (v3.28.0): entra na maquininha/gaveta como
+        // qualquer pagamento, então aparece aqui para a conferência bater — mas
+        // em linha própria, marcada como troca, nunca somada a venda.
+        + (() => {
+          const ag = new Map();
+          for (const tr of (r.trocas || [])) for (const pg of (tr.pagamentos || [])) {
+            const g = ag.get(pg.forma) || { forma: pg.forma, qtd: 0, valor: 0, taxa: 0 };
+            g.qtd++; g.valor += Number(pg.valor) || 0; ag.set(pg.forma, g);
+          }
+          for (const tr of (r.trocas || [])) {
+            const tot = (tr.pagamentos || []).reduce((a, pg) => a + (Number(pg.valor) || 0), 0);
+            for (const pg of (tr.pagamentos || [])) {
+              const g = ag.get(pg.forma);
+              if (g && tot > 0) g.taxa += (tr.taxa || 0) * (Number(pg.valor) || 0) / tot;
+            }
+          }
+          return [...ag.values()].map(g => `<tr class="ev-linha-troca"><td>🔁 ${esc(g.forma)} <small>(diferença de troca)</small></td>
+            <td class="num">${g.qtd}</td><td class="num">${moeda(g.valor)}</td>
+            <td class="num">${g.valor ? (Math.round(g.taxa / g.valor * 10000) / 100).toFixed(2).replace('.', ',') : '0'}%</td>
+            <td class="num">${moeda(g.taxa)}</td>
+            <td class="num"><b>${moeda(g.valor - g.taxa)}</b></td></tr>`).join('');
+        })()
         || '<tr><td colspan="6" class="vazio">—</td></tr>', '', '', 'ev-s-pagamentos');
     }
 

@@ -185,7 +185,7 @@ CREATE TABLE IF NOT EXISTS vendas (
   subtotal REAL NOT NULL DEFAULT 0,
   desconto REAL NOT NULL DEFAULT 0,
   total REAL NOT NULL DEFAULT 0,
-  status TEXT NOT NULL DEFAULT 'concluida' CHECK (status IN ('concluida','cancelada','orcamento','condicional')),
+  status TEXT NOT NULL DEFAULT 'concluida' CHECK (status IN ('concluida','cancelada','orcamento','condicional','troca')),
   obs TEXT,
   -- Desconto avulso: quem liberou e por quê. Preenchido pelo PDV quando o
   -- operador lança desconto manual (v3.3.0). Campo livre de propósito: quem
@@ -304,7 +304,9 @@ CREATE TABLE IF NOT EXISTS devolucoes (
   valor_devolvido REAL NOT NULL DEFAULT 0,
   forma_reembolso TEXT,
   motivo TEXT,
-  criado_em TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  criado_em TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  troca_venda_id INTEGER,          -- v3.28.0: a venda (status 'troca') que esta troca gerou
+  excedente REAL NOT NULL DEFAULT 0 -- v3.28.0: credito que sobrou alem da peca levada
 );
 
 CREATE TABLE IF NOT EXISTS devolucao_itens (

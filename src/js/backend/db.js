@@ -473,6 +473,117 @@ function migrar(db) {
     } catch (e) { console.error('[migração] vendas.acrescimo:', e.message); }
   }
 
+  // ── v3.28.0 — TROCA NÃO É VENDA: a troca ganha situação própria ──────────
+  //
+  // Ordem do Marcio, repetida até virar esta migração: "troca não é venda".
+  //
+  // Até aqui a troca era gravada em `vendas` com status 'concluida', igual a
+  // uma venda, e CADA relatório tinha de lembrar de separá-la. São mais de 50
+  // consultas que filtram `status='concluida'`; cada uma que esquecia mostrava
+  // a troca como venda (caixa, relatório, painel, relatório de evento...).
+  //
+  // Agora a troca nasce com status 'troca'. Toda consulta que já filtra
+  // 'concluida' passa a ignorá-la SOZINHA — inclusive as que ainda vão ser
+  // escritas. Quem precisa ver a troca (bloco de trocas do caixa, do painel e
+  // dos relatórios) pede status='troca' explicitamente.
+  //
+  // O CHECK da coluna não aceita 'troca', e SQLite não altera CHECK: a tabela é
+  // reconstruída. A definição nova sai da definição ATUAL do banco (não do
+  // schema.sql), trocando só a lista do CHECK — assim toda coluna que migrações
+  // antigas acrescentaram (tipo_venda, acrescimo, desconto_autorizado_por...)
+  // é preservada. Contagem de linhas e soma de `total` são conferidas antes do
+  // DROP; qualquer diferença desfaz tudo e o banco fica como estava.
+  try {
+    const def = db.prepare(
+      "SELECT sql FROM sqlite_master WHERE type='table' AND name='vendas'").get();
+    if (def && def.sql && !def.sql.includes("'troca'")) {
+      const listaVelha = "('concluida','cancelada','orcamento','condicional')";
+      if (!def.sql.includes(listaVelha)) throw new Error('CHECK de status em formato inesperado — migração não aplicada');
+      const sqlNovo = def.sql
+        .replace(/^CREATE TABLE\s+("?)vendas\1/i, 'CREATE TABLE vendas_nova')
+        .replace(listaVelha, "('concluida','cancelada','orcamento','condicional','troca')");
+      const cols = db.prepare('PRAGMA table_info(vendas)').all().map(c => '"' + c.name + '"').join(', ');
+      const antes = db.prepare('SELECT COUNT(*) n, COALESCE(SUM(total),0) t, COALESCE(MAX(id),0) m FROM vendas').get();
+      const indices = db.prepare(
+        "SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name='vendas' AND sql IS NOT NULL").all();
+      db.exec('PRAGMA foreign_keys=off');
+      db.exec('BEGIN');
+      try {
+        db.exec(sqlNovo);
+        db.exec(`INSERT INTO vendas_nova (${cols}) SELECT ${cols} FROM vendas`);
+        const depois = db.prepare('SELECT COUNT(*) n, COALESCE(SUM(total),0) t, COALESCE(MAX(id),0) m FROM vendas_nova').get();
+        if (depois.n !== antes.n || Math.abs(depois.t - antes.t) > 0.001 || depois.m !== antes.m) {
+          throw new Error(`cópia não bate: ${depois.n}/${antes.n} vendas, total ${depois.t}/${antes.t}`);
+        }
+        db.exec('DROP TABLE vendas');
+        db.exec('ALTER TABLE vendas_nova RENAME TO vendas');
+        for (const ix of indices) db.exec(ix.sql);
+        // O próximo id continua de onde estava (AUTOINCREMENT guarda em sqlite_sequence).
+        const seq = db.prepare("SELECT seq FROM sqlite_sequence WHERE name='vendas'").get();
+        if (!seq) db.prepare("INSERT INTO sqlite_sequence (name, seq) VALUES ('vendas', ?)").run(antes.m);
+        db.exec('COMMIT');
+        console.log(`[migração] vendas aceita status 'troca' (${antes.n} vendas preservadas)`);
+      } catch (e) {
+        db.exec('ROLLBACK');
+        try { db.exec('DROP TABLE IF EXISTS vendas_nova'); } catch {}
+        console.error('[migração] status troca falhou, banco intacto:', e.message);
+      }
+      db.exec('PRAGMA foreign_keys=on');
+    }
+  } catch (e) { console.error('[migração] status troca:', e.message); }
+
+  // ── v3.28.0 — o troco da troca passa a ser guardado ───────────────────────
+  // "Se positiva ou negativa" (Marcio): trocando uma peça cara por uma barata e
+  // devolvendo a diferença em dinheiro ou estorno, isso é diferença NEGATIVA e
+  // tem de sair do total. Até aqui o valor não ficava guardado em lugar nenhum
+  // (só a sangria, e só no caso do dinheiro). `excedente` = crédito que sobrou
+  // além da peça levada; `troca_venda_id` liga a devolução à venda de troca.
+  // Quanto disso saiu da loja depende de `forma_reembolso`: dinheiro/estorno
+  // saiu; vale/nada não.
+  if (!temColuna('devolucoes', 'troca_venda_id')) {
+    try { db.exec('ALTER TABLE devolucoes ADD COLUMN troca_venda_id INTEGER'); } catch (e) { console.error('[migração] troca_venda_id:', e.message); }
+  }
+  if (!temColuna('devolucoes', 'excedente')) {
+    try {
+      db.exec('ALTER TABLE devolucoes ADD COLUMN excedente REAL NOT NULL DEFAULT 0');
+      // Trocas antigas: acha a venda de troca pelo texto que a troca sempre
+      // gravou e calcula o que sobrou. Troca rápida grava "devolução #<id>";
+      // a troca pela venda de origem grava "venda origem #<venda>" no mesmo
+      // caixa e no mesmo instante (mesma transação).
+      const devs = db.prepare(
+        "SELECT id, venda_id, caixa_id, criado_em, valor_devolvido FROM devolucoes WHERE tipo='troca'").all();
+      const achaRapida = db.prepare("SELECT id, total FROM vendas WHERE obs = ? LIMIT 1");
+      const achaOrigem = db.prepare(`SELECT id, total FROM vendas
+         WHERE obs LIKE ? AND COALESCE(caixa_id,-1)=COALESCE(?,-1)
+           AND abs(strftime('%s',criado_em) - strftime('%s',?)) <= 2
+         ORDER BY id LIMIT 1`);
+      const grava = db.prepare('UPDATE devolucoes SET troca_venda_id=?, excedente=? WHERE id=?');
+      for (const d of devs) {
+        let tv = achaRapida.get(`Troca rápida — devolução #${d.id}`);
+        if (!tv && d.venda_id) tv = achaOrigem.get(`Troca — venda origem #${d.venda_id}%`, d.caixa_id, d.criado_em);
+        const exc = Math.max(0, Math.round(((Number(d.valor_devolvido) || 0) - (tv ? Number(tv.total) || 0 : 0)) * 100) / 100);
+        grava.run(tv ? tv.id : null, exc, d.id);
+      }
+      if (devs.length) console.log(`[migração] troco de ${devs.length} troca(s) antiga(s) calculado`);
+    } catch (e) { console.error('[migração] excedente:', e.message); }
+  }
+
+  // Trocas já gravadas passam para a situação nova. Idempotente: roda a cada
+  // abertura e não faz nada quando já está tudo certo. Identifica pela marca
+  // da v3.27.0 e, para as mais antigas, pelo texto que a troca sempre gravou.
+  try {
+    const temTroca = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='vendas'").get();
+    if (temTroca && temTroca.sql.includes("'troca'")) {
+      const r = db.prepare(`
+        UPDATE vendas SET status='troca', tipo_venda='troca'
+         WHERE status='concluida'
+           AND (COALESCE(tipo_venda,'normal')='troca'
+                OR obs LIKE 'Troca — venda origem #%'
+                OR obs LIKE 'Troca rápida — devolução #%')`).run();
+      if (r && r.changes) console.log(`[migração] ${r.changes} troca(s) passaram para status 'troca'`);
+    }
+  } catch (e) { console.error('[migração] marcar trocas:', e.message); }
+
   // ── v3.3.0 — Consumidor final vira cliente de verdade ─────────────────────
   // Toda venda sem identificação passa a apontar para ele. `generico=1` o
   // mantém fora de ranking de melhores clientes, pontos, crediário e

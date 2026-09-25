@@ -1,10 +1,10 @@
-; Salgueiro Gestao v3.27.5
+; Salgueiro Gestao v3.28.0
 ; Build: /tmp/rel  — gerado pelo pipeline de build (ver CLAUDE.md)
 Unicode True
 !include "LogicLib.nsh"
 
 Name "Salgueiro Gestao"
-OutFile "/tmp/Salgueiro Gestao Setup v3.27.5.exe"
+OutFile "/tmp/Salgueiro Gestao Setup v3.28.0.exe"
 InstallDir "$LOCALAPPDATA\SalgueiroGestao"
 InstallDirRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "InstallLocation"
 RequestExecutionLevel user
@@ -82,7 +82,7 @@ Function .onInit
     ${If} $R1 == ""
       StrCpy $R1 "versao anterior"
     ${EndIf}
-    MessageBox MB_YESNO|MB_ICONQUESTION "Salgueiro Gestao ($R1) ja esta instalado neste computador.$\n$\nDeseja atualizar para a versao 3.27.5?$\n$\nSeus dados, vendas e configuracoes serao preservados." IDYES prosseguir
+    MessageBox MB_YESNO|MB_ICONQUESTION "Salgueiro Gestao ($R1) ja esta instalado neste computador.$\n$\nDeseja atualizar para a versao 3.28.0?$\n$\nSeus dados, vendas e configuracoes serao preservados." IDYES prosseguir
     Abort
     prosseguir:
   ${EndIf}
@@ -146,7 +146,7 @@ Section "Principal"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "DisplayName" "Salgueiro Gestao"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "UninstallString" "$INSTDIR\uninstall.exe"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "InstallLocation" "$INSTDIR"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "DisplayVersion" "3.27.5"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "DisplayVersion" "3.28.0"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "Publisher" "ML Lopes Design"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "DisplayIcon" "$INSTDIR\icon.ico"
 
