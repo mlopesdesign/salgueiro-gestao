@@ -16,7 +16,7 @@ import { aplicarEstiloImpressao } from './impressao.js';
 const $app = document.getElementById('app');
 let usuario = null;
 let categoriasCache = [];
-let APP_VERSION = '3.27.1'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
+let APP_VERSION = '3.27.2'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
 
 // API dupla: no aplicativo usa IPC (preload); num terminal em rede (navegador),
 // conversa com o servidor do computador principal via HTTP com token de sessão.
@@ -49,7 +49,7 @@ const api = NO_APP
     })
   : criarApiRede();
 const EM_REDE = !NO_APP; // true quando rodando num terminal via navegador
-export { api, el, esc, moeda, toast, modal, getConfig, aplicarTema, recarregarConfig, pode, ehAdmin, podeVerTela, getLicenca, setorAtivo, EM_REDE };
+export { api, el, esc, moeda, toast, modal, ajustarLarguraModal, getConfig, aplicarTema, recarregarConfig, pode, ehAdmin, podeVerTela, getLicenca, setorAtivo, EM_REDE };
 
 async function recarregarVersao() {
   try {
@@ -183,9 +183,53 @@ function modal(titulo, corpoHtml, aoSalvar, rotuloSalvar = 'Salvar') {
   m.querySelector('.btn-salvar').onclick = () => aoSalvar(m, fechar);
   document.body.appendChild(m);
   aplicarOlhinhos(m);
+  ajustarLarguraModal(m);
   const primeiro = m.querySelector('input, select');
   if (primeiro) primeiro.focus();
   return m;
+}
+
+// ---------- Largura das janelas (v3.27.2) ----------
+// REGRA DO MARCIO (25/09/2026): janela NÃO usa barra de rolagem lateral tendo
+// espaço sobrando na tela. Vale para TODAS as janelas, não para a que foi
+// reclamada — por isso mora aqui, dentro do `modal()`, e não em cada tela.
+//
+// Como funciona: depois que a janela entra no DOM, mede se o conteúdo está
+// estourando para os lados (no corpo ou em qualquer `.tab-scroll` de dentro).
+// Se estiver, alarga a janela até caber, com teto de 90% da tela. Janela pequena
+// continua pequena — só cresce a que precisa.
+function ajustarLarguraModal(m) {
+  const cx = m.querySelector('.modal');
+  const corpo = m.querySelector('.corpo');
+  if (!cx || !corpo) return;
+
+  const medir = () => {
+    // Quanto falta de largura, olhando o corpo e os roladores internos.
+    let falta = Math.max(0, corpo.scrollWidth - corpo.clientWidth);
+    for (const sc of m.querySelectorAll('.tab-scroll, .tab-scroll > table')) {
+      falta = Math.max(falta, sc.scrollWidth - sc.clientWidth);
+    }
+    return falta;
+  };
+
+  const aplicar = () => {
+    const teto = Math.floor(window.innerWidth * 0.90);
+    cx.style.maxWidth = '90vw';
+    // Laço com limite: cada passo soma o que falta; layouts que reflowam
+    // podem precisar de mais de uma passada, mas nunca de dezenas.
+    for (let i = 0; i < 12; i++) {
+      const falta = medir();
+      if (falta <= 1) break;
+      const atual = cx.offsetWidth;
+      if (atual >= teto) break;
+      cx.style.width = Math.min(teto, atual + falta + 8) + 'px';
+    }
+  };
+
+  // Duas passadas: uma agora e outra no quadro seguinte, quando fontes e
+  // tabelas já terminaram de calcular a própria largura.
+  aplicar();
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(aplicar);
 }
 
 // ---------- Permissões frontend ----------

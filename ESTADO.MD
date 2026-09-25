@@ -9,16 +9,45 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.27.1 |
+| **Versão atual** | 3.27.2 |
 | **Data do último build** | 2026-09-25 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.27.1 em 2026-09-25 ✓ (27 módulos core · 158 rotas · 37 tabelas) |
-| **5 lugares da versão** | os 5 em 3.27.1 ✓ |
+| **GRAPHIFY** | atualizado para 3.27.2 em 2026-09-25 ✓ (27 módulos core · 158 rotas · 37 tabelas) |
+| **5 lugares da versão** | os 5 em 3.27.2 ✓ |
 
 ---
 
-## 1.1 v3.27.1 — pronta no disco, FALTA PUBLICAR (2026-09-25)
+## 1.1 v3.27.2 — pronta no disco, FALTA PUBLICAR (2026-09-25)
+
+**Dados da release (quem publica é o Marcio):**
+
+| Campo | Valor |
+|---|---|
+| Tag | `v3.27.2` |
+| Título | v3.27.2 — Nenhuma janela rola tendo espaço na tela |
+| Asset | `Portable\resources.neu` — sha256 `2a3f9a7fd1074b4c3bb8dea97b749f2795807904631f2be95fa240ae614204f2` |
+| Notas | `release-notes.md` na raiz |
+
+**Reprovação da v3.27.1:** *"vc não fez o procedimento em todas as janelas como eu pedi"*.
+Eu tinha corrigido a largura **dentro da tela de estoque**, tratando como defeito de uma
+janela o que era uma REGRA do sistema. A Troca rápida continuava estreita e com rolagem.
+
+**Correção:** `app.js` ganhou `ajustarLarguraModal(m)`, chamada dentro do próprio
+`modal()` — o ponto por onde TODA janela do sistema passa. Ela mede o corpo e os
+`.tab-scroll` internos; se houver estouro lateral, alarga a janela até caber, com teto
+de 90% da largura da tela e `max-width:90vw`. Janela pequena não cresce.
+Exportada também, porque tela que monta grade DEPOIS de a janela abrir
+(`estoque.js:formMovimentoProduto`) precisa remedir ao fim da montagem.
+
+**LIÇÃO — vale para toda reprovação de layout:** quando o Marcio aponta um defeito de
+interface, a pergunta não é "onde conserto isso" e sim **"esse defeito é regra do
+sistema?"**. Se for, a correção vai para o ponto comum (`modal()`, `app.css`), nunca
+para a tela reclamada. Corrigir só a tela apontada é reprovação garantida na seguinte.
+
+---
+
+## 1.1b v3.27.1 — histórico (2026-09-25)
 
 **Dados da release (quem publica é o Marcio):**
 

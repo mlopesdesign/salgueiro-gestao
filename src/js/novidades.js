@@ -3,6 +3,13 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.27.2',
+    data: '2026-09-25',
+    itens: [
+      '🪟 Nenhuma janela do sistema usa mais barra de rolagem lateral tendo espaço na tela. A regra passou a valer para TODAS as janelas de uma vez — Troca rápida, Entrada de mercadoria, fechamento de caixa, o que for: cada janela abre já no tamanho que o conteúdo precisa, até 90% da tela. Na 3.27.1 isso tinha sido acertado só na janela de estoque.',
+    ],
+  },
+  {
     versao: '3.27.1',
     data: '2026-09-25',
     itens: [

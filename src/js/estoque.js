@@ -1,5 +1,5 @@
 // Módulo Estoque — movimentação, kardex, reposição e etiquetas
-import { api, el, esc, moeda, toast, modal, getConfig, ehAdmin } from './app.js';
+import { api, el, esc, moeda, toast, modal, getConfig, ehAdmin, ajustarLarguraModal } from './app.js';
 import { abrirEtiquetasLote, imprimirFolhaEtiquetas } from './etiquetas.js';
 const dataBrH = (s) => s ? `${String(s).slice(0, 10).split('-').reverse().join('/')} ${String(s).slice(11, 16)}` : '—';
 
@@ -652,6 +652,10 @@ export async function formMovimentoProduto(prod, tipo, aoConcluir) {
     }
     corpoTab.appendChild(tr);
   }
+
+  // A grade nasce depois que a janela abriu, então a medida de largura feita
+  // pelo `modal()` não a viu. Remede agora, com as colunas todas no lugar.
+  ajustarLarguraModal(m);
 
   const bTudo = m.querySelector('#mp-tudo');
   if (bTudo) bTudo.onclick = () => {
