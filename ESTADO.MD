@@ -9,12 +9,12 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.28.0 |
-| **Data do último build** | 2026-09-25 |
+| **Versão atual** | 3.29.0 |
+| **Data do último build** | 2026-09-30 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.28.0 em 2026-09-25 ✓ (27 módulos core · 158 rotas · 37 tabelas) |
-| **5 lugares da versão** | os 5 em 3.28.0 ✓ |
+| **GRAPHIFY** | atualizado para 3.29.0 em 2026-09-30 ✓ (28 módulos core · 158 rotas · 37 tabelas) |
+| **5 lugares da versão** | os 5 em 3.29.0 ✓ |
 
 ---
 
@@ -24,6 +24,36 @@
 `PUBLICAR.bat`". **Ele:** clica e aguarda. **Eu:** confiro no GitHub e confirmo.
 Detalhe completo na regra 3 do `REGRAS-CRITICAS.md`. **v3.27.5 publicada assim** —
 primeira release enviada sem o Marcio abrir o GitHub (25/09/2026 01:04).
+
+## 0.0 v3.29.0 — RODINHA NÃO MEXE EM NÚMERO · ESTOQUE POR LOJA NO PRODUTO (2026-09-30)
+
+| Campo | Valor |
+|---|---|
+| Tag | `v3.29.0` |
+| Título | v3.29.0 — Rodinha do mouse não mexe em número · Estoque por loja no produto |
+| Asset | `Portable\resources.neu` — 6.456.384 bytes — sha256 `106d8459cc87e679e8958f2520158a0fcaac859111c62047d349913d94e29514` |
+| Backup | `backups\pre-v3.29.0-2026-09-30\` (app.js, app.css, core/produtos.js, resources.neu da 3.28.0) |
+
+**1. Rodinha do mouse (URGENTE — gerava diferença de estoque).** Corrigido NO PONTO
+COMUM, não tela por tela: um único `wheel` em `document` (captura, passivo) no topo
+do `app.js` — se o cursor está num `input[type=number]` com foco, o campo perde o
+foco e a página rola; o número não muda. Vale para os 50 campos de número de 10
+telas e para os que nascem depois (modais, grades) e para o terminal via navegador
+(mesmo `index.html`/`app.js`). `app.css`: setinhas escondidas em todo
+`input[type=number]`. **Não existe `wheel` em nenhum outro lugar do código** —
+se alguém criar, olhe este primeiro.
+
+**2. Estoque por loja no produto** (`formProduto` em `app.js` + `salvarProduto` em
+`core/produtos.js`). Admin vê uma coluna por estoque ativo + Total; digita quanto
+deve FICAR em cada local. Payload: `variacoes[].saldos = {estoque_id: qtd}`. O core:
+par descida/subida → TRANSFERÊNCIA (romaneio em `transferencias`, kardex
+`transferencia` −/+); sobra subindo → ENTRADA (vai para a etiqueta); sobra
+descendo → SAÍDA. Total = soma dos locais (mesma regra da zeragem). Negativo
+recusado; não-admin mandando `saldos` é recusado no servidor. Não-admin continua
+no caminho antigo (estoque inicial → almoxarifado). Teste novo
+`testes/teste-produto-locais.mjs` (30 asserções, contas à mão nos comentários);
+`teste-estoque-grade` 32 OK (roda só com o caminho decodificado — espaço no nome
+da pasta).
 
 ## 0.1 v3.28.0 — TROCA NÃO É VENDA, NA ESTRUTURA (2026-09-25) — pedido de publicação gravado
 

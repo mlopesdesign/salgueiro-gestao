@@ -3,6 +3,15 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.29.0',
+    data: '2026-09-30',
+    itens: [
+      '🖱️ A RODINHA DO MOUSE NÃO MEXE MAIS EM NÚMERO. Com o cursor em cima de um campo de número (estoque, preço, quantidade — qualquer um), rolar a rodinha para descer a página alterava o valor sem ninguém ver, e isso gerava diferença de estoque. Agora a rodinha só rola a página, em todas as telas e janelas do sistema, no computador e no navegador. As setinhas de subir e descer também saíram dos campos.',
+      '📦 ESTOQUE POR LOJA DIRETO NO PRODUTO. Ao cadastrar ou editar um produto, o administrador vê uma coluna para cada estoque — almoxarifado e cada loja — e digita quanto fica em cada um. Produto de 40 peças: 10 numa loja, 10 na outra, 20 no almoxarifado, tudo na mesma tela. A coluna Total soma sozinha e mostra quanto entra ou sai.',
+      '🔄 O que passa de um estoque para outro vira transferência (aparece em Transferências, com romaneio); o que for a mais vira entrada, com etiqueta oferecida ao salvar; o que for a menos vira saída. Tudo fica no histórico do estoque. Estoque negativo continua não existindo, e só o administrador mexe no estoque por essa tela.',
+    ],
+  },
+  {
     versao: '3.28.0',
     data: '2026-09-25',
     itens: [

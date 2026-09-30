@@ -157,9 +157,53 @@ function salvarProduto(db, p, quem) {
   const destino = Number(p.estoque_destino_id) > 0
     ? db.prepare('SELECT * FROM estoques WHERE id=? AND ativo=1').get(Number(p.estoque_destino_id))
     : estoques.principal(db);
+  // ── Estoque repartido por LOCAL direto no produto (v3.29.0) ─────────────
+  //
+  // Pedido do Marcio: "em produtos tem que deixar a gente movimentar o estoque
+  // completamente. 40 peças: 10 para uma loja, 10 para outra e o resto para o
+  // almoxarifado. A única trava é que só o administrador pode mexer."
+  //
+  // A tela manda, por variação, `saldos = { estoque_id: quantidade QUE DEVE
+  // FICAR ali }`. Aqui vira movimento de verdade, com kardex:
+  //   • o que sai de um local e aparece em outro → TRANSFERÊNCIA (romaneio;
+  //     o total do Salgueiro não muda);
+  //   • o que sobra subindo → ENTRADA (peça nova; vai para a etiqueta);
+  //   • o que sobra descendo → SAÍDA.
+  // Estoque negativo continua não existindo.
+  const planos = new Map();                    // variação do payload → [{estoque_id, delta}]
+  let locaisAtivos = null;
+  const comLocais = variacoes.filter(v => v && v.saldos && typeof v.saldos === 'object');
+  if (comLocais.length) {
+    if (!ehAdmin) {
+      return { ok: false, erro: 'Só administrador pode mexer no estoque pela tela de Produtos.' };
+    }
+    locaisAtivos = new Map(db.prepare('SELECT id, nome FROM estoques WHERE ativo=1').all()
+      .map(e => [Number(e.id), e]));
+    for (const v of comLocais) {
+      if (v.id && !db.prepare('SELECT 1 FROM variacoes WHERE id=? AND produto_id=? AND ativo=1').get(v.id, p.id)) {
+        return { ok: false, erro: 'Uma variação da grade não pertence mais a este produto. Reabra o produto.' };
+      }
+      const plano = [];
+      for (const [k, bruto] of Object.entries(v.saldos)) {
+        if (bruto === '' || bruto === null || bruto === undefined) continue;   // não mexe
+        const eid = Number(k);
+        const local = locaisAtivos.get(eid);
+        if (!local) return { ok: false, erro: 'Um dos estoques da grade não existe mais. Reabra o produto.' };
+        const alvo = Math.round(Number(bruto));
+        if (!Number.isFinite(alvo)) return { ok: false, erro: `Quantidade inválida em ${local.nome}.` };
+        const atual = v.id ? estoques.saldo(db, eid, v.id) : 0;
+        if (alvo === atual) continue;
+        if (alvo < 0) return { ok: false, erro: `Quantidade negativa em ${local.nome} — estoque negativo não existe.` };
+        plano.push({ estoque_id: eid, delta: alvo - atual });
+      }
+      planos.set(v, plano);
+    }
+  }
+
   const ajustes = [];
   for (const v of variacoes) {
     if (!v.id) continue;                       // variação nova: segue o caminho do estoque inicial
+    if (planos.has(v)) continue;               // estoque veio repartido por local (acima)
     if (v.estoque === undefined || v.estoque === null || String(v.estoque).trim() === '') continue;
     const alvo = Math.round(Number(v.estoque));
     if (!Number.isFinite(alvo) || alvo < 0) {
@@ -230,6 +274,7 @@ function salvarProduto(db, p, quem) {
           ? db.prepare(upd).run(cor, tamanho, minVar, vfoto || null, v.id, produtoId)
           : db.prepare(upd).run(cor, tamanho, minVar, v.id, produtoId);
         idsEnviados.push(v.id);
+        v._varId = v.id;
       } else {
         // Se a variação foi excluída antes (ativo=0), reativa em vez de inserir — evita
         // violar o UNIQUE (produto_id, cor, tamanho) que permanece mesmo em soft-delete.
@@ -256,8 +301,10 @@ function salvarProduto(db, p, quem) {
         const codigo = String(v.codigo_barras || '').trim() || codigoInterno(varId);
         db.prepare('UPDATE variacoes SET codigo_barras=? WHERE id=?').run(codigo, varId);
         idsEnviados.push(varId);
-        // estoque inicial vira movimento de entrada
-        const estoqueInicial = Number(v.estoque) || 0;
+        v._varId = varId;
+        // estoque inicial vira movimento de entrada — a não ser que tenha vindo
+        // repartido por local (aí quem grava é o bloco `planos`, mais abaixo)
+        const estoqueInicial = planos.has(v) ? 0 : (Number(v.estoque) || 0);
         if (estoqueInicial > 0) {
           db.prepare('UPDATE variacoes SET estoque=? WHERE id=?').run(estoqueInicial, varId);
           const central = estoques.principal(db); // estoque inicial entra no central
@@ -300,13 +347,93 @@ function salvarProduto(db, p, quem) {
       }
     }
 
+    // Estoque repartido por local (v3.29.0) — ver o bloco `planos` lá em cima.
+    let nEnt = 0, nSai = 0, nTrf = 0;
+    const tocadas = new Set();
+    if (planos.size) {
+      const insMov = db.prepare(`INSERT INTO movimentos_estoque
+        (variacao_id, tipo, qtd, custo_unit, motivo, usuario_id, estoque_id) VALUES (?,?,?,?,?,?,?)`);
+      const quemId = quem ? quem.id : null;
+      const custo = Number(p.preco_custo) || null;
+      const romaneios = new Map();             // 'origem>destino' → [{variacao_id, qtd}]
+      for (const [v, plano] of planos) {
+        if (!plano.length) continue;
+        const vid = v._varId;
+        const sobe  = plano.filter(x => x.delta > 0).map(x => ({ ...x, r: x.delta }));
+        const desce = plano.filter(x => x.delta < 0).map(x => ({ ...x, r: -x.delta }));
+        // 1) saiu de um local e apareceu em outro = transferência
+        for (const d of desce) for (const u of sobe) {
+          const q = Math.min(d.r, u.r);
+          if (q <= 0) continue;
+          d.r -= q; u.r -= q;
+          const k = `${d.estoque_id}>${u.estoque_id}`;
+          if (!romaneios.has(k)) romaneios.set(k, []);
+          romaneios.get(k).push({ variacao_id: vid, qtd: q });
+        }
+        // 2) o que ainda sobe é peça NOVA entrando
+        let entrou = 0;
+        for (const u of sobe) {
+          if (u.r <= 0) continue;
+          insMov.run(vid, 'entrada', u.r, custo,
+            v.id ? 'Entrada pela tela de Produtos' : 'Estoque inicial (cadastro)', quemId, u.estoque_id);
+          estoques.aplicar(db, u.estoque_id, vid, u.r);
+          entrou += u.r; nEnt += u.r;
+        }
+        // 3) o que ainda desce é peça SAINDO do Salgueiro
+        for (const d of desce) {
+          if (d.r <= 0) continue;
+          insMov.run(vid, 'saida', -d.r, null, 'Saída pela tela de Produtos', quemId, d.estoque_id);
+          estoques.aplicarEstrito(db, d.estoque_id, vid, -d.r);
+          nSai += d.r;
+        }
+        if (entrou > 0) {
+          const d = db.prepare('SELECT id, cor, tamanho, codigo_barras FROM variacoes WHERE id=?').get(vid);
+          if (d) entradas.push({ ...d, estoque: entrou });
+        }
+        tocadas.add(vid);
+      }
+      // Um romaneio por par origem → destino, com todas as variações do produto:
+      // aparece na lista de Transferências como qualquer outra.
+      for (const [k, itens] of romaneios) {
+        const [o, d] = k.split('>').map(Number);
+        const eo = locaisAtivos.get(o), ed = locaisAtivos.get(d);
+        const rt = db.prepare('INSERT INTO transferencias (origem_id, destino_id, usuario_id, obs) VALUES (?,?,?,?)')
+          .run(o, d, quemId, `Pela tela de Produtos — #${produtoId} ${nome}`);
+        const tid = Number(rt.lastInsertRowid);
+        for (const i of itens) {
+          db.prepare('INSERT INTO transferencia_itens (transferencia_id, variacao_id, qtd) VALUES (?,?,?)')
+            .run(tid, i.variacao_id, i.qtd);
+          estoques.aplicarEstrito(db, o, i.variacao_id, -i.qtd);
+          estoques.aplicar(db, d, i.variacao_id, i.qtd);
+          const mot = `Transf. #${tid}: ${eo.nome} → ${ed.nome}`;
+          insMov.run(i.variacao_id, 'transferencia', -i.qtd, null, mot, quemId, o);
+          insMov.run(i.variacao_id, 'transferencia', i.qtd, null, mot, quemId, d);
+          nTrf += i.qtd;
+        }
+      }
+      // Total do Salgueiro = soma dos locais (mesma regra da zeragem).
+      for (const vid of tocadas) {
+        db.prepare(`UPDATE variacoes SET estoque = COALESCE(
+          (SELECT SUM(qtd) FROM estoque_saldos WHERE variacao_id = ?), 0) WHERE id = ?`).run(vid, vid);
+      }
+    }
+
     db.exec('COMMIT');
     auditar(db, quem, p.id ? 'produto_editado' : 'produto_criado', `#${produtoId} ${nome}`);
+    if (nEnt || nSai || nTrf) {
+      auditar(db, quem, 'estoque_grade_produto',
+        `#${produtoId} ${nome}: entraram ${nEnt}, saíram ${nSai}, transferidas ${nTrf}`);
+    }
     if (ajustes.length) {
       auditar(db, quem, 'estoque_grade_produto',
         `#${produtoId} ${nome}: ${ajustes.map(a => (a.delta > 0 ? '+' : '') + a.delta).join(', ')} em ${destino.nome}`);
     }
-    return { ok: true, id: produtoId, entradas, destino: destino ? destino.nome : null };
+    const partes = [];
+    if (nEnt) partes.push(`${nEnt} entraram`);
+    if (nTrf) partes.push(`${nTrf} mudaram de estoque`);
+    if (nSai) partes.push(`${nSai} saíram`);
+    return { ok: true, id: produtoId, entradas, destino: destino ? destino.nome : null,
+             resumo_estoque: partes.join(' · ') };
   } catch (e) {
     db.exec('ROLLBACK');
     if (String(e.message).includes('UNIQUE') && String(e.message).includes('codigo_barras')) {

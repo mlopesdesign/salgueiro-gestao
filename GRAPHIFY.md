@@ -3,7 +3,7 @@
 > Mapa técnico gerado automaticamente por `tools/graphify.js`.
 > **Não edite à mão.** Regere com `node tools/graphify.js` a cada alteração estrutural.
 
-**Versão:** 3.28.0 · **Gerado em:** 2026-09-25
+**Versão:** 3.29.0 · **Gerado em:** 2026-09-30
 **Aplicação:** `br.com.mllopes.salgueirogestao` (Neutralino 6 + WebView2)
 **Cliente:** Boutique do Salgueiro · **Autor:** ML Lopes Design
 
@@ -90,7 +90,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `pdv.js` | 630 | 13 | abrirCaixa, caixaAtual, cancelarVenda, fecharCaixa, listarVendas, listarVendasGeral, movimentoCaixa, obterVenda, +3 |
 | `permissoes.js` | 94 | 3 | CATALOGO, DEFAULTS, TODAS, efetivas, normalizar, pode |
 | `pontos.js` | 110 | 9 | ajustar, calcularGanho, calcularResgate, creditar, debitar, getConfig, historico, saldo, +1 |
-| `produtos.js` | 328 | 7 | excluirCategoria, excluirProduto, listarCategorias, listarProdutos, obterProduto, salvarCategoria, salvarProduto |
+| `produtos.js` | 455 | 7 | excluirCategoria, excluirProduto, listarCategorias, listarProdutos, obterProduto, salvarCategoria, salvarProduto |
 | `rede.js` | 150 | 3 | SOMENTE_LOCAL, imprimir, iniciar, listarImpressoras, parar, preparar, status |
 | `relatorios.js` | 1515 | 21 | TAXAS_PADRAO, comprasAcompanhadas, consignadosMensal, curvaAbc, estoqueDetalhado, eventosVenda, pecasParadas, ranking, +5 |
 | `trocas.js` | 430 | 3 | DESTINOS, registrar, registrarRapida |
@@ -112,7 +112,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 
 | Arquivo | Linhas | Exporta |
 |---|---|---|
-| `app.js` | 1807 | EM_REDE, ajustarLarguraModal, api, aplicarTema, ehAdmin |
+| `app.js` | 1884 | EM_REDE, ajustarLarguraModal, api, aplicarTema, ehAdmin |
 | `catalogo.js` | 262 | viewCatalogo |
 | `clientes.js` | 529 | viewClientes |
 | `compras.js` | 229 | viewCompras |
@@ -124,7 +124,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `impressao.js` | 141 | LIMITES, PADRAO, aplicarEstiloImpressao, cssCupomArquivo, cssCupomTela |
 | `mensagens.js` | 758 | abrirBalao, encerrarTelaMensagens, iniciarMensagens, pararMensagens, viewMensagens |
 | `neutralino.js` | 2 | — |
-| `novidades.js` | 988 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
+| `novidades.js` | 997 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
 | `pdv.js` | 2361 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
 | `ranking.js` | 361 | viewRanking |
 | `relatorios.js` | 1758 | viewRelatorios |
@@ -543,7 +543,7 @@ apenas **repartem** esse total.
 | `estoques.js` | 1 | 0 |
 | `importar-vendas.js` | 1 | 0 |
 | `pdv.js` | 2 | 1 |
-| `produtos.js` | 2 | 1 |
+| `produtos.js` | 3 | 3 |
 | `trocas.js` | 4 | 4 |
 
 > Ao acrescentar um ponto novo que mexa em estoque, ele precisa aparecer nas

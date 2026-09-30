@@ -688,3 +688,9 @@ body.com-chat .conteudo { padding-bottom: 96px; }
 }
 .tab-mov td input[type="number"]:disabled { background: #F4F1F1; cursor: not-allowed; }
 .tab-mov tbody tr:last-child td { border-bottom: none; }
+
+/* v3.29.0 — sem setinhas de subir/descer em NENHUM campo de número (regra global).
+   A rodinha do mouse também não altera mais o valor (app.js). */
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }

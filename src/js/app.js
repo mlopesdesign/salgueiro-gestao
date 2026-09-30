@@ -13,10 +13,20 @@ import { viewMensagens, iniciarMensagens, pararMensagens, encerrarTelaMensagens 
 import { viewCatalogo } from './catalogo.js';
 import { aplicarEstiloImpressao } from './impressao.js';
 
+// ── Campo de número NÃO muda com a rodinha do mouse (v3.29.0) ────────────────
+// Regra única para TODOS os <input type="number"> do sistema, inclusive os que
+// nascem depois (modais, grades). Rodinha em cima do campo: o campo perde o foco
+// e a página rola normalmente — o número fica como estava. Antes, rolar a página
+// com o cursor sobre o campo de estoque alterava a quantidade sem o usuário ver.
+document.addEventListener('wheel', (e) => {
+  const el = e.target && e.target.closest ? e.target.closest('input[type="number"]') : null;
+  if (el && document.activeElement === el) el.blur();
+}, { capture: true, passive: true });
+
 const $app = document.getElementById('app');
 let usuario = null;
 let categoriasCache = [];
-let APP_VERSION = '3.28.0'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
+let APP_VERSION = '3.29.0'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
 
 // API dupla: no aplicativo usa IPC (preload); num terminal em rede (navegador),
 // conversa com o servidor do computador principal via HTTP com token de sessão.
@@ -1367,13 +1377,36 @@ async function viewProdutos(alvo) {
 
 // `duplicando` = os campos vêm preenchidos de outro produto, mas o registro é
 // NOVO: não há prod.id, o título muda e o estoque começa vazio.
-function formProduto(prod, variacoes, aoConcluir, duplicando) {
+async function formProduto(prod, variacoes, aoConcluir, duplicando) {
+  // ── Estoque por LOCAL na grade do produto (v3.29.0) ──────────────────────
+  // Administrador vê UMA COLUNA POR ESTOQUE (almoxarifado, cada loja…) e digita
+  // quanto deve FICAR em cada um. Ex.: 40 peças → 10 Loja A, 10 Loja B, 20
+  // Almoxarifado. O servidor transforma a diferença em entrada, saída ou
+  // transferência, com kardex. Outros perfis continuam como antes.
+  let locais = [];
+  const saldoLocal = new Map();
+  if (ehAdmin()) {
+    const [rl, rm] = await Promise.all([api('estoques:listar', {}), api('estoques:mapaLocais')]);
+    locais = (rl && rl.ok ? rl.estoques : []) || [];
+    for (const x of ((rm && rm.ok ? rm.saldos : []) || [])) saldoLocal.set(`${x.variacao_id}:${x.estoque_id}`, Number(x.qtd) || 0);
+  }
+  const porLocal = locais.length > 0;
   // linha nova nasce sem estoque preenchido (campos em branco, não com 0/1)
   // `_estoque0` guarda o total que a variação TINHA ao abrir a tela. A diferença
   // entre ele e o que o usuário digitar é o que vira movimento e o que vai para
   // a etiqueta. (v3.26.5)
   const linhas = (variacoes.length ? variacoes : [{ cor: '', tamanho: '', estoque: '' }])
-    .map(v => ({ ...v, _estoque0: v.id ? Number(v.estoque || 0) : 0 }));
+    .map(v => {
+      const l = { ...v, _estoque0: v.id ? Number(v.estoque || 0) : 0 };
+      if (porLocal) {
+        // `saldos` = o que o usuário quer que FIQUE em cada local. Variação que
+        // já existe nasce com o saldo atual; nova (ou duplicada) nasce em branco.
+        l.saldos = {};
+        for (const lc of locais) l.saldos[lc.id] = v.id ? (saldoLocal.get(`${v.id}:${lc.id}`) || 0) : '';
+      }
+      return l;
+    });
+  const somaLocais = (l) => Object.values(l.saldos || {}).reduce((a, q) => a + (Number(q) || 0), 0);
 
   let fotoAtual = prod?.foto || null;
   const m = modal(duplicando ? 'Duplicar produto' : (prod?.id ? 'Editar produto' : 'Novo produto'), `
@@ -1417,7 +1450,11 @@ function formProduto(prod, variacoes, aoConcluir, duplicando) {
       </div>
     </div>
 
-    ${prod?.id && ehAdmin() ? `<p style="margin:0 0 8px;font-size:12.5px;color:var(--texto-suave)">
+    ${porLocal ? `<p style="margin:0 0 8px;font-size:12.5px;color:var(--texto-suave)">
+      🔑 <b>Administrador:</b> cada coluna é um estoque. Digite quanto deve <b>ficar</b> em cada um —
+      ex.: 40 peças → 10 numa loja, 10 na outra, 20 no almoxarifado. O que passar de um estoque para outro vira
+      transferência; o que for a mais vira entrada (com etiqueta ao salvar); o que for a menos vira saída.</p>`
+    : prod?.id && ehAdmin() ? `<p style="margin:0 0 8px;font-size:12.5px;color:var(--texto-suave)">
       🔑 <b>Administrador:</b> a coluna Estoque é o <b>total</b> da variação. Corrija direto aqui — tem 10 e chegaram 10, escreva 20.
       As peças que entrarem vão para o <b>Almoxarifado Central</b> e a etiqueta delas é oferecida ao salvar.</p>` : ''}
     <div class="grade-titulo">
@@ -1425,7 +1462,9 @@ function formProduto(prod, variacoes, aoConcluir, duplicando) {
       <button class="btn btn-suave" id="add-var" type="button">+ Variação</button>
     </div>
     <table class="grade">
-      <thead><tr><th class="var-foto-cell" title="Foto da variação">Foto</th><th>Cor</th><th>Tamanho</th><th>${prod?.id ? 'Estoque' : 'Estoque inicial'}</th><th>Mínimo</th><th>Código de barras</th><th></th></tr></thead>
+      <thead><tr><th class="var-foto-cell" title="Foto da variação">Foto</th><th>Cor</th><th>Tamanho</th>${porLocal
+        ? locais.map(lc => `<th class="num" style="min-width:84px">${esc(lc.nome)}${lc.tipo === 'almoxarifado' ? '<br><small style="font-weight:400;color:var(--texto-suave)">central</small>' : ''}</th>`).join('') + '<th class="num">Total</th>'
+        : `<th>${prod?.id ? 'Estoque' : 'Estoque inicial'}</th>`}<th>Mínimo</th><th>Código de barras</th><th></th></tr></thead>
       <tbody id="grade-corpo"></tbody>
     </table>
     <div class="erro" id="p-erro"></div>
@@ -1457,7 +1496,10 @@ function formProduto(prod, variacoes, aoConcluir, duplicando) {
         l.codigo_barras || l.foto)
         .map(l => ({ id: l.id, cor: l.cor, tamanho: l.tamanho,
           estoque: Number(l.estoque) || 0, estoque_minimo: Number(l.estoque_minimo) || 0,
-          codigo_barras: l.codigo_barras, foto: l.foto ?? null }))
+          codigo_barras: l.codigo_barras, foto: l.foto ?? null,
+          // campo em branco = 0 naquele local
+          ...(porLocal ? { saldos: Object.fromEntries(Object.entries(l.saldos || {})
+            .map(([k, q]) => [k, Number(q) || 0])) } : {}) }))
     };
     const r = await api('produtos:salvar', dados);
     if (!r.ok) { m.querySelector('#p-erro').textContent = r.erro; return; }
@@ -1467,7 +1509,9 @@ function formProduto(prod, variacoes, aoConcluir, duplicando) {
     // produto, saía, abria a tela de etiquetas e tinha que desmarcar tudo na
     // mão para imprimir só as novas.
     const entradas = (r.entradas || []).filter(v => Number(v.estoque) > 0);
-    toast(entradas.length
+    toast(r.resumo_estoque
+      ? `Produto salvo. Estoque: ${r.resumo_estoque}.`
+      : entradas.length
       ? `Produto salvo. ${entradas.reduce((a, v) => a + Number(v.estoque), 0)} peça(s) entraram em ${r.destino || 'estoque'}.`
       : 'Produto salvo.');
     fechar(); aoConcluir();
@@ -1534,8 +1578,14 @@ function formProduto(prod, variacoes, aoConcluir, duplicando) {
         <td class="var-foto-cell"></td>
         <td><input data-c="cor" value="${esc(l.cor || '')}" placeholder="Preto"></td>
         <td><input data-c="tamanho" value="${esc(l.tamanho || '')}" placeholder="M"></td>
-        <td><input data-c="estoque" type="number" min="0" value="${l.id ? (l.estoque ?? 0) : (l.estoque || '')}" placeholder="0" ${l.id && !ehAdmin() ? 'disabled title="Só administrador altera o estoque por aqui"' : (l.id ? 'title="Digite o TOTAL novo. Ex.: tem 10, chegaram 10, escreva 20"' : '')}>
-          ${l.id && ehAdmin() ? '<small class="delta-estoque" style="display:block;font-size:11px;min-height:13px"></small>' : ''}</td>
+        ${porLocal
+          ? locais.map(lc => `<td class="num"><input data-loja="${lc.id}" type="number" min="0" step="1" inputmode="numeric"
+              value="${l.saldos[lc.id] === '' ? '' : l.saldos[lc.id]}" placeholder="0" style="width:100%;min-width:64px"
+              onfocus="this.select()" title="Quanto deve ficar em ${esc(lc.nome)}"></td>`).join('')
+            + `<td class="num"><b class="total-var">${somaLocais(l)}</b>
+              <small class="delta-estoque" style="display:block;font-size:11px;min-height:13px"></small></td>`
+          : `<td><input data-c="estoque" type="number" min="0" value="${l.id ? (l.estoque ?? 0) : (l.estoque || '')}" placeholder="0" ${l.id && !ehAdmin() ? 'disabled title="Só administrador altera o estoque por aqui"' : (l.id ? 'title="Digite o TOTAL novo. Ex.: tem 10, chegaram 10, escreva 20"' : '')}>
+          ${l.id && ehAdmin() ? '<small class="delta-estoque" style="display:block;font-size:11px;min-height:13px"></small>' : ''}</td>`}
         <td><input data-c="estoque_minimo" type="number" min="0" value="${l.estoque_minimo || ''}" placeholder="0" style="width:60px" title="Mínimo para esta variação (0 = usa o padrão do produto)"></td>
         <td>${l.id
           ? `<span class="cod">${esc(l.codigo_barras || '')}</span>`
@@ -1615,6 +1665,28 @@ function formProduto(prod, variacoes, aoConcluir, duplicando) {
           }
         });
       });
+      // Estoque por local: atualiza total e diferença SEM redesenhar a grade
+      // (redesenhar mataria o cursor — armadilha da v3.2.0/v3.5.0).
+      const mostrarTotal = () => {
+        const tot = somaLocais(l);
+        l.estoque = tot;
+        const bT = tr.querySelector('.total-var'); if (bT) bT.textContent = tot;
+        const avi = tr.querySelector('.delta-estoque');
+        if (avi) {
+          const d = tot - Number(l._estoque0 ?? 0);
+          avi.textContent = d === 0 ? '' : (d > 0 ? `entram ${d}` : `saem ${-d}`);
+          avi.style.color = d > 0 ? 'var(--verde, #1a7f37)' : 'var(--vermelho)';
+        }
+      };
+      tr.querySelectorAll('[data-loja]').forEach(inp => {
+        inp.addEventListener('input', () => {
+          const v = inp.value.trim();
+          l.saldos[inp.dataset.loja] = v === '' ? '' : Math.max(0, Math.round(Number(v) || 0));
+          mostrarTotal();
+        });
+      });
+      if (porLocal) mostrarTotal();
+
       // Duplicar variação: copia cor, tamanho, mínimo e foto da linha. Estoque e
       // código de barras nascem em branco — o código é UNIQUE no banco e o
       // estoque de uma variação nova é sempre zero. Entra logo abaixo da
@@ -1625,7 +1697,8 @@ function formProduto(prod, variacoes, aoConcluir, duplicando) {
           linhas.splice(i + 1, 0, {
             cor: l.cor || '', tamanho: l.tamanho || '',
             estoque: '', estoque_minimo: l.estoque_minimo || '',
-            codigo_barras: '', foto: l.foto || null
+            codigo_barras: '', foto: l.foto || null,
+            ...(porLocal ? { saldos: Object.fromEntries(locais.map(lc => [lc.id, ''])) } : {})
           });
           desenharGrade();
           // foco no tamanho da linha nova — é quase sempre o que muda
@@ -1649,10 +1722,14 @@ function formProduto(prod, variacoes, aoConcluir, duplicando) {
   }
 
   m.querySelector('#add-var').onclick = () => {
-    linhas.push({ cor: '', tamanho: '', estoque: '', codigo_barras: '', foto: null });
+    linhas.push({ cor: '', tamanho: '', estoque: '', codigo_barras: '', foto: null,
+      ...(porLocal ? { saldos: Object.fromEntries(locais.map(lc => [lc.id, ''])) } : {}) });
     desenharGrade();
   };
   desenharGrade();
+  // A grade nasce depois que a janela abriu: remede a largura com as colunas
+  // dos estoques no lugar (até 90% da janela, sem barra de rolagem à toa).
+  ajustarLarguraModal(m);
 }
 
 // ---------- Vales-Troca ----------
