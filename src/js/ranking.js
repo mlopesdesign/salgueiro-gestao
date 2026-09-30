@@ -4,6 +4,7 @@
 // (vendas separadas por mais de 6h viram eventos diferentes).
 // Na tela: top 10. Na impressão/PDF e no Excel: a lista completa.
 import { api, el, esc, moeda, toast, getConfig } from './app.js';
+import { imprimirFolhaA4 } from './impressao.js';
 
 const TOPO = 10;
 let eventos = [];       // sessões de venda detectadas
@@ -201,9 +202,7 @@ function imprimir() {
       }`;
     document.head.appendChild(st);
   }
-  document.body.appendChild(area);
-  window.print();
-  setTimeout(() => area.remove(), 900);
+  imprimirFolhaA4(area);   // A4, só o ranking na folha (v3.29.1)
 }
 
 export async function viewRanking(alvo) {

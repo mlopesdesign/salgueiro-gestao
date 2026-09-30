@@ -9,12 +9,12 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.29.0 |
+| **Versão atual** | 3.29.1 |
 | **Data do último build** | 2026-09-30 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.29.0 em 2026-09-30 ✓ (28 módulos core · 158 rotas · 37 tabelas) |
-| **5 lugares da versão** | os 5 em 3.29.0 ✓ |
+| **GRAPHIFY** | atualizado para 3.29.1 em 2026-09-30 ✓ (28 módulos core · 158 rotas · 37 tabelas) |
+| **5 lugares da versão** | os 5 em 3.29.1 ✓ |
 
 ---
 
@@ -24,6 +24,27 @@
 `PUBLICAR.bat`". **Ele:** clica e aguarda. **Eu:** confiro no GitHub e confirmo.
 Detalhe completo na regra 3 do `REGRAS-CRITICAS.md`. **v3.27.5 publicada assim** —
 primeira release enviada sem o Marcio abrir o GitHub (25/09/2026 01:04).
+
+## 0.00 v3.29.1 — IMPRIMIR BALANÇO DAVA FOLHA EM BRANCO (2026-09-30)
+
+| Campo | Valor |
+|---|---|
+| Tag | `v3.29.1` |
+| Título | v3.29.1 — Imprimir balanço sem folha em branco · documentos em A4 |
+| Asset | `Portable\resources.neu` — 6.463.521 bytes — sha256 `0d767d3457575c27790ae4d8cbdb7b7af72ca84aba5114a4adac39704a95a727` |
+| Backup | `backups\pre-v3.29.1-2026-09-30\` |
+
+**Causa:** o botão fazia `window.print()` da TELA, e o `app.css` (@media print)
+esconde `body > #app` inteiro → folha em branco. Além disso o `@page{size:80mm auto}`
+global (do cupom) fazia relatório, ranking e romaneio saírem numa tira de 80 mm.
+
+**Correção no ponto comum:** `imprimirFolhaA4(area)` em `impressao.js` — põe o
+documento numa área própria, esconde o resto, injeta `@page A4` por ÚLTIMO no head
+(vence o 80 mm do cupom) e limpa no `afterprint`. Balanço, relatório, ranking e
+romaneio usam ela. **Regra: documento NUNCA chama `window.print()` direto** — só
+cupom (pdv.js/configuracoes.js) faz isso. Balanço impresso = lista filtrada da tela,
+com coluna "Contado" e assinatura. Conferido gerando PDF no Chromium: antes 1 folha
+vazia (Letter), depois A4 com o conteúdo.
 
 ## 0.0 v3.29.0 — RODINHA NÃO MEXE EM NÚMERO · ESTOQUE POR LOJA NO PRODUTO (2026-09-30)
 

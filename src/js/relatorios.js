@@ -1,5 +1,6 @@
 // Relatórios — vendas, curva ABC, peças paradas, exportação CSV/PDF/impressão
 import { api, el, esc, moeda, toast, modal, getConfig, pode } from './app.js';
+import { imprimirFolhaA4 } from './impressao.js';
 
 // Impressão / PDF: monta uma folha limpa e chama a impressão do sistema
 // (no destino, o usuário escolhe a impressora ou "Salvar como PDF"). Funciona
@@ -30,9 +31,7 @@ function imprimirRelatorio(titulo, htmlInterno) {
       <h1>${esc(cfg.loja_nome || 'Relatório')}</h1>
       <div>${esc(titulo)} · ${new Date().toLocaleString('pt-BR')}</div>
     </div>${htmlInterno}`;
-  document.body.appendChild(area);
-  window.print();
-  setTimeout(() => area.remove(), 800);
+  imprimirFolhaA4(area);   // A4, só o relatório na folha (v3.29.1)
 }
 
 const hoje = () => new Date().toISOString().slice(0, 10);

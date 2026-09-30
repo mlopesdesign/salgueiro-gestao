@@ -131,7 +131,45 @@ function aplicarEstiloImpressao(cfg) {
   return m;
 }
 
+// ── Documento em folha A4 (v3.29.1) ─────────────────────────────────────────
+// Ponto ÚNICO de impressão de documento: balanço de estoque, relatórios,
+// ranking e romaneio passam por aqui.
+//
+// POR QUE EXISTE: o `app.css` esconde `#app` inteiro na impressão e tem
+// `@page { size: 80mm auto }` global (é do cupom). Quem chamava `window.print()`
+// direto na tela recebia FOLHA EM BRANCO (balanço de estoque) ou uma página
+// estreita de cupom (relatório/ranking/romaneio). Aqui o documento vai para uma
+// área própria, só ela aparece na impressão, e a página é A4.
+function imprimirFolhaA4(area, { paisagem = false, margem = '12mm' } = {}) {
+  if (!area.id) area.id = 'area-folha-a4';
+  document.getElementById('estilo-folha-a4')?.remove();
+  const st = document.createElement('style');
+  st.id = 'estilo-folha-a4';
+  st.textContent = `#${area.id}{display:none}
+@page{size:A4 ${paisagem ? 'landscape' : 'portrait'};margin:${margem}}
+@media print{
+  body > *:not(#${area.id}){display:none !important}
+  #${area.id}{display:block !important;position:static !important;width:auto !important}
+  html,body{background:#fff !important;height:auto !important;overflow:visible !important}
+}`;
+  // Entra por ÚLTIMO no <head>: vence o @page do cupom (app.css e estilo-impressao).
+  document.head.appendChild(st);
+  if (!area.isConnected) document.body.appendChild(area);
+  let feito = false;
+  const limpar = () => {
+    if (feito) return;
+    feito = true;
+    window.removeEventListener('afterprint', limpar);
+    st.remove(); area.remove();
+  };
+  window.addEventListener('afterprint', limpar);
+  window.print();
+  // Segurança: se o `afterprint` não vier, limpa depois (a prévia já foi feita).
+  setTimeout(limpar, 60000);
+}
+
 export {
+  imprimirFolhaA4,
   PADRAO, LIMITES,
   lerAjusteLocal, salvarAjusteLocal,
   medidasDaLoja, medidasAtivas,

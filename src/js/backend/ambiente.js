@@ -298,7 +298,7 @@ export async function garantirExtensaoRede() {
 
 // ── App ──────────────────────────────────────────────────────────────────────
 export function versaoApp() {
-  try { return NL_APPVERSION; } catch { return '3.29.0'; }
+  try { return NL_APPVERSION; } catch { return '3.29.1'; }
 }
 
 export async function reiniciarApp() {

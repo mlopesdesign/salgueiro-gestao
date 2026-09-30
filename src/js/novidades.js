@@ -3,6 +3,14 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.29.1',
+    data: '2026-09-30',
+    itens: [
+      '🖨️ IMPRIMIR BALANÇO VOLTOU A FUNCIONAR. Em Estoques → local, o botão Imprimir balanço gerava uma folha em branco. Agora sai um documento A4 próprio: nome da loja e do estoque, data, filtro usado, cada peça com referência, cor/tamanho, código de barras, quantidade e valor, total no fim, coluna "Contado" em branco para a conferência e espaço para assinatura. Sai exatamente o que está filtrado na tela.',
+      '📄 RELATÓRIO, RANKING E ROMANEIO EM FOLHA A4. Eles usavam o tamanho do cupom (80 mm) na impressão e saíam numa tira estreita. Agora todo documento sai em A4 — a impressão do cupom continua como estava.',
+    ],
+  },
+  {
     versao: '3.29.0',
     data: '2026-09-30',
     itens: [

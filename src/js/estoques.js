@@ -3,6 +3,7 @@
 // peça está e move entre os locais por romaneio (imprimível e em PDF).
 import { api, el, esc, moeda, toast, modal, getConfig, ehAdmin } from './app.js';
 import { formMovimento } from './estoque.js';
+import { imprimirFolhaA4 } from './impressao.js';
 
 const TIPOS = [
   ['almoxarifado', '🏢 Almoxarifado'],
@@ -114,9 +115,7 @@ function imprimirRomaneio(r) {
       }`;
     document.head.appendChild(st);
   }
-  document.body.appendChild(area);
-  window.print();
-  setTimeout(() => area.remove(), 900);
+  imprimirFolhaA4(area);   // A4, só o romaneio na folha (v3.29.1)
 }
 
 // Abre tela de visualização do romaneio com botões imprimir e baixar PDF
@@ -772,6 +771,9 @@ export async function viewEstoques(alvo) {
     const chave = (x) => String(x || '')
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
+    let listaAtual = [];     // o que está na tela agora — é o que o balanço imprime
+    let filtroAtual = '';
+
     function aplicarFiltroEsl() {
       const tipo  = fTipoEl.value;
       const fid   = Number(fFornEl.value) || 0;
@@ -795,6 +797,13 @@ export async function viewEstoques(alvo) {
         ).includes(termo));
       }
 
+      listaAtual = lista;
+      filtroAtual = [
+        saldo === 'zerados' ? 'somente zerados' : saldo === 'todos' ? 'com estoque e zerados' : 'somente com estoque',
+        tipo === 'proprios' ? 'somente da loja' : tipo === 'cons'
+          ? 'somente consignados' + (fid ? ` (${fFornEl.options[fFornEl.selectedIndex]?.textContent || ''})` : '') : '',
+        termo ? `busca "${buscaEl.value.trim()}"` : '',
+      ].filter(Boolean).join(' · ');
       const pecas = lista.reduce((a, v) => a + v.qtd, 0);
       contaEl.textContent = lista.length
         ? `${lista.length} de ${todosItens.length} linha(s) · ${Math.round(pecas * 100) / 100} peça(s)`
@@ -856,9 +865,61 @@ export async function viewEstoques(alvo) {
     });
     fFornEl.addEventListener('change', () => aplicarFiltroEsl());
 
+    // Balanço impresso (v3.29.1). Antes era `window.print()` da tela inteira —
+    // e o app.css esconde a tela na impressão: saía FOLHA EM BRANCO. Agora é
+    // um documento próprio, A4, com o que está filtrado na tela, coluna para a
+    // contagem e assinatura de quem conferiu.
     bloco.querySelector('#es-print').onclick = () => {
+      if (!listaAtual.length) { toast('Nada para imprimir com esse filtro.', true); return; }
+      const cfg = (getConfig && getConfig()) || {};
+      const pecas = Math.round(listaAtual.reduce((a, v) => a + v.qtd, 0) * 100) / 100;
+      const venda = listaAtual.reduce((a, v) => a + v.qtd * (v.preco_venda || 0), 0);
+      const corTam = (i) => [i.cor, i.tamanho].filter(x => x && x !== 'Única' && x !== 'U').join(' · ') || '—';
+      const area = el('<div id="area-balanco"></div>');
+      area.innerHTML = `
+        <style>
+          #area-balanco { font-family:'Segoe UI',Arial,sans-serif; color:#1a1a1a; font-size:10.5px }
+          #area-balanco .bl-cab { display:flex; justify-content:space-between; align-items:flex-end;
+            border-bottom:2px solid #7E1114; padding-bottom:6px; margin-bottom:8px }
+          #area-balanco h1 { font-size:16px; margin:0; color:#7E1114 }
+          #area-balanco h2 { font-size:12px; margin:2px 0 0; letter-spacing:1px; font-weight:700 }
+          #area-balanco .bl-info { text-align:right; font-size:10px; line-height:1.45 }
+          #area-balanco .bl-resumo { display:flex; gap:18px; font-size:11px; margin:0 0 8px }
+          #area-balanco table { width:100%; border-collapse:collapse }
+          #area-balanco th { background:#F6E9E9; font-size:9.5px; text-transform:uppercase; letter-spacing:.3px;
+            -webkit-print-color-adjust:exact; print-color-adjust:exact }
+          #area-balanco th, #area-balanco td { border:1px solid #bbb; padding:3px 5px; text-align:left; vertical-align:top }
+          #area-balanco .num { text-align:right; white-space:nowrap }
+          #area-balanco .bl-cont { width:62px }
+          #area-balanco small { color:#666 }
+          #area-balanco thead { display:table-header-group }
+          #area-balanco tr { page-break-inside:avoid }
+          #area-balanco tfoot td { font-weight:700; background:#F6E9E9;
+            -webkit-print-color-adjust:exact; print-color-adjust:exact }
+          #area-balanco .bl-ass { display:flex; gap:40px; margin-top:34px; font-size:10.5px; text-align:center }
+          #area-balanco .bl-ass > div { flex:1; border-top:1px solid #333; padding-top:4px }
+        </style>
+        <div class="bl-cab">
+          <div><h1>${esc(cfg.loja_nome || 'Salgueiro')}</h1>
+            <h2>BALANÇO DE ESTOQUE — ${esc(r.estoque.nome)}</h2></div>
+          <div class="bl-info">Emitido em ${new Date().toLocaleString('pt-BR')}<br>${esc(filtroAtual)}</div>
+        </div>
+        <div class="bl-resumo"><span><b>${listaAtual.length}</b> linha(s)</span>
+          <span><b>${pecas}</b> peça(s)</span><span>Valor de venda <b>${moeda(venda)}</b></span></div>
+        <table>
+          <thead><tr><th>Produto</th><th>Ref.</th><th>Cor / Tam.</th><th>Código de barras</th>
+            <th class="num">Qtd</th><th class="num">Valor de venda</th><th class="num bl-cont">Contado</th></tr></thead>
+          <tbody>${listaAtual.map(i => `<tr>
+            <td>${esc(i.produto)}${i.consignado ? ` <small>· consignado${i.fornecedor ? ' ' + esc(i.fornecedor) : ''}</small>` : ''}</td>
+            <td>${esc(i.referencia || '—')}</td><td>${esc(corTam(i))}</td><td>${esc(i.codigo_barras || '—')}</td>
+            <td class="num"><b>${i.qtd}</b></td><td class="num">${moeda(i.qtd * (i.preco_venda || 0))}</td>
+            <td class="bl-cont"></td></tr>`).join('')}</tbody>
+          <tfoot><tr><td colspan="4">TOTAL</td><td class="num">${pecas}</td>
+            <td class="num">${moeda(venda)}</td><td></td></tr></tfoot>
+        </table>
+        <div class="bl-ass"><div>Conferido por</div><div>Data</div></div>`;
       toast('Para enviar por WhatsApp ou e-mail, escolha "Salvar como PDF".');
-      window.print();
+      imprimirFolhaA4(area);
     };
     bloco.querySelector('#es-xlsx').onclick = async () => {
       toast('Gerando Excel…');
