@@ -18,12 +18,13 @@
 
 ---
 
-## 0. COMO SE PUBLICA (combinado com o Marcio em 25/09/2026)
+## 0. COMO SE PUBLICA (regra nova do Marcio em 07/10/2026)
 
-**Eu:** build → commit → tag → `tools\publicar\pedido.json` → digo "dois cliques em
-`PUBLICAR.bat`". **Ele:** clica e aguarda. **Eu:** confiro no GitHub e confirmo.
-Detalhe completo na regra 3 do `REGRAS-CRITICAS.md`. **v3.27.5 publicada assim** —
-primeira release enviada sem o Marcio abrir o GitHub (25/09/2026 01:04).
+**EU PUBLICO SOZINHO — ele não clica em nada.** Build → commit → tag →
+`tools\publicar\pedido.json` → **eu rodo** `tools\auto-commit.ps1 -UmaVez` no Windows
+pelo Desktop Commander (`start_process`, powershell) → confiro no GitHub → aviso.
+O "dois cliques em PUBLICAR.bat" está REVOGADO. Detalhe: regra 3 do `REGRAS-CRITICAS.md`.
+**v3.30.0 publicada assim** (07/10/2026 00:24 UTC, 6.485.691 bytes conferidos).
 
 ## 0.000 v3.30.0 — TROCO EM DINHEIRO · MAIS VENDIDOS · LOJA SEM DESCONTO (2026-10-07)
 

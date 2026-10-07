@@ -70,15 +70,22 @@ tag, cria a Release com o `.neu` e confere que o arquivo está lá. Resultado em
 `tools\publicar\resultado.txt` — **eu leio esse arquivo e digo ao Marcio o que
 aconteceu.** Pedido tratado vai para `feito\` ou `falhou\`, nunca fica em loop.
 
-**O COMBINADO (Marcio, 25/09/2026):** *"toda vez eu vou lá e vai ser assim que vamos
-subir, eu clico e aguardo."* A cada versão:
+**REGRA NOVA (Marcio, 07/10/2026): EU PUBLICO SOZINHO. ELE NÃO CLICA EM NADA.**
+*"Eu te contrato para fazer o trabalho por mim... Eu não vou trabalhar para você."*
+O "dois cliques em PUBLICAR.bat" está REVOGADO — nunca mais pedir.
+
+A cada versão:
 
 1. Eu termino o build, comito, crio a tag e gravo `tools\publicar\pedido.json`.
-2. Eu digo a ele: **"dois cliques em `PUBLICAR.bat`"** — e só isso. Junto vão tag e
-   título, para ele saber o que está subindo.
-3. A janela mostra "Enviando vX..." e depois **PRONTO - PUBLICADA** (fecha sozinha em
-   15 s) ou **NAO PUBLICOU** com o motivo (fica aberta para ele me mostrar).
-4. Eu confiro no GitHub (`/releases/tags/vX`) e confirmo: título, arquivo e tamanho.
+2. **Eu mesmo rodo o vigia no Windows** pelo Desktop Commander (`start_process`, roda
+   no Windows dele, que tem git e gh logados):
+   `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "E:\Projetos\LOJA FISICA SALGUEIRO V2\tools\auto-commit.ps1" -UmaVez`
+   Saída esperada: **PRONTO - PUBLICADA** / `OK vX publicada`.
+3. Eu confiro no GitHub (`/releases/tags/vX`): título, arquivo e tamanho.
+4. Só então digo a ele que está publicado. **v3.30.0 foi a primeira publicada assim.**
+
+Se o Desktop Commander não estiver disponível, aí sim explico por quê e só então
+peço o clique — como exceção, nunca como rotina.
 
 NÃO voltar a mandar título/notas para ele colar no GitHub. NÃO pedir reinício do PC.
 
