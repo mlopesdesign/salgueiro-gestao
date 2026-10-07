@@ -23,10 +23,49 @@ document.addEventListener('wheel', (e) => {
   if (el && document.activeElement === el) el.blur();
 }, { capture: true, passive: true });
 
+// ── Fechar o sistema: SEMPRE pergunta (v3.30.1) ─────────────────────────────
+// Relato: "o sistema fechou sozinho". No PDV o F4 troca o cliente; com o Alt
+// apertado vira Alt+F4, que fecha qualquer programa do Windows na hora — e o
+// X/Alt+F4 fechava SEM perguntar. Agora o index.html, ao receber o fechamento
+// da janela, chama esta função: ela pergunta e só confirma com o clique em
+// "Fechar o sistema". Venda montada no PDV aparece no aviso.
+// Sem usuário logado (tela de entrada) fecha direto. Duas tentativas seguidas
+// (X de novo com a pergunta aberta) reaproveitam a mesma pergunta.
+let _pedidoFechar = null;
+window.__pedirFechar = () => {
+  if (!usuario) return Promise.resolve(true);
+  if (_pedidoFechar) return _pedidoFechar;
+  const p = new Promise((resolve) => {
+    let pecas = 0;
+    try { pecas = typeof window.__vendaEmAndamento === 'function' ? window.__vendaEmAndamento() : 0; } catch {}
+    let respondeu = false;
+    const m = modal('Fechar o Salgueiro Gestão?', `
+      ${pecas
+        ? `<p style="margin:0 0 10px;padding:10px 12px;border-radius:8px;background:#FDF0F0;border:1px solid #E8B8B8;color:var(--vermelho)">
+             ⚠️ <b>Há uma venda montada no PDV</b> (${pecas} peça${pecas === 1 ? '' : 's'}). Ela ainda <b>não foi gravada</b> e será perdida.</p>`
+        : '<p style="margin:0 0 10px">Tudo o que foi feito até agora já está salvo.</p>'}
+      <p style="margin:0;color:var(--texto-suave);font-size:12.5px">Só quer tirar a janela da frente? Use o botão <b>_</b> (minimizar).</p>`,
+      (mm, fechar) => { respondeu = true; fechar(); resolve(true); }, 'Fechar o sistema');
+    const bSair = m.querySelector('.btn-salvar');
+    bSair.classList.remove('btn-primario'); bSair.classList.add('btn-perigo');
+    const bFica = m.querySelector('.btn-cancelar');
+    bFica.textContent = 'Continuar trabalhando';
+    // Enter / espaço caem em "continuar": quem fechou sem querer não fecha de novo sem querer
+    setTimeout(() => { try { bFica.focus(); } catch {} }, 30);
+    const obs = new MutationObserver(() => {
+      if (!document.contains(m)) { obs.disconnect(); if (!respondeu) resolve(false); }
+    });
+    obs.observe(document.body, { childList: true });
+  });
+  _pedidoFechar = p;
+  p.finally(() => { _pedidoFechar = null; });
+  return p;
+};
+
 const $app = document.getElementById('app');
 let usuario = null;
 let categoriasCache = [];
-let APP_VERSION = '3.30.0'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
+let APP_VERSION = '3.30.1'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
 
 // API dupla: no aplicativo usa IPC (preload); num terminal em rede (navegador),
 // conversa com o servidor do computador principal via HTTP com token de sessão.
@@ -199,15 +238,6 @@ function modal(titulo, corpoHtml, aoSalvar, rotuloSalvar = 'Salvar') {
   return m;
 }
 
-// ---------- Largura das janelas (v3.27.2) ----------
-// REGRA DO MARCIO (25/09/2026): janela NÃO usa barra de rolagem lateral tendo
-// espaço sobrando na tela. Vale para TODAS as janelas, não para a que foi
-// reclamada — por isso mora aqui, dentro do `modal()`, e não em cada tela.
-//
-// Como funciona: depois que a janela entra no DOM, mede se o conteúdo está
-// estourando para os lados (no corpo ou em qualquer `.tab-scroll` de dentro).
-// Se estiver, alarga a janela até caber, com teto de 90% da tela. Janela pequena
-// continua pequena — só cresce a que precisa.
 // ── Pagamento em DINHEIRO: quanto o cliente deu e o troco (v3.30.0) ─────────
 // Regra ÚNICA, usada em todo lugar onde se recebe dinheiro (PDV, troca rápida,
 // troca pela venda, recebimento de crediário). Pedido do Marcio: "campo para
@@ -266,6 +296,15 @@ function campoTroco({ forma, valor, inicial = '' }) {
   return box;
 }
 
+// ---------- Largura das janelas (v3.27.2) ----------
+// REGRA DO MARCIO (25/09/2026): janela NÃO usa barra de rolagem lateral tendo
+// espaço sobrando na tela. Vale para TODAS as janelas, não para a que foi
+// reclamada — por isso mora aqui, dentro do `modal()`, e não em cada tela.
+//
+// Como funciona: depois que a janela entra no DOM, mede se o conteúdo está
+// estourando para os lados (no corpo ou em qualquer `.tab-scroll` de dentro).
+// Se estiver, alarga a janela até caber, com teto de 90% da tela. Janela pequena
+// continua pequena — só cresce a que precisa.
 function ajustarLarguraModal(m) {
   const cx = m.querySelector('.modal');
   const corpo = m.querySelector('.corpo');

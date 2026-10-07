@@ -17,6 +17,11 @@ let refresco = null;   // função para redesenhar a tela
 // não aplica categoria do cliente, desconto à vista nem resgate de pontos.
 // A trava que vale é a do servidor (core/pdv.js); esta só evita o susto.
 let lojaSemDesconto = false;
+
+// Peças da venda montada na tela — usado pela pergunta "Fechar o sistema?"
+// (app.js). Só conta se o PDV estiver aberto: fora dele o carrinho já não existe.
+window.__vendaEmAndamento = () => document.getElementById('pdv-itens')
+  ? itens.reduce((a, i) => a + (Number(i.qtd) || 0), 0) : 0;
 const podeDescontar = () => pode('pdv.desconto') && !lojaSemDesconto;
 
 // Arredondamento de dinheiro no nível do MÓDULO: o modalPagamento é uma função

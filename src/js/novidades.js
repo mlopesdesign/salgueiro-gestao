@@ -3,6 +3,14 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.30.1',
+    data: '2026-10-07',
+    itens: [
+      '🛑 O SISTEMA NÃO FECHA MAIS SEM PERGUNTAR. No PDV o F4 troca o cliente; com o Alt apertado vira Alt+F4, que fecha qualquer programa do Windows na hora — parecia que o sistema tinha "fechado sozinho". Agora o X e o Alt+F4 perguntam "Fechar o Salgueiro Gestão?". Se houver venda montada no PDV, o aviso diz quantas peças vão ser perdidas. O botão em destaque é "Continuar trabalhando": um Enter sem querer não fecha.',
+      '💾 SALVAMENTO FINAL AO FECHAR VOLTOU A FUNCIONAR. Desde a 3.25.9 o sistema fechava antes de rodar a gravação final do banco. Agora ele grava tudo e só depois fecha.',
+    ],
+  },
+  {
     versao: '3.30.0',
     data: '2026-10-07',
     itens: [

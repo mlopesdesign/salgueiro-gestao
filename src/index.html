@@ -70,15 +70,29 @@
             } catch(e) { console.warn('[icon]', e); }
           }
         })();
-        Neutralino.events.on('windowClose', function () {
+        // X e Alt+F4 chegam AQUI (v3.30.1). Antes o neutralino.config tinha
+        // exitProcessOnClose=true: o processo morria direto e este gancho NUNCA
+        // rodava — nem pergunta, nem o salvamento final do banco.
+        // Agora: pergunta (window.__pedirFechar, em app.js) → salva → sai.
+        // Se a tela não estiver de pé (erro no boot), fecha direto: o X nunca
+        // pode ficar sem funcionar.
+        var _sairSalvando = function () {
           // Timeout de segurança: força saída após 4 s mesmo que o save trave
           var _forcar = setTimeout(function () {
             try { Neutralino.app.exit(0); } catch (_) {}
           }, 4000);
           var salvar = window.__fecharComSalvamento;
-          var p = salvar ? salvar() : Promise.resolve();
-          p.then(function () { clearTimeout(_forcar); })
+          var p = salvar ? salvar() : Neutralino.app.exit(0);
+          Promise.resolve(p).then(function () { clearTimeout(_forcar); })
            .catch(function () { clearTimeout(_forcar); try { Neutralino.app.exit(0); } catch (_) {} });
+        };
+        Neutralino.events.on('windowClose', function () {
+          var perguntar = window.__pedirFechar;
+          if (typeof perguntar !== 'function') { _sairSalvando(); return; }
+          try {
+            Promise.resolve(perguntar()).then(function (sim) { if (sim) _sairSalvando(); },
+                                              function () { _sairSalvando(); });
+          } catch (_) { _sairSalvando(); }
         });
         // espelha erros do console no arquivo neutralinojs.log (diagnóstico)
         var _cerr = console.error.bind(console);

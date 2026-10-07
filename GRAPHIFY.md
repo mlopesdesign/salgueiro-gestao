@@ -3,7 +3,7 @@
 > Mapa técnico gerado automaticamente por `tools/graphify.js`.
 > **Não edite à mão.** Regere com `node tools/graphify.js` a cada alteração estrutural.
 
-**Versão:** 3.30.0 · **Gerado em:** 2026-10-07
+**Versão:** 3.30.1 · **Gerado em:** 2026-10-07
 **Aplicação:** `br.com.mllopes.salgueirogestao` (Neutralino 6 + WebView2)
 **Cliente:** Boutique do Salgueiro · **Autor:** ML Lopes Design
 
@@ -112,7 +112,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 
 | Arquivo | Linhas | Exporta |
 |---|---|---|
-| `app.js` | 1942 | EM_REDE, ajustarLarguraModal, api, aplicarTema, campoTroco |
+| `app.js` | 1981 | EM_REDE, ajustarLarguraModal, api, aplicarTema, campoTroco |
 | `catalogo.js` | 262 | viewCatalogo |
 | `clientes.js` | 538 | viewClientes |
 | `compras.js` | 229 | viewCompras |
@@ -124,8 +124,8 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `impressao.js` | 179 | LIMITES, PADRAO, aplicarEstiloImpressao, cssCupomArquivo, cssCupomTela |
 | `mensagens.js` | 758 | abrirBalao, encerrarTelaMensagens, iniciarMensagens, pararMensagens, viewMensagens |
 | `neutralino.js` | 2 | — |
-| `novidades.js` | 1014 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
-| `pdv.js` | 2439 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
+| `novidades.js` | 1022 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
+| `pdv.js` | 2444 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
 | `ranking.js` | 360 | viewRanking |
 | `relatorios.js` | 1819 | viewRelatorios |
 

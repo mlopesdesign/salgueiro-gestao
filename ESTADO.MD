@@ -9,12 +9,12 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.30.0 |
+| **Versão atual** | 3.30.1 |
 | **Data do último build** | 2026-10-07 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.30.0 em 2026-10-07 ✓ (28 módulos core · 159 rotas · 37 tabelas) |
-| **5 lugares da versão** | os 5 em 3.30.0 ✓ |
+| **GRAPHIFY** | atualizado para 3.30.1 em 2026-10-07 ✓ (28 módulos core · 159 rotas · 37 tabelas) |
+| **5 lugares da versão** | os 5 em 3.30.1 ✓ |
 
 ---
 
@@ -25,6 +25,33 @@
 pelo Desktop Commander (`start_process`, powershell) → confiro no GitHub → aviso.
 O "dois cliques em PUBLICAR.bat" está REVOGADO. Detalhe: regra 3 do `REGRAS-CRITICAS.md`.
 **v3.30.0 publicada assim** (07/10/2026 00:24 UTC, 6.485.691 bytes conferidos).
+
+## 0.0000 v3.30.1 — FECHAR PERGUNTA ANTES · SALVAMENTO FINAL VOLTOU (2026-10-07)
+
+| Campo | Valor |
+|---|---|
+| Tag | `v3.30.1` |
+| Título | v3.30.1 — O sistema não fecha mais sem perguntar |
+| Asset | `Portable\resources.neu` — 6.489.909 bytes — sha256 `721a9c5d0d9e4302b6eb874ef5abe43d1206b0d7c50adb1037754a33b5dcd5f4` |
+| Backup | `backups\pre-v3.30.1-2026-10-07\` (+ `teste-fechar\`, app mínimo usado na prova) |
+
+**Relato:** "o sistema fechou sozinho". Nenhum código fecha sozinho (saídas: X/Alt+F4,
+"Baixar e instalar", restaurar backup). Windows do Marcio sem crash em 14 dias.
+Causa provável: **Alt+F4** (F4 = cliente no PDV) fechando sem perguntar.
+
+**Bug real achado:** `exitProcessOnClose: true` (desde v3.25.9) mata o processo
+ANTES do evento `windowClose` → o gancho de `index.html` (salvar e sair) era código
+morto. **PROVADO no Windows dele** com o próprio `Salgueiro Gestao.exe` (Neutralino
+6.3) e um app mínimo: `true` → fecha, 0 eventos; `false` → evento chega, janela fica.
+
+**Correção:** `exitProcessOnClose: false`; `index.html` → `window.__pedirFechar()`
+(app.js: modal "Fechar o Salgueiro Gestão?", foco em "Continuar trabalhando", aviso
+com nº de peças via `window.__vendaEmAndamento` do pdv.js; sem login → fecha direto;
+X de novo reaproveita a mesma pergunta) → `__fecharComSalvamento` (salvarAgora +
+exit, com saída forçada em 4 s). Se a tela não subiu, X fecha direto — o X NUNCA
+pode ficar sem funcionar. Atualizador e restauração continuam com `app.exit`
+direto (não passam pela pergunta). Corrigido também: o comentário da largura dos
+modais tinha ficado em cima do helper do troco (v3.30.0).
 
 ## 0.000 v3.30.0 — TROCO EM DINHEIRO · MAIS VENDIDOS · LOJA SEM DESCONTO (2026-10-07)
 
