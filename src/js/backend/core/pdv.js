@@ -12,7 +12,8 @@ const arred = (n) => Math.round(n * 100) / 100;
 // ---------- Caixa ----------
 function caixaAtual(db) {
   const caixa = db.prepare(`
-    SELECT cx.*, u.nome AS aberto_por, lj.nome AS loja FROM caixas cx
+    SELECT cx.*, u.nome AS aberto_por, lj.nome AS loja,
+           COALESCE(lj.sem_desconto,0) AS loja_sem_desconto FROM caixas cx
     LEFT JOIN usuarios u ON u.id = cx.usuario_abertura
     LEFT JOIN lojas lj ON lj.id = cx.loja_id
     WHERE cx.fechado_em IS NULL ORDER BY cx.id DESC LIMIT 1
@@ -50,14 +51,15 @@ function trocarLoja(db, p, quem) {
   const lojaId = Number(p && p.loja_id) || 0;
   if (!lojaId) return { ok: false, erro: 'Informe a loja.' };
   if (lojaId === cx.loja_id) return { ok: false, erro: 'O caixa já está nesta loja.' };
-  const l = db.prepare('SELECT id, nome FROM lojas WHERE id=? AND ativo=1').get(lojaId);
+  const l = db.prepare('SELECT id, nome, COALESCE(sem_desconto,0) sem_desconto FROM lojas WHERE id=? AND ativo=1').get(lojaId);
   if (!l) return { ok: false, erro: 'Loja inválida ou inativa.' };
 
   db.prepare('UPDATE caixas SET loja_id=? WHERE id=?').run(lojaId, cx.id);
   auditar(db, quem, 'caixa_troca_loja', `caixa #${cx.id}: ${cx.loja || '—'} → ${l.nome}`);
 
   const est = estoques.daLoja(db, lojaId);
-  return { ok: true, loja_id: lojaId, loja: l.nome, estoque: est ? est.nome : null };
+  return { ok: true, loja_id: lojaId, loja: l.nome, estoque: est ? est.nome : null,
+           sem_desconto: l.sem_desconto ? 1 : 0 };
 }
 
 function movimentoCaixa(db, p, quem) {
@@ -226,6 +228,20 @@ function registrarVenda(db, p, quem) {
   const pagamentos = Array.isArray(p.pagamentos) ? p.pagamentos : [];
   if (!itens.length) return { ok: false, erro: 'A venda não tem itens.' };
   if (!pagamentos.length) return { ok: false, erro: 'Informe a forma de pagamento.' };
+
+  // ── Loja SEM DESCONTO (v3.30.0) ───────────────────────────────────────────
+  // "Vendas online nunca têm desconto." Na loja marcada assim não entra
+  // desconto de espécie nenhuma: manual, por item, à vista, de categoria do
+  // cliente nem resgate de pontos. A trava é AQUI, no servidor — a tela só
+  // esconde os campos; terminal em rede pode montar o payload à mão.
+  if (cx.loja_sem_desconto) {
+    const temDesc = (Number(p.desconto) || 0) > 0.004 ||
+      itens.some(i => (Number(i.desconto) || 0) > 0.004) ||
+      (Number(p.pontos_resgatar) || 0) > 0;
+    if (temDesc) {
+      return { ok: false, erro: `A loja ${cx.loja || 'deste caixa'} não aceita desconto. Tire o desconto e refaça o fechamento.` };
+    }
+  }
 
   // ── Venda a preço de custo (v3.19.0) ──────────────────────────────────────
   // A peça sai pelo `produtos.preco_custo` LIDO DO BANCO, nunca pelo preço que

@@ -9,12 +9,12 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.29.1 |
-| **Data do último build** | 2026-09-30 |
+| **Versão atual** | 3.30.0 |
+| **Data do último build** | 2026-10-07 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.29.1 em 2026-09-30 ✓ (28 módulos core · 158 rotas · 37 tabelas) |
-| **5 lugares da versão** | os 5 em 3.29.1 ✓ |
+| **GRAPHIFY** | atualizado para 3.30.0 em 2026-10-07 ✓ (28 módulos core · 159 rotas · 37 tabelas) |
+| **5 lugares da versão** | os 5 em 3.30.0 ✓ |
 
 ---
 
@@ -24,6 +24,41 @@
 `PUBLICAR.bat`". **Ele:** clica e aguarda. **Eu:** confiro no GitHub e confirmo.
 Detalhe completo na regra 3 do `REGRAS-CRITICAS.md`. **v3.27.5 publicada assim** —
 primeira release enviada sem o Marcio abrir o GitHub (25/09/2026 01:04).
+
+## 0.000 v3.30.0 — TROCO EM DINHEIRO · MAIS VENDIDOS · LOJA SEM DESCONTO (2026-10-07)
+
+| Campo | Valor |
+|---|---|
+| Tag | `v3.30.0` |
+| Título | v3.30.0 — Troco em dinheiro · Mais vendidos por loja · Loja sem desconto |
+| Asset | `Portable\resources.neu` — 6.485.691 bytes — sha256 `087fc5dadb0eff00ee5d39c9df267fa5f5bb923bef4b1ad41e8c8589fcd52f97` |
+| Backup | `backups\pre-v3.30.0-2026-10-07\` |
+
+**1. Troco (regra única em `app.js`: `trocoDinheiro()` + `campoTroco()`).** Usado em
+4 lugares: PDV (por linha de dinheiro), troca rápida, troca pela venda, receber
+crediário. "Cliente deu" obrigatório só em dinheiro. No PDV vai para o servidor
+`valor = max(valor, cliente deu)` → o core já calculava `troco = pago − total` e
+grava em `venda_pagamentos.troco`; gaveta = valor − troco; cupom mostra Troco.
+Troca/crediário: troco só na tela (o valor enviado continua o da diferença).
+Rodapé do pagamento virou `rodape()` — digitar o "Cliente deu" não redesenha as
+linhas (cursor). Conferido em tela renderizada (Chromium) com app.css.
+
+**2. Mais vendidos** — `relatorios.maisVendidos(db,{de,ate,loja_id})`, rota
+`relatorios:maisVendidos` (relatorios.ver). Produto × loja, líquido de devolução
+(loja da venda de origem), só `status='concluida'`. Aba `🏆 Mais vendidos` com
+seletor Todas as lojas (colunas por loja) / uma loja; CSV.
+
+**3. Loja sem desconto** — `lojas.sem_desconto` (schema + migração db.js).
+Trava no SERVIDOR (`core/pdv.js registrarVenda`): recusa desconto geral, por item
+e `pontos_resgatar`. `caixaAtual` devolve `loja_sem_desconto`; `trocarLoja` devolve
+`sem_desconto`. Tela: `podeDescontar()` substitui `pode('pdv.desconto')` no PDV;
+sem à vista, sem categoria, sem pontos; etiqueta "🚫 sem desconto"; trocar de loja
+redesenha o PDV mantendo carrinho (`telaVenda(alvo, caixa, true)`). Config → Lojas:
+caixa "Esta loja não dá desconto". **Cortesia NÃO foi bloqueada** (é brinde
+autorizado, não desconto) — confirmar com o Marcio se precisar.
+
+Teste novo `testes/teste-loja-sem-desconto.mjs` — 25 asserções (contas à mão).
+Falhas antigas inalteradas: consignado-rel 6, origem-vendas 4.
 
 ## 0.00 v3.29.1 — IMPRIMIR BALANÇO DAVA FOLHA EM BRANCO (2026-09-30)
 

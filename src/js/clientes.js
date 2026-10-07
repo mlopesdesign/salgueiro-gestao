@@ -1,5 +1,5 @@
 // Clientes + Crediário + Categorias + Importação/Exportação
-import { api, el, esc, moeda, toast, modal, setorAtivo } from './app.js';
+import { api, el, esc, moeda, toast, modal, setorAtivo, campoTroco } from './app.js';
 
 const dataBr  = (s) => s ? String(s).slice(0, 10).split('-').reverse().join('/') : '—';
 const dataBrH  = (s) => s ? `${String(s).slice(0, 10).split('-').reverse().join('/')} ${String(s).slice(11, 16)}` : '—';
@@ -479,7 +479,7 @@ async function abaCrediario(corpo) {
 }
 
 function modalReceber(p, restante, aoConcluir) {
-  modal(`Receber — ${esc(p.cliente)}`, `
+  const mr = modal(`Receber — ${esc(p.cliente)}`, `
     <p style="margin-bottom:12px">Parcela ${p.numero}/${p.total_parcelas} da venda #${p.venda_id}
       · restante <b>${moeda(restante)}</b></p>
     <div class="linha-2">
@@ -489,9 +489,12 @@ function modalReceber(p, restante, aoConcluir) {
         <select id="rc-forma"><option value="dinheiro">Dinheiro</option><option value="pix">PIX</option>
           <option value="debito">Cartão débito</option><option value="credito">Cartão crédito</option></select></div>
     </div>
+    <div id="rc-troco"></div>
     <p style="color:var(--texto-suave);font-size:12px">Recebimento em dinheiro entra na gaveta do caixa aberto.</p>
     <div class="erro" id="rc-erro"></div>
   `, async (m, fechar) => {
+    const eT = mr._troco ? mr._troco.validar() : '';
+    if (eT) { m.querySelector('#rc-erro').textContent = eT; return; }
     const r = await api('crediario:receber', {
       parcela_id: p.id,
       valor: Number(m.querySelector('#rc-valor').value),
@@ -501,6 +504,12 @@ function modalReceber(p, restante, aoConcluir) {
     toast(r.quitada ? 'Parcela quitada! ✅' : `Recebido. Restam ${moeda(r.restante)}.`);
     fechar(); aoConcluir();
   }, 'Confirmar recebimento');
+  // Dinheiro: cliente deu / troco (v3.30.0, regra em app.js)
+  mr._troco = campoTroco({ forma: () => mr.querySelector('#rc-forma').value,
+                           valor: () => Number(mr.querySelector('#rc-valor').value) || 0 });
+  mr.querySelector('#rc-troco').appendChild(mr._troco);
+  mr.querySelector('#rc-forma').addEventListener('change', () => mr._troco.atualizar());
+  mr.querySelector('#rc-valor').addEventListener('input', () => mr._troco.atualizar());
 }
 
 // ---------- Aba: aniversariantes ----------

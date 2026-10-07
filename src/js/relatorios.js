@@ -78,6 +78,7 @@ export async function viewRelatorios(alvo) {
         <button data-aba="vendas" class="ativa">Vendas</button>
         <button data-aba="evento">🎪 Evento / Pós-venda</button>
         ${pode('dashboard.financeiro') ? '<button data-aba="lojas">🏬 Por loja</button>' : ''}
+        <button data-aba="maisvendidos">🏆 Mais vendidos</button>
         <button data-aba="consignados">Consignados</button>
         <button data-aba="abc">Curva ABC</button>
         <button data-aba="paradas">Peças paradas</button>
@@ -88,7 +89,7 @@ export async function viewRelatorios(alvo) {
     </div>`);
   const corpo = tela.querySelector('#aba-conteudo');
   const periodo = () => ({ de: tela.querySelector('#r-de').value, ate: tela.querySelector('#r-ate').value });
-  const abas = { vendas: abaVendas, evento: abaEvento, lojas: abaPorLoja, consignados: abaConsignados, abc: abaAbc, paradas: abaParadas, estoque: abaEstoque, acompanhadas: abaAcompanhadas };
+  const abas = { vendas: abaVendas, evento: abaEvento, lojas: abaPorLoja, maisvendidos: abaMaisVendidos, consignados: abaConsignados, abc: abaAbc, paradas: abaParadas, estoque: abaEstoque, acompanhadas: abaAcompanhadas };
   const rotuloAba = () => (tela.querySelector('.abas button.ativa')?.textContent || 'Relatório').trim();
   tela.querySelector('#r-imprimir').onclick = () => imprimirRelatorio(
     `${rotuloAba()} — ${tela.querySelector('#r-de').value} a ${tela.querySelector('#r-ate').value}`, corpo.innerHTML);
@@ -1119,6 +1120,67 @@ async function abaAbc(corpo, per) {
     baixarCsv('curva-abc', ['Classe', 'Produto', 'Referência', 'Peças', 'Receita (R$)', '% total', 'Margem (R$)'],
       r.produtos.map(p => [p.classe, p.nome, p.referencia || '', p.pecas,
         p.receita.toFixed(2).replace('.', ','), p.pct + '%', p.margem.toFixed(2).replace('.', ',')]));
+  corpo.appendChild(bloco);
+}
+
+// ---------- Produtos mais vendidos (v3.30.0) ----------
+// Filtro: todas as lojas (total, com as peças de cada loja em colunas) ou uma
+// loja só. A escolha fica guardada enquanto o usuário troca o período.
+let _mvLoja = '';
+async function abaMaisVendidos(corpo, per) {
+  const r = await api('relatorios:maisVendidos', { ...per, loja_id: _mvLoja || null });
+  if (!r.ok) { toast(r.erro, true); return; }
+  const total = !r.loja_id;
+  const cols = total && r.colunas.length > 1 ? r.colunas : [];
+  const nf = (n) => String(Math.round(n * 100) / 100).replace('.', ',');
+  const linhas = r.produtos.map(x => `<tr>
+    <td class="num" style="color:var(--texto-suave)">${x.pos}º</td>
+    <td><b>${esc(x.nome)}</b>${x.referencia ? ` <small style="color:var(--texto-suave)">${esc(x.referencia)}</small>` : ''}
+      <br><small style="color:var(--texto-suave)">${esc(x.categoria)}${x.consignado ? ' · 🤝 consignado' : ''}</small></td>
+    ${cols.map(c => `<td class="num">${x.por_loja[c.id] ? nf(x.por_loja[c.id].pecas) : '<span style="opacity:.35">—</span>'}</td>`).join('')}
+    <td class="num"><b>${nf(x.pecas)}</b></td>
+    <td class="num">${moeda(x.receita)}</td>
+    <td class="num" style="width:120px">
+      <div style="background:var(--fundo);border-radius:6px;overflow:hidden;height:8px;margin-bottom:2px">
+        <div style="width:${Math.min(100, x.pct)}%;background:var(--vinho);height:8px"></div></div>
+      <small style="color:var(--texto-suave)">${String(x.pct).replace('.', ',')}%</small></td>
+  </tr>`).join('');
+  const nCols = 5 + cols.length;
+  const bloco = el(`
+    <div>
+      <div class="cards">
+        <div class="card"><div class="rotulo">Produtos vendidos</div><div class="valor">${r.totais.produtos}</div></div>
+        <div class="card"><div class="rotulo">Peças</div><div class="valor">${nf(r.totais.pecas)}</div></div>
+        <div class="card"><div class="rotulo">Receita</div><div class="valor" style="color:var(--verde)">${moeda(r.totais.receita)}</div></div>
+      </div>
+      <div class="painel"><div class="barra"><b>Produtos mais vendidos</b>
+        <select id="mv-loja" style="min-width:220px;margin-left:12px">
+          <option value="">Todas as lojas (total)</option>
+          ${r.lojas.map(l => `<option value="${l.id}" ${String(l.id) === String(_mvLoja) ? 'selected' : ''}>${esc(l.nome)}</option>`).join('')}
+        </select>
+        <small style="color:var(--texto-suave)">ordem por peças · líquido de devoluções · troca não conta</small>
+        <button class="btn btn-suave" id="mv-exp" style="margin-left:auto">Exportar CSV</button></div>
+        <table>
+          <thead><tr><th class="num" style="width:44px">#</th><th>Produto</th>
+            ${cols.map(c => `<th class="num">${esc(c.nome)}</th>`).join('')}
+            <th class="num">${cols.length ? 'Total peças' : 'Peças'}</th><th class="num">Receita</th><th class="num">% das peças</th></tr></thead>
+          <tbody>${linhas || `<tr><td colspan="${nCols}" class="vazio">Nenhuma venda ${r.loja ? 'em ' + esc(r.loja) + ' ' : ''}no período.</td></tr>`}</tbody>
+          ${r.produtos.length ? `<tfoot><tr style="border-top:2px solid var(--borda)">
+            <td></td><td><b>TOTAL</b></td>
+            ${cols.map(c => `<td class="num"><b>${nf(r.produtos.reduce((s, x) => s + (x.por_loja[c.id] ? x.por_loja[c.id].pecas : 0), 0))}</b></td>`).join('')}
+            <td class="num"><b>${nf(r.totais.pecas)}</b></td><td class="num"><b>${moeda(r.totais.receita)}</b></td><td></td></tr></tfoot>` : ''}
+        </table></div>
+    </div>`);
+  bloco.querySelector('#mv-loja').onchange = (e) => {
+    _mvLoja = e.target.value;
+    corpo.innerHTML = ''; abaMaisVendidos(corpo, per);
+  };
+  bloco.querySelector('#mv-exp').onclick = () =>
+    baixarCsv(`mais-vendidos-${r.loja ? r.loja.toLowerCase().replace(/\s+/g, '-') : 'todas-as-lojas'}`,
+      ['Posição', 'Produto', 'Referência', 'Categoria', ...cols.map(c => `Peças ${c.nome}`), 'Peças', 'Receita (R$)', '% das peças'],
+      r.produtos.map(x => [x.pos, x.nome, x.referencia, x.categoria,
+        ...cols.map(c => x.por_loja[c.id] ? nf(x.por_loja[c.id].pecas) : 0),
+        nf(x.pecas), x.receita.toFixed(2).replace('.', ','), String(x.pct).replace('.', ',') + '%']));
   corpo.appendChild(bloco);
 }
 

@@ -542,7 +542,7 @@ async function abaLojas(corpo) {
         ? (l.estoque_principal ? `${esc(l.estoque_nome)} <span style="font-size:10px;color:var(--texto-suave)">(central)</span>` : esc(l.estoque_nome))
         : '<span style="color:var(--texto-suave);font-size:11px">— usa central —</span>';
       const tr = el(`<tr>
-        <td><b>${esc(l.nome)}</b></td>
+        <td><b>${esc(l.nome)}</b>${l.sem_desconto ? ' <span class="pill" style="background:#FFF6DA;color:#8a6d0b;border:1px solid #EAD48A">🚫 sem desconto</span>' : ''}</td>
         <td style="font-size:12px">${nomeEst}</td>
         <td class="num">${l.qtd_caixas || 0}</td>
         <td>${l.ativo ? '<span class="pill pill-ok">ativa</span>' : '<span class="pill pill-baixo">inativa</span>'}</td>
@@ -589,12 +589,20 @@ async function formLoja(l, aoConcluir) {
       <small style="color:var(--texto-suave);margin-top:4px;display:block">
         Qual estoque é debitado ao vender nesta loja.
         "Loja WhatsApp" pode usar o mesmo estoque da loja física, por exemplo.</small></div>
+    <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer;border:1px dashed var(--borda);
+      border-radius:8px;padding:10px 12px;margin:4px 0 10px">
+      <input type="checkbox" id="lj-semdesc" ${l && l.sem_desconto ? 'checked' : ''} style="margin-top:3px">
+      <span><b>🚫 Esta loja não dá desconto</b><br>
+        <small style="color:var(--texto-suave)">Para venda online, por exemplo. No PDV desta loja some o campo de
+        desconto e não entra desconto de espécie nenhuma — manual, à vista, de categoria do cliente nem resgate de pontos.</small></span>
+    </label>
     <div class="erro" id="lj-erro"></div>
   `, async (wrap, fechar) => {
     const nome = wrap.querySelector('#lj-nome').value.trim();
     if (!nome) { wrap.querySelector('#lj-erro').textContent = 'Informe o nome da loja.'; return; }
     const estoqueId = wrap.querySelector('#lj-estoque').value; // 'proprio' ou número
-    const payload = { id: l ? l.id : undefined, nome, estoque_id: estoqueId };
+    const payload = { id: l ? l.id : undefined, nome, estoque_id: estoqueId,
+      sem_desconto: wrap.querySelector('#lj-semdesc').checked ? 1 : 0 };
     const r = await api('lojas:salvar', payload);
     if (!r.ok) { wrap.querySelector('#lj-erro').textContent = r.erro; return; }
     toast('Loja salva.'); fechar(); aoConcluir && aoConcluir();

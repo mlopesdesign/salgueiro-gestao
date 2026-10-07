@@ -149,6 +149,7 @@ CREATE TABLE IF NOT EXISTS lojas (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   nome TEXT NOT NULL UNIQUE,
   estoque_id INTEGER REFERENCES estoques(id),
+  sem_desconto INTEGER NOT NULL DEFAULT 0,      -- v3.30.0: loja que nunca dá desconto (ex.: venda online)
   ativo INTEGER NOT NULL DEFAULT 1,
   criado_em TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );

@@ -466,6 +466,16 @@ function migrar(db) {
   // coluna própria porque NÃO é preço de peça: a soma dos itens continua
   // valendo o custo, e o total da venda passa a ser subtotal + acrescimo.
   // Sem separar, a conciliação do relatório (v3.9.0) deixaria de fechar.
+  // v3.30.0 — loja SEM DESCONTO (pedido do Marcio: "vendas online nunca tem
+  // descontos, preciso ter uma forma de bloquear os descontos nas lojas
+  // específicas"). 0 = loja normal; 1 = nenhum desconto de espécie nenhuma.
+  if (tabelaExiste('lojas') && !temColuna('lojas', 'sem_desconto')) {
+    try {
+      db.exec('ALTER TABLE lojas ADD COLUMN sem_desconto INTEGER NOT NULL DEFAULT 0');
+      console.log('[migração] lojas.sem_desconto adicionado');
+    } catch (e) { console.error('[migração] lojas.sem_desconto:', e.message); }
+  }
+
   if (!temColuna('vendas', 'acrescimo')) {
     try {
       db.exec('ALTER TABLE vendas ADD COLUMN acrescimo REAL NOT NULL DEFAULT 0');

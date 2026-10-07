@@ -8,7 +8,7 @@ const arred = (n) => Math.round(n * 100) / 100;
 function listar(db, p) {
   const incluirInativas = p && p.todas;
   const linhas = db.prepare(`
-    SELECT l.id, l.nome, l.ativo, l.estoque_id,
+    SELECT l.id, l.nome, l.ativo, l.estoque_id, COALESCE(l.sem_desconto,0) AS sem_desconto,
            e.nome  AS estoque_nome,
            e.tipo  AS estoque_tipo,
            e.principal AS estoque_principal,
@@ -32,6 +32,9 @@ function salvar(db, p, quem) {
     if (p.id) {
       // edição: atualiza nome e, se o campo vier, o estoque vinculado
       db.prepare('UPDATE lojas SET nome=? WHERE id=?').run(nome, p.id);
+      if (p.sem_desconto !== undefined) {
+        db.prepare('UPDATE lojas SET sem_desconto=? WHERE id=?').run(p.sem_desconto ? 1 : 0, p.id);
+      }
       if (p.estoque_id !== undefined && p.estoque_id !== null && p.estoque_id !== '') {
         const eid = Number(p.estoque_id) || null;
         db.prepare('UPDATE lojas SET estoque_id=? WHERE id=?').run(eid, p.id);
@@ -42,6 +45,7 @@ function salvar(db, p, quem) {
     // criação
     const r = db.prepare('INSERT INTO lojas (nome) VALUES (?)').run(nome);
     const idLoja = Number(r.lastInsertRowid);
+    if (p.sem_desconto) db.prepare('UPDATE lojas SET sem_desconto=1 WHERE id=?').run(idLoja);
 
     // estoque_id pode ser:
     //   'proprio' (ou omitido) → criar estoque próprio vazio para esta loja

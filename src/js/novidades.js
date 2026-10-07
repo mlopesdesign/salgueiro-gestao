@@ -3,6 +3,15 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.30.0',
+    data: '2026-10-07',
+    itens: [
+      '💵 TROCO NO PAGAMENTO EM DINHEIRO. Ao escolher Dinheiro aparece o campo "Cliente deu" — obrigatório — e o sistema mostra na hora o troco a devolver (ou quanto falta). O troco sai no cupom e a gaveta confere certinho. Vale no PDV, na troca (quando a cliente paga a diferença em dinheiro) e no recebimento de crediário. Nas outras formas o campo não aparece.',
+      '🏆 RELATÓRIOS → MAIS VENDIDOS. Aba nova com o ranking dos produtos por peças vendidas no período, receita e participação. No seletor: "Todas as lojas (total)" — com a quantidade de cada loja em colunas — ou uma loja só. Já desconta devolução, troca não conta, e exporta para Excel (CSV).',
+      '🚫 LOJA SEM DESCONTO. Em Configurações → Lojas, marque "Esta loja não dá desconto" (ex.: venda online). No PDV dessa loja some o campo de desconto e não entra desconto de espécie nenhuma: manual, por item, à vista, de categoria do cliente ou resgate de pontos. Trocando o caixa de loja, a regra acompanha. O servidor também recusa — não dá para burlar pela rede.',
+    ],
+  },
+  {
     versao: '3.29.1',
     data: '2026-09-30',
     itens: [

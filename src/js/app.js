@@ -26,7 +26,7 @@ document.addEventListener('wheel', (e) => {
 const $app = document.getElementById('app');
 let usuario = null;
 let categoriasCache = [];
-let APP_VERSION = '3.29.1'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
+let APP_VERSION = '3.30.0'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
 
 // API dupla: no aplicativo usa IPC (preload); num terminal em rede (navegador),
 // conversa com o servidor do computador principal via HTTP com token de sessão.
@@ -59,7 +59,7 @@ const api = NO_APP
     })
   : criarApiRede();
 const EM_REDE = !NO_APP; // true quando rodando num terminal via navegador
-export { api, el, esc, moeda, toast, modal, ajustarLarguraModal, getConfig, aplicarTema, recarregarConfig, pode, ehAdmin, podeVerTela, getLicenca, setorAtivo, EM_REDE };
+export { api, el, esc, moeda, toast, modal, ajustarLarguraModal, campoTroco, trocoDinheiro, getConfig, aplicarTema, recarregarConfig, pode, ehAdmin, podeVerTela, getLicenca, setorAtivo, EM_REDE };
 
 async function recarregarVersao() {
   try {
@@ -208,6 +208,64 @@ function modal(titulo, corpoHtml, aoSalvar, rotuloSalvar = 'Salvar') {
 // estourando para os lados (no corpo ou em qualquer `.tab-scroll` de dentro).
 // Se estiver, alarga a janela até caber, com teto de 90% da tela. Janela pequena
 // continua pequena — só cresce a que precisa.
+// ── Pagamento em DINHEIRO: quanto o cliente deu e o troco (v3.30.0) ─────────
+// Regra ÚNICA, usada em todo lugar onde se recebe dinheiro (PDV, troca rápida,
+// troca pela venda, recebimento de crediário). Pedido do Marcio: "campo para
+// colocar o valor dado pelo cliente e calcular o troco; quando for em dinheiro
+// o preenchimento é obrigatório, só em dinheiro".
+//
+// campoTroco({ forma: () => 'dinheiro'|..., valor: () => número, inicial })
+// devolve um elemento com:
+//   .atualizar()  mostra/esconde (só aparece em dinheiro) e refaz o troco
+//   .validar()    '' se está certo, senão a mensagem de erro
+//   .recebido()   quanto o cliente deu
+//   .aoMudar      função opcional chamada a cada digitação
+function trocoDinheiro(valor, recebido) {
+  const v = Math.round((Number(valor) || 0) * 100) / 100;
+  const r = Math.round((Number(recebido) || 0) * 100) / 100;
+  if (v <= 0) return { erro: '', troco: 0 };
+  if (!(r > 0)) return { erro: 'Informe quanto o cliente deu em dinheiro.', troco: 0 };
+  if (r < v) return { erro: `O cliente deu ${moeda(r)} — faltam ${moeda(Math.round((v - r) * 100) / 100)} em dinheiro.`, troco: 0 };
+  return { erro: '', troco: Math.round((r - v) * 100) / 100 };
+}
+
+function campoTroco({ forma, valor, inicial = '' }) {
+  const box = el(`<div class="troco-box">
+      <div class="campo" style="margin:0"><label>Cliente deu (R$) *</label>
+        <input class="tb-rec" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00"
+          value="${inicial === '' || inicial == null ? '' : inicial}"></div>
+      <div class="troco-res"><span class="tb-rot">Troco a devolver</span><b class="tb-val">R$ 0,00</b></div>
+    </div>`);
+  const inp = box.querySelector('.tb-rec');
+  box.recebido = () => Number(String(inp.value).replace(',', '.')) || 0;
+  box.validar = () => (forma() === 'dinheiro' ? trocoDinheiro(valor(), box.recebido()).erro : '');
+  box.atualizar = () => {
+    const ehDinheiro = forma() === 'dinheiro' && (Number(valor()) || 0) > 0;
+    box.style.display = ehDinheiro ? '' : 'none';
+    if (!ehDinheiro) return;
+    const res = box.querySelector('.troco-res');
+    const t = trocoDinheiro(valor(), box.recebido());
+    if (inp.value.trim() === '') {
+      res.classList.remove('falta');
+      box.querySelector('.tb-rot').textContent = 'Troco a devolver';
+      box.querySelector('.tb-val').textContent = '—';
+    } else if (t.erro) {
+      res.classList.add('falta');
+      box.querySelector('.tb-rot').textContent = 'Falta em dinheiro';
+      box.querySelector('.tb-val').textContent =
+        moeda(Math.max(0, Math.round(((Number(valor()) || 0) - box.recebido()) * 100) / 100));
+    } else {
+      res.classList.remove('falta');
+      box.querySelector('.tb-rot').textContent = 'Troco a devolver';
+      box.querySelector('.tb-val').textContent = moeda(t.troco);
+    }
+  };
+  inp.addEventListener('focus', () => { try { inp.select(); } catch {} });
+  inp.addEventListener('input', () => { box.atualizar(); if (box.aoMudar) box.aoMudar(box.recebido(), inp.value); });
+  box.atualizar();
+  return box;
+}
+
 function ajustarLarguraModal(m) {
   const cx = m.querySelector('.modal');
   const corpo = m.querySelector('.corpo');

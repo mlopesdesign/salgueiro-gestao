@@ -514,6 +514,7 @@ const rotas = {
   // Relatórios
   'relatorios:vendas': (p) => relatorios.vendasPeriodo(db, p || {}),
   'relatorios:abc': (p) => relatorios.curvaAbc(db, p || {}),
+  'relatorios:maisVendidos': (p) => relatorios.maisVendidos(db, p || {}),
   'relatorios:paradas': (p) => relatorios.pecasParadas(db, p || {}),
   'relatorios:estoque': (p) => relatorios.estoqueDetalhado(db, p || {}),
   'relatorios:receitaPorLoja': (p) => relatorios.receitaPorLoja(db, p || {}),
@@ -2333,7 +2334,7 @@ const PERM_ROTA = {
   'financeiro:salvar': 'financeiro.gerenciar', 'financeiro:baixar': 'financeiro.gerenciar', 'financeiro:excluir': 'financeiro.gerenciar',
   'consignacao:resumo': 'financeiro.ver', 'consignacao:listar': 'financeiro.ver',
   'consignacao:acertar': 'financeiro.gerenciar',
-  'relatorios:vendas': 'relatorios.ver', 'relatorios:abc': 'relatorios.ver', 'relatorios:paradas': 'relatorios.ver',
+  'relatorios:vendas': 'relatorios.ver', 'relatorios:abc': 'relatorios.ver', 'relatorios:maisVendidos': 'relatorios.ver', 'relatorios:paradas': 'relatorios.ver',
   // relatório de estoque: quem cuida do estoque precisa dele, mesmo sem acesso a relatórios de venda
   'relatorios:estoque': 'estoque.ver',
   'relatorios:consignados': 'relatorios.ver',

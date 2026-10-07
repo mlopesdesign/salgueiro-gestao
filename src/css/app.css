@@ -694,3 +694,11 @@ body.com-chat .conteudo { padding-bottom: 96px; }
 input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* v3.30.0 — pagamento em dinheiro: quanto o cliente deu e o troco (campoTroco em app.js) */
+.troco-box { display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:end;
+  background:#F2F9F3; border:1px solid #CFE6D4; border-radius:8px; padding:10px 12px; margin:2px 0 10px; }
+.troco-res { text-align:right; }
+.troco-res span { display:block; font-size:11px; letter-spacing:.3px; text-transform:uppercase; color:var(--texto-suave); }
+.troco-res b { font-size:21px; color:var(--verde); font-variant-numeric:tabular-nums; }
+.troco-res.falta b { color:var(--vermelho); }

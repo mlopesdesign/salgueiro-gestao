@@ -1,5 +1,5 @@
 // PDV — frente de caixa
-import { api, el, esc, moeda, toast, modal, getConfig, pode, ehAdmin, podeVerTela, setorAtivo, EM_REDE } from './app.js';
+import { api, el, esc, moeda, toast, modal, getConfig, pode, ehAdmin, podeVerTela, setorAtivo, EM_REDE, campoTroco, trocoDinheiro } from './app.js';
 
 // Formas de pagamento disponíveis (respeita setores desligados pelo Dev).
 // 'troca' NÃO entra: é lançada pelo sistema quando o crédito de uma troca abate
@@ -11,6 +11,13 @@ const formasDisponiveis = () => FORMAS.filter(([v]) =>
 let itens = [];        // itens da venda em andamento
 let cliente = null;    // cliente selecionado
 let refresco = null;   // função para redesenhar a tela
+
+// Loja SEM DESCONTO (v3.30.0) — ex.: venda online. Vem do caixa aberto e muda
+// quando o caixa troca de loja. Desligado, a tela não mostra campo de desconto,
+// não aplica categoria do cliente, desconto à vista nem resgate de pontos.
+// A trava que vale é a do servidor (core/pdv.js); esta só evita o susto.
+let lojaSemDesconto = false;
+const podeDescontar = () => pode('pdv.desconto') && !lojaSemDesconto;
 
 // Arredondamento de dinheiro no nível do MÓDULO: o modalPagamento é uma função
 // irmã de viewPdv e não enxerga variáveis declaradas lá dentro. Já houve uso
@@ -124,13 +131,14 @@ async function telaAbertura(alvo) {
 }
 
 // ---------- Tela de venda ----------
-function telaVenda(alvo, caixa) {
-  itens = []; cliente = null;
+function telaVenda(alvo, caixa, manterVenda = false) {
+  if (!manterVenda) { itens = []; cliente = null; }
+  lojaSemDesconto = !!(caixa && caixa.loja_sem_desconto);
   const tela = el(`
     <div>
       <div class="pagina-topo">
         <h1>PDV — Venda${caixa && caixa.loja ? ` <button type="button" id="b-loja" title="Trocar de loja sem fechar o caixa nem perder a venda"
-          style="font-size:13px;font-weight:600;color:var(--vinho);background:#F6E9E9;border:1px solid transparent;padding:3px 10px;border-radius:20px;vertical-align:middle;cursor:pointer">🏬 <span id="b-loja-nome">${esc(caixa.loja)}</span> ▾</button>` : ''}</h1>
+          style="font-size:13px;font-weight:600;color:var(--vinho);background:#F6E9E9;border:1px solid transparent;padding:3px 10px;border-radius:20px;vertical-align:middle;cursor:pointer">🏬 <span id="b-loja-nome">${esc(caixa.loja)}</span> ▾</button>` : ''}${lojaSemDesconto ? ` <span title="Esta loja não aceita desconto" style="font-size:12px;font-weight:600;color:#8a6d0b;background:#FFF6DA;border:1px solid #EAD48A;padding:3px 10px;border-radius:20px;vertical-align:middle">🚫 sem desconto</span>` : ''}</h1>
         <div style="display:flex;gap:8px">
           <button class="btn btn-suave" id="b-consulta">🔍 Consultar preço (F3)</button>
           <button class="btn btn-suave" id="b-troca" style="color:var(--vinho);font-weight:700">🔄 Troca (F6)</button>
@@ -151,7 +159,7 @@ function telaVenda(alvo, caixa) {
           <div id="pdv-sugestoes" style="max-height:42vh;overflow-y:auto;border-radius:0 0 8px 8px"></div>
           <table>
             <thead><tr><th>Item</th><th style="width:70px">Qtd</th><th class="num">Preço</th>
-              ${pode('pdv.desconto') ? '<th style="width:90px">Desc. R$</th>' : ''}<th class="num">Total</th><th style="width:36px"></th></tr></thead>
+              ${podeDescontar() ? '<th style="width:90px">Desc. R$</th>' : ''}<th class="num">Total</th><th style="width:36px"></th></tr></thead>
             <tbody id="pdv-itens"><tr><td colspan="6" class="vazio">Bipe um produto para começar.</td></tr></tbody>
           </table>
         </div>
@@ -161,7 +169,7 @@ function telaVenda(alvo, caixa) {
               <button class="btn btn-suave btn-bloco" id="pdv-cliente">Consumidor final — trocar (F4)</button></div>
             <div id="pdv-pontos" style="display:none;margin-bottom:4px"></div>
             <div class="tot-linha"><span>Subtotal</span><b id="t-sub">R$ 0,00</b></div>
-            ${pode('pdv.desconto') ? `<div class="tot-linha"><span>Desconto geral</span>
+            ${podeDescontar() ? `<div class="tot-linha"><span>Desconto geral</span>
               <div style="display:flex;align-items:center">
                 <input id="t-desc" type="number" min="0" step="0.01" value="0"
                   style="width:78px;text-align:right;padding:5px 8px;border:1px solid var(--borda);border-radius:6px 0 0 6px">
@@ -195,7 +203,7 @@ function telaVenda(alvo, caixa) {
       ? arred(itens.reduce((s, i) => s + arred(i.qtd * (Number(i.preco_custo) || 0)), 0))
       : arred(itens.reduce((s, i) => s + arred(i.qtd * i.preco_unit) - arred(i.desconto), 0));
     let desc = 0;
-    if (!modoCusto && pode('pdv.desconto')) {
+    if (!modoCusto && podeDescontar()) {
       const modo = tela.querySelector('#t-desc-modo')?.textContent || 'R$';
       const val = Number(tela.querySelector('#t-desc')?.value) || 0;
       if (modo === '%') {
@@ -267,7 +275,7 @@ function telaVenda(alvo, caixa) {
         <td><input data-c="qtd" type="number" min="1" max="${i.estoque || ''}" value="${i.qtd}"
           style="width:56px;padding:4px 6px;border:1px solid var(--borda);border-radius:6px;text-align:center"></td>
         ${celPreco}
-        ${pode('pdv.desconto') ? (modoCusto
+        ${podeDescontar() ? (modoCusto
           ? `<td class="num" style="color:var(--texto-suave);font-size:.85em">—</td>`
           : `<td><input data-c="desconto" type="number" min="0" step="0.01" value="${i.desconto}"
           style="width:76px;padding:4px 6px;border:1px solid var(--borda);border-radius:6px"></td>`) : ''}
@@ -385,7 +393,7 @@ function telaVenda(alvo, caixa) {
   tela.querySelector('#pdv-cliente').onclick = () =>
     escolherCliente(async c => {
       // Ao trocar cliente: limpa desconto de categoria anterior
-      if (pode('pdv.desconto') && tela._descontoAutorizado) {
+      if (podeDescontar() && tela._descontoAutorizado) {
         const $td = tela.querySelector('#t-desc');
         const $tm = tela.querySelector('#t-desc-modo');
         if ($td) $td.value = '0';
@@ -399,7 +407,7 @@ function telaVenda(alvo, caixa) {
       tela.querySelector('#pdv-cliente').textContent =
         c ? `👤 ${c.nome} — trocar (F4)` : 'Consumidor final — trocar (F4)';
       // Auto-aplicar desconto de categoria
-      if (c && (c.categoria_desconto || 0) > 0 && pode('pdv.desconto') && !tela._vendaCusto) {
+      if (c && (c.categoria_desconto || 0) > 0 && podeDescontar() && !tela._vendaCusto) {
         const $tm = tela.querySelector('#t-desc-modo');
         const $td = tela.querySelector('#t-desc');
         if ($tm) $tm.textContent = '%';
@@ -414,7 +422,7 @@ function telaVenda(alvo, caixa) {
           api('pontos:config'),
           api('pontos:saldo', { cliente_id: c.id })
         ]);
-        if (cfg.ativo && sd.ok) {
+        if (cfg.ativo && sd.ok && !lojaSemDesconto) {
           const pts = sd.pontos;
           const desc = calcResgateLocal(cfg, pts);
           $pp.style.display = '';
@@ -594,6 +602,12 @@ function telaVenda(alvo, caixa) {
   });
 
   alvo.appendChild(tela);
+  // Redesenho por troca de loja com venda montada (v3.30.0): o carrinho e o
+  // cliente continuam; só os campos de desconto aparecem ou somem.
+  if (manterVenda) {
+    desenhar();
+    if (cliente) tela.querySelector('#pdv-cliente').textContent = `👤 ${cliente.nome} — trocar (F4)`;
+  }
   $busca.focus();
 }
 
@@ -759,7 +773,7 @@ function modalPagamento(total, descontoGeral, pontosResgate, aoConcluir, descont
   // é o piso, abater de novo faria a loja vender abaixo do que pagou. Vale
   // inclusive para pagamento em dinheiro.
   const cfg = getConfig();
-  const ativoAvista   = !aCusto && cfg.desconto_avista_ativo === '1';
+  const ativoAvista   = !aCusto && !lojaSemDesconto && cfg.desconto_avista_ativo === '1';
   const pctAvista     = Math.max(0, Math.min(1, Number(cfg.desconto_avista_percent || 5) / 100));
   const minimoAvista  = Number(cfg.desconto_avista_minimo || 100);
 
@@ -792,6 +806,13 @@ function modalPagamento(total, descontoGeral, pontosResgate, aoConcluir, descont
     <div class="tot-linha"><span id="pg-rotulo">Troco</span><b id="pg-troco">R$ 0,00</b></div>
     <div class="erro" id="pg-erro"></div>
   `, async (m, fechar) => {
+    // Dinheiro: quanto o cliente deu é OBRIGATÓRIO (v3.30.0) — é dele que sai
+    // o troco. Só em dinheiro; nas outras formas o campo nem aparece.
+    for (const pg of pagamentos) {
+      if (pg.forma !== 'dinheiro') continue;
+      const t = trocoDinheiro(pg.valor, pg.recebido);
+      if (t.erro) { m.querySelector('#pg-erro').textContent = t.erro; return; }
+    }
     // Cortesia: autorizador e beneficiário são obrigatórios
     const semDados = pagamentos.find(pg => pg.forma === 'cortesia' &&
       (!String(pg.autorizado_por || '').trim() || !String(pg.beneficiario || '').trim()));
@@ -815,8 +836,14 @@ function modalPagamento(total, descontoGeral, pontosResgate, aoConcluir, descont
       desconto_token: descontoJustificativa ? descontoJustificativa.token : null,
       cliente_id: cliente ? cliente.id : null,
       pontos_resgatar: pontosResgate ? pontosResgate.pontos : 0,
+      // Em dinheiro vai o que o cliente DEU: o servidor calcula o troco
+      // (pago − total) e grava em venda_pagamentos.troco; a gaveta conta
+      // valor − troco. Assim o cupom sai com "Troco" e o caixa bate.
       pagamentos: pagamentos.map(pg => ({
-        forma: pg.forma, valor: pg.valor, parcelas: pg.parcelas,
+        forma: pg.forma, parcelas: pg.parcelas,
+        valor: pg.forma === 'dinheiro'
+          ? Math.max(Number(pg.valor) || 0, Number(pg.recebido) || 0)
+          : pg.valor,
         ...(pg.forma === 'vale' ? { codigo_vale: (pg.codigo_vale || '').trim().toUpperCase() } : {}),
         ...(pg.forma === 'cortesia' ? {
           autorizado_por: String(pg.autorizado_por || '').trim(),
@@ -996,6 +1023,13 @@ function modalPagamento(total, descontoGeral, pontosResgate, aoConcluir, descont
       linha.querySelector('[data-a=rm]').onclick = () => { pagamentos.splice(idx, 1); desenhar(); };
       $linhas.appendChild(linha);
 
+      // Dinheiro: "Cliente deu" + troco desta linha (regra única em app.js)
+      if (pg.forma === 'dinheiro') {
+        const box = campoTroco({ forma: () => pg.forma, valor: () => pg.valor, inicial: pg.recebido ?? '' });
+        box.aoMudar = (v, bruto) => { pg.recebido = bruto.trim() === '' ? '' : v; rodape(); };
+        $linhas.appendChild(box);
+      }
+
       if (isCortesia) {
         const extra = el(`<div class="linha-2" style="margin:-2px 0 12px;padding:10px 12px;
             background:rgba(180,83,9,.08);border-left:3px solid #b45309;border-radius:6px">
@@ -1012,6 +1046,15 @@ function modalPagamento(total, descontoGeral, pontosResgate, aoConcluir, descont
       }
     });
 
+    _totalLiq = totalLiquido;
+    rodape();
+  }
+  let _totalLiq = 0;
+  // Rodapé (Pago / Troco / Falta). Separado do desenhar() para a digitação do
+  // "Cliente deu" atualizar o troco SEM redesenhar as linhas — redesenhar
+  // mataria o cursor no meio do número.
+  function rodape() {
+    const totalLiquido = _totalLiq;
     // Cortesia não é dinheiro recebido: sai do total a pagar, não entra em "pago"
     const cortesiaTotal = pagamentos.reduce((s, p) =>
       s + (p.forma === 'cortesia' ? (Number(p.valor) || 0) : 0), 0);
@@ -1020,8 +1063,12 @@ function modalPagamento(total, descontoGeral, pontosResgate, aoConcluir, descont
     const aReceber = Math.max(0, totalLiquido - cortesiaTotal);
     m.querySelector('#pg-pago').textContent = moeda(pago);
     const dif = pago - aReceber;
-    m.querySelector('#pg-rotulo').textContent = dif >= 0 ? 'Troco' : 'Falta';
-    m.querySelector('#pg-troco').textContent = moeda(Math.abs(dif));
+    // Troco total = o que passou do total + o que o cliente deu a mais em dinheiro
+    const trocoDin = pagamentos.reduce((s, p) => s + (p.forma === 'dinheiro'
+      ? Math.max(0, (Number(p.recebido) || 0) - (Number(p.valor) || 0)) : 0), 0);
+    const trocoTot = arred((dif > 0 ? dif : 0) + trocoDin);
+    m.querySelector('#pg-rotulo').textContent = dif >= -0.004 ? 'Troco' : 'Falta';
+    m.querySelector('#pg-troco').textContent = moeda(dif >= -0.004 ? trocoTot : Math.abs(dif));
     m.querySelector('#pg-troco').style.color = dif >= 0 ? 'var(--verde)' : 'var(--vermelho)';
     if (pagamentos.some(p => p.forma === 'crediario') && !cliente) {
       m.querySelector('#pg-erro').textContent = 'Crediário exige cliente identificado (feche e use F4).';
@@ -1246,11 +1293,20 @@ async function modalTrocarLoja(caixa, tela) {
     const r = await api('pdv:trocarLoja', { loja_id: id });
     if (!r.ok) { m.querySelector('#tl-erro').textContent = r.erro; return; }
     caixa.loja_id = r.loja_id; caixa.loja = r.loja;
+    const mudouDesconto = !!r.sem_desconto !== lojaSemDesconto;
+    caixa.loja_sem_desconto = r.sem_desconto ? 1 : 0;
     const badge = tela.querySelector('#b-loja-nome');
     if (badge) badge.textContent = r.loja;
     try { localStorage.setItem('salgueiro_loja_id', String(r.loja_id)); } catch {}
-    toast(`Agora vendendo em ${r.loja}${r.estoque ? ` (estoque: ${r.estoque})` : ''}.`);
     fechar();
+    if (mudouDesconto) {
+      // Loja nova não aceita desconto: tira o que estava na venda montada.
+      if (r.sem_desconto) for (const i of itens) i.desconto = 0;
+      const alvo = tela.parentNode;
+      if (alvo) { alvo.innerHTML = ''; telaVenda(alvo, caixa, true); }
+    }
+    toast(`Agora vendendo em ${r.loja}${r.estoque ? ` (estoque: ${r.estoque})` : ''}.`
+      + (r.sem_desconto ? ' Esta loja não aceita desconto.' : ''));
   }, 'Trocar');
 }
 
@@ -1666,6 +1722,10 @@ async function modalTrocaRapida(aoFinalizar) {
     const credito = ar(voltou.reduce((a, i) => a + i.valor_unit * i.qtd, 0));
     const total   = ar(levou.reduce((a, i) => a + i.preco_unit * i.qtd, 0));
     const dif     = ar(total - credito);
+    if (dif > 0.01 && m._troco) {
+      const eT = m._troco.validar();
+      if (eT) { erro.textContent = eT; return; }
+    }
     const extras  = dif > 0.01
       ? [{ forma: mm.querySelector('#tr-forma').value, valor: Number(mm.querySelector('#tr-valor').value) || 0 }]
       : [];
@@ -1682,6 +1742,13 @@ async function modalTrocaRapida(aoFinalizar) {
     else toast('Troca registrada!');
     if (aoFinalizar) aoFinalizar();
   }, 'Confirmar troca');
+
+  // Diferença paga em dinheiro: cliente deu / troco (v3.30.0, regra em app.js)
+  m._troco = campoTroco({ forma: () => m.querySelector('#tr-forma').value,
+                          valor: () => Number(m.querySelector('#tr-valor').value) || 0 });
+  m.querySelector('#tr-pag').appendChild(m._troco);
+  m.querySelector('#tr-forma').addEventListener('change', () => m._troco.atualizar());
+  m.querySelector('#tr-valor').addEventListener('input', () => m._troco.atualizar());
 
   function linhas(lado) {
     const lista = lado === 'dev' ? voltou : levou;
@@ -1729,6 +1796,7 @@ async function modalTrocaRapida(aoFinalizar) {
       $d.textContent = moeda(dif); $d.style.color = 'var(--vermelho,#dc2626)';
       $p.style.display = ''; $e.style.display = 'none'; $i.style.display = 'none';
       m.querySelector('#tr-valor').value = dif.toFixed(2);
+      if (m._troco) m._troco.atualizar();
     } else if (dif < -0.01) {
       $d.textContent = moeda(Math.abs(dif)); $d.style.color = 'var(--verde,#16a34a)';
       $p.style.display = 'none'; $e.style.display = ''; $i.style.display = 'none';
@@ -2035,6 +2103,8 @@ async function modalTroca(venda_id, aoFinalizar) {
       if (valor < diferenca - 0.01) {
         mm.querySelector('#tc-erro').textContent = `Valor insuficiente (falta ${moeda(diferenca - valor)}).`; return;
       }
+      const eT = m._troco ? m._troco.validar() : '';
+      if (eT) { mm.querySelector('#tc-erro').textContent = eT; return; }
       pagamentosExtra.push({ forma, valor });
     }
 
@@ -2070,6 +2140,13 @@ async function modalTroca(venda_id, aoFinalizar) {
     }
     if (aoFinalizar) aoFinalizar();
   }, 'Confirmar troca');
+
+  // Diferença paga em dinheiro: cliente deu / troco (v3.30.0, regra em app.js)
+  m._troco = campoTroco({ forma: () => m.querySelector('#tc-pag-forma').value,
+                          valor: () => Number(m.querySelector('#tc-pag-valor').value) || 0 });
+  m.querySelector('#tc-pag-panel').appendChild(m._troco);
+  m.querySelector('#tc-pag-forma').addEventListener('change', () => m._troco.atualizar());
+  m.querySelector('#tc-pag-valor').addEventListener('input', () => m._troco.atualizar());
 
   function _calcCredito(mm) {
     return info.itens.reduce((s, it) => {
@@ -2107,6 +2184,7 @@ async function modalTroca(venda_id, aoFinalizar) {
       igualMsg.style.display = 'none';
       const iv = m.querySelector('#tc-pag-valor');
       if (iv) iv.value = diferenca.toFixed(2);
+      if (m._troco) m._troco.atualizar();
     } else if (diferenca < -0.01) {
       // Devolveu mais do que levou → escolher o destino do excedente
       dEl.textContent = moeda(-diferenca) + ' a favor';

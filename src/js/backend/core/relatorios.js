@@ -214,6 +214,102 @@ function receitaPorLoja(db, p) {
   return { ok: true, de, ate, lojas: linhas, total: arred(total), qtd };
 }
 
+// ── Produtos mais vendidos (v3.30.0) ──────────────────────────────────────
+// Pedido do Marcio: "em relatórios, criar aba de produtos mais vendidos, drop
+// para filtrar total e por loja".
+//
+// `loja_id` vazio = TODAS as lojas (total), com a quebra de peças por loja em
+// colunas. `loja_id` = só aquela loja. Peças e receita LÍQUIDAS de devolução
+// (a devolução conta na loja da venda de origem). Troca não é venda: fica de
+// fora pelo status (só 'concluida'). Venda antiga sem loja cai em "Sem loja".
+function maisVendidos(db, p) {
+  p = p || {};
+  const de = /^\d{4}-\d{2}-\d{2}$/.test(p.de || '') ? p.de : new Date().toISOString().slice(0, 8) + '01';
+  const ate = /^\d{4}-\d{2}-\d{2}$/.test(p.ate || '') ? p.ate : new Date().toISOString().slice(0, 10);
+  const lojaId = Number(p.loja_id) || 0;
+  const filtroLoja = lojaId ? 'AND v.loja_id = ?' : '';
+  const filtroLojaDev = lojaId ? 'AND vs.loja_id = ?' : '';
+  const params = lojaId ? [de, ate, lojaId] : [de, ate];
+
+  // vendido por produto × loja
+  const vend = db.prepare(`
+    SELECT pr.id, COALESCE(v.loja_id,0) loja_id,
+           SUM(vi.qtd) pecas, SUM(vi.total) receita
+    FROM venda_itens vi
+    JOIN vendas v ON v.id = vi.venda_id
+    JOIN variacoes va ON va.id = vi.variacao_id
+    JOIN produtos pr ON pr.id = va.produto_id
+    WHERE v.status='concluida' AND date(v.criado_em) BETWEEN ? AND ? ${filtroLoja}
+    GROUP BY pr.id, COALESCE(v.loja_id,0)
+  `).all(...params);
+  // devolvido (de venda do período) por produto × loja
+  const dev = db.prepare(`
+    SELECT va.produto_id id, COALESCE(vs.loja_id,0) loja_id,
+           SUM(di.qtd) pecas, SUM(di.qtd * CAST(vi.total AS REAL) / vi.qtd) receita
+    FROM devolucao_itens di
+    JOIN devolucoes d ON d.id = di.devolucao_id AND COALESCE(d.tipo,'') <> 'troca'
+    JOIN vendas vs ON vs.id = d.venda_id
+    JOIN venda_itens vi ON vi.venda_id = d.venda_id AND vi.variacao_id = di.variacao_id
+    JOIN variacoes va ON va.id = di.variacao_id
+    WHERE vs.status='concluida' AND date(vs.criado_em) BETWEEN ? AND ? ${filtroLojaDev}
+    GROUP BY va.produto_id, COALESCE(vs.loja_id,0)
+  `).all(...params);
+
+  const mapa = new Map();      // produto → { porLoja: Map(loja → {pecas, receita}) }
+  const soma = (lista, sinal) => {
+    for (const r of lista) {
+      if (!mapa.has(r.id)) mapa.set(r.id, new Map());
+      const m = mapa.get(r.id);
+      const a = m.get(r.loja_id) || { pecas: 0, receita: 0 };
+      a.pecas += sinal * (Number(r.pecas) || 0);
+      a.receita += sinal * (Number(r.receita) || 0);
+      m.set(r.loja_id, a);
+    }
+  };
+  soma(vend, 1); soma(dev, -1);
+
+  const info = db.prepare(`SELECT pr.nome, COALESCE(pr.referencia,'') referencia,
+      COALESCE(c.nome,'Sem categoria') categoria, pr.consignado
+    FROM produtos pr LEFT JOIN categorias c ON c.id = pr.categoria_id WHERE pr.id = ?`);
+  const lojasUsadas = new Set();
+  const produtos = [];
+  for (const [id, m] of mapa) {
+    let pecas = 0, receita = 0;
+    const por_loja = {};
+    for (const [lid, a] of m) {
+      const pc = arred(a.pecas), rc = arred(a.receita);
+      if (pc === 0 && rc === 0) continue;
+      por_loja[lid] = { pecas: pc, receita: rc };
+      pecas += pc; receita += rc;
+      lojasUsadas.add(lid);
+    }
+    pecas = arred(pecas); receita = arred(receita);
+    if (pecas <= 0) continue;
+    const i = info.get(id) || {};
+    produtos.push({ id, nome: i.nome || `Produto #${id}`, referencia: i.referencia || '',
+      categoria: i.categoria || 'Sem categoria', consignado: i.consignado ? 1 : 0,
+      pecas, receita, por_loja });
+  }
+  produtos.sort((a, b) => b.pecas - a.pecas || b.receita - a.receita || a.nome.localeCompare(b.nome));
+  const totPecas = arred(produtos.reduce((s, x) => s + x.pecas, 0));
+  const totReceita = arred(produtos.reduce((s, x) => s + x.receita, 0));
+  produtos.forEach((x, i) => {
+    x.pos = i + 1;
+    x.pct = totPecas ? Math.round((x.pecas / totPecas) * 1000) / 10 : 0;
+  });
+
+  // Lojas para o filtro (todas as ativas) e colunas (as que venderam algo)
+  const nomes = new Map(db.prepare('SELECT id, nome FROM lojas').all().map(l => [l.id, l.nome]));
+  const lojas = db.prepare('SELECT id, nome FROM lojas WHERE ativo=1 ORDER BY nome').all();
+  const colunas = [...lojasUsadas]
+    .map(id => ({ id, nome: id ? (nomes.get(id) || `Loja #${id}`) : 'Sem loja' }))
+    .sort((a, b) => a.nome.localeCompare(b.nome));
+  return { ok: true, de, ate, loja_id: lojaId || null,
+    loja: lojaId ? (nomes.get(lojaId) || null) : null,
+    lojas, colunas, produtos,
+    totais: { produtos: produtos.length, pecas: totPecas, receita: totReceita } };
+}
+
 // Curva ABC de produtos por receita no período (A=80%, B=95%, C=resto)
 // Receita e peças são líquidos de devoluções.
 function curvaAbc(db, p) {
@@ -1510,6 +1606,6 @@ function comprasAcompanhadas(db, p) {
 }
 
 export {
-  estoqueDetalhado, vendasPeriodo, curvaAbc, pecasParadas, receitaPorLoja, consignadosMensal,
+  estoqueDetalhado, vendasPeriodo, curvaAbc, maisVendidos, pecasParadas, receitaPorLoja, consignadosMensal,
   relatorioEvento, ranking, rankingPeriodo, eventosVenda, comprasAcompanhadas,
   TAXAS_PADRAO, taxasDaConfig };
