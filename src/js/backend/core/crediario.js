@@ -1,4 +1,5 @@
 // Crediário — parcelas, recebimento, inadimplentes; extras de clientes
+import { caixaDoTerminal } from './caixa-terminal.js';
 import { auditar } from './util.js';
 const arred = (n) => Math.round(n * 100) / 100;
 
@@ -63,7 +64,7 @@ function receberParcela(db, p, quem) {
            valor, parc.vencimento, valor, parc.id);
     // dinheiro recebido entra na gaveta se houver caixa aberto
     if (forma === 'dinheiro') {
-      const cx = db.prepare('SELECT id FROM caixas WHERE fechado_em IS NULL ORDER BY id DESC LIMIT 1').get();
+      const cx = caixaDoTerminal(db, p._terminal);   // caixa DESTE computador (v3.31.1)
       if (cx) {
         db.prepare(`INSERT INTO caixa_movimentos (caixa_id, tipo, valor, motivo, usuario_id)
                     VALUES (?,?,?,?,?)`)

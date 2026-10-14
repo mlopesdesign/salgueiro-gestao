@@ -9,12 +9,12 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.31.0 |
+| **Versão atual** | 3.31.1 |
 | **Data do último build** | 2026-10-14 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.31.0 em 2026-10-14 ✓ (29 módulos core · 162 rotas · 37 tabelas) |
-| **5 lugares da versão** | os 5 em 3.31.0 ✓ |
+| **GRAPHIFY** | atualizado para 3.31.1 em 2026-10-14 ✓ (30 módulos core · 164 rotas · 37 tabelas) |
+| **5 lugares da versão** | os 5 em 3.31.1 ✓ |
 
 ---
 
@@ -25,6 +25,35 @@
 pelo Desktop Commander (`start_process`, powershell) → confiro no GitHub → aviso.
 O "dois cliques em PUBLICAR.bat" está REVOGADO. Detalhe: regra 3 do `REGRAS-CRITICAS.md`.
 **v3.30.0 publicada assim** (07/10/2026 00:24 UTC, 6.485.691 bytes conferidos).
+
+## v3.31.1 — CADA COMPUTADOR COM O SEU CAIXA (2026-10-14)
+
+| Campo | Valor |
+|---|---|
+| Tag | `v3.31.1` |
+| Título | v3.31.1 — Cada computador com o seu caixa: o PDV não troca mais de loja sozinho |
+| Asset | `Portable\resources.neu` — 6.550.431 bytes — sha256 `b6af0dc719ce89b3a80a7ab920462c836f98ed1137664316befcbe325708a7d5` |
+| Backup | `backups\pre-v3.31.1-2026-10-14\` |
+
+**Relato:** "o PDV está trocando de loja sozinho; a venda sai na loja errada".
+**Causa:** havia UM caixa aberto para o sistema inteiro — toda consulta era
+`caixas WHERE fechado_em IS NULL ORDER BY id DESC LIMIT 1` (em pdv.js, trocas.js ×2,
+devolucoes.js, crediario.js, importar-vendas.js, dashboard.js). O principal e o
+navegador do Camarote usavam o MESMO caixa: um trocava a loja (`pdv:trocarLoja`
+faz UPDATE no caixa) e o outro passava a vender nela; abrir/fechar também era dos dois.
+
+**Correção na regra (ponto único):** `core/caixa-terminal.js` — `caixaDoTerminal(db, terminal)`.
+`caixas.terminal` + `terminal_desc` (schema + migração). O aparelho se identifica
+com `localStorage salg_terminal_id` ('PC-…' programa, 'T-…' navegador) e
+**app.js injeta `_terminal` em TODO pedido** (`_comTerminal`, local e rede).
+`rede.js` marca `_rede`/`_ip` do lado do servidor. Abrir caixa: um por terminal.
+Caixa sem dono (aberto antes da 3.31.1) não é usado por ninguém sozinho: a tela
+de abertura lista "Caixas abertos em outros computadores" → **Assumir neste
+computador** (`pdv:assumirCaixa`, auditado). **REGRA: a consulta "último caixa
+aberto de qualquer um" NUNCA MAIS** — grep `fechado_em IS NULL` só pode achar
+caixa-terminal.js e o assumir.
+Testes: `__SALG_TERMINAL_TESTE='TESTE'` no harness (caixa inserido à mão vira do
+TESTE). Novo `teste-caixa-por-terminal.mjs` (22): o cenário exato do relato.
 
 ## v3.31.0 — REDE SEM FILA · DIAGNÓSTICO DE TRAVAMENTOS · FRETE (2026-10-14)
 

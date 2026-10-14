@@ -476,6 +476,18 @@ function migrar(db) {
     } catch (e) { console.error('[migração] lojas.sem_desconto:', e.message); }
   }
 
+  // v3.31.1 — CAIXA POR COMPUTADOR. Ver core/caixa-terminal.js.
+  // Caixa aberto antes desta versão fica com terminal NULL: ninguém o usa
+  // sozinho; a tela de abertura oferece "assumir neste computador".
+  if (tabelaExiste('caixas') && !temColuna('caixas', 'terminal')) {
+    try { db.exec('ALTER TABLE caixas ADD COLUMN terminal TEXT'); console.log('[migração] caixas.terminal adicionado'); }
+    catch (e) { console.error('[migração] caixas.terminal:', e.message); }
+  }
+  if (tabelaExiste('caixas') && !temColuna('caixas', 'terminal_desc')) {
+    try { db.exec('ALTER TABLE caixas ADD COLUMN terminal_desc TEXT'); }
+    catch (e) { console.error('[migração] caixas.terminal_desc:', e.message); }
+  }
+
   // v3.31.0 — FRETE da venda com entrega (loja WhatsApp / internet).
   // `vendas.frete` soma no total; `vendas.frete_tipo` diz como a peça saiu.
   // `lojas.usa_frete` liga o campo no PDV daquela loja.

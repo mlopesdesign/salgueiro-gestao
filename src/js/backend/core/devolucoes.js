@@ -1,4 +1,5 @@
 // Devoluções de venda — retorno ao estoque e reembolso
+import { caixaDoTerminal } from './caixa-terminal.js';
 import { auditar } from './util.js';
 import * as valesTroca from './vales_troca.js';
 import * as estoques from './estoques.js';
@@ -59,7 +60,7 @@ function registrar(db, p, quem) {
 
   db.exec('BEGIN');
   try {
-    const caixa = db.prepare('SELECT id FROM caixas WHERE fechado_em IS NULL ORDER BY id DESC LIMIT 1').get();
+    const caixa = caixaDoTerminal(db, p._terminal);   // caixa DESTE computador (v3.31.1)
     const rd = db.prepare(`
       INSERT INTO devolucoes (venda_id, cliente_id, usuario_id, caixa_id, tipo, valor_devolvido, forma_reembolso, motivo)
       VALUES (?,?,?,?,?,?,?,?)

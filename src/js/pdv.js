@@ -122,7 +122,41 @@ async function telaAbertura(alvo) {
         <button class="btn btn-primario btn-bloco" id="cx-abrir">Abrir caixa</button>
         <button class="btn btn-suave btn-bloco" id="cx-historico" style="margin-top:10px">📋 Histórico de vendas</button>
       </div>
+      <div id="cx-outros"></div>
     </div>`);
+  // Caixas abertos em OUTROS computadores (v3.31.1). Cada computador tem o seu
+  // caixa; aqui só aparecem para quem precisar ASSUMIR um — computador
+  // formatado, navegador limpo, ou o caixa aberto antes desta versão.
+  api('pdv:caixasDeOutros', {}).then(ro => {
+    const lista = (ro && ro.ok ? ro.caixas : []) || [];
+    if (!lista.length || !pode('caixa.abrir_fechar')) return;
+    const fmt = (s) => { const m = String(s || '').match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}:\d{2})/); return m ? `${m[3]}/${m[2]} às ${m[4]}` : ''; };
+    const box = el(`<div class="painel" style="padding:18px 22px;margin-top:14px">
+      <h3 style="margin:0 0 6px;font-size:14px">Caixas abertos em outros computadores</h3>
+      <p style="margin:0 0 10px;font-size:12.5px;color:var(--texto-suave)">Cada computador vende no PRÓPRIO caixa — um não mexe no do
+        outro. Só assuma um destes se ele era deste computador (programa reinstalado, navegador limpo) ou se é o caixa que
+        estava aberto antes da atualização.</p>
+      ${lista.map(c => `<div style="border-top:1px solid var(--borda);padding:10px 0">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px">
+          <b style="font-size:13.5px">🏬 ${esc(c.loja || 'sem loja')}</b>
+          <small style="color:var(--texto-suave);white-space:nowrap">${c.vendas} venda(s)</small></div>
+        <div style="font-size:12.5px;margin-top:2px">Aberto por ${esc(c.aberto_por || '—')} em ${fmt(c.aberto_em)}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:6px">
+          <small style="color:var(--texto-suave)">${esc(c.terminal_desc || (c.terminal ? 'outro computador' : 'aberto antes da atualização — sem dono'))}</small>
+          <button class="btn btn-suave" data-assumir="${c.id}" style="white-space:nowrap;padding:6px 12px;font-size:12.5px">Assumir neste computador</button></div>
+      </div>`).join('')}
+    </div>`);
+    box.querySelectorAll('[data-assumir]').forEach(b => b.onclick = async () => {
+      const c = lista.find(x => String(x.id) === b.dataset.assumir);
+      if (!confirm(`Assumir o caixa da loja ${c.loja || ''} neste computador?\n\n` +
+        (c.terminal ? 'O outro computador deixa de vender nele e vai precisar abrir o próprio caixa.' : ''))) return;
+      const r2 = await api('pdv:assumirCaixa', { caixa_id: c.id });
+      if (!r2.ok) { toast(r2.erro, true); return; }
+      toast('Caixa assumido neste computador.');
+      alvo.innerHTML = ''; viewPdv(alvo);
+    });
+    tela.appendChild(box);
+  }).catch(() => {});
   tela.querySelector('#cx-abrir').onclick = async () => {
     const selLoja = tela.querySelector('#cx-loja');
     const loja_id = selLoja ? Number(selLoja.value)

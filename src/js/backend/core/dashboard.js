@@ -1,5 +1,6 @@
 // Dashboard — agregação única para o painel executivo
 const arred = (n) => Math.round((Number(n) || 0) * 100) / 100;
+import { caixaDoTerminal } from './caixa-terminal.js';
 import { pode } from './permissoes.js';
 // Troca não é venda — regra única do sistema. Ver core/vendas-sql.js.
 import { NAO_TROCA, RECEBIDO_BRUTO, trocasDoPeriodo } from './vendas-sql.js';
@@ -9,7 +10,7 @@ function ymd(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function resumo(db, usuario) {
+function resumo(db, usuario, terminal) {
   const hojeStr = ymd(new Date());
   const mesIni = hojeStr.slice(0, 8) + '01';
 
@@ -185,7 +186,7 @@ function resumo(db, usuario) {
   `).get();
 
   // --- Caixa aberto ---
-  const caixa = db.prepare(`SELECT id, aberto_em FROM caixas WHERE fechado_em IS NULL ORDER BY id DESC LIMIT 1`).get();
+  const caixa = caixaDoTerminal(db, terminal);   // caixa DESTE computador (v3.31.1)
 
   // --- Financeiro: vencidos e a vencer (7 dias) ---
   const finVencidos = db.prepare(`

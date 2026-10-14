@@ -6,25 +6,41 @@ import * as valesTroca from './vales_troca.js';
 import * as pontos from './pontos.js';
 import * as estoques from './estoques.js';
 import { tipoFreteValido, rotuloFrete, freteDoPeriodo } from './frete.js';
+import { caixaDoTerminal, caixasDeOutros, descricaoTerminal, terminalDe } from './caixa-terminal.js';
 
 const FORMAS = ['dinheiro', 'pix', 'debito', 'credito', 'crediario', 'vale', 'cortesia'];
 const arred = (n) => Math.round(n * 100) / 100;
 
 // ---------- Caixa ----------
-function caixaAtual(db) {
-  const caixa = db.prepare(`
-    SELECT cx.*, u.nome AS aberto_por, lj.nome AS loja,
-           COALESCE(lj.sem_desconto,0) AS loja_sem_desconto,
-           COALESCE(lj.usa_frete,0) AS loja_usa_frete FROM caixas cx
-    LEFT JOIN usuarios u ON u.id = cx.usuario_abertura
-    LEFT JOIN lojas lj ON lj.id = cx.loja_id
-    WHERE cx.fechado_em IS NULL ORDER BY cx.id DESC LIMIT 1
-  `).get();
-  return { ok: true, caixa: caixa || null };
+// Caixa aberto DESTE computador (v3.31.1 — ver core/caixa-terminal.js).
+// `p._terminal` vem de app.js em todo pedido.
+function caixaAtual(db, p) {
+  return { ok: true, caixa: caixaDoTerminal(db, p && p._terminal) };
+}
+const caixaDe = (db, p) => caixaDoTerminal(db, p && p._terminal);
+
+// Caixas abertos em OUTROS computadores (para a tela de abertura).
+function caixasAbertosDeOutros(db, p) {
+  return { ok: true, caixas: caixasDeOutros(db, p && p._terminal) };
+}
+
+// Assumir um caixa aberto que não é deste computador — escolha EXPLÍCITA na
+// tela de abertura (computador formatado, navegador limpo, ou o caixa que
+// estava aberto antes da v3.31.1). Fica na auditoria.
+function assumirCaixa(db, p, quem) {
+  const t = terminalDe(p && p._terminal);
+  if (!t) return { ok: false, erro: 'Este computador não se identificou. Recarregue a página.' };
+  if (caixaDe(db, p)) return { ok: false, erro: 'Este computador já tem um caixa aberto.' };
+  const cx = db.prepare('SELECT id, terminal, terminal_desc FROM caixas WHERE id=? AND fechado_em IS NULL').get(Number(p.caixa_id) || 0);
+  if (!cx) return { ok: false, erro: 'Esse caixa não está mais aberto.' };
+  db.prepare('UPDATE caixas SET terminal=?, terminal_desc=? WHERE id=?').run(t, descricaoTerminal(p), cx.id);
+  auditar(db, quem, 'caixa_assumido', `caixa #${cx.id}: ${cx.terminal_desc || cx.terminal || 'sem dono'} → ${descricaoTerminal(p)}`);
+  return { ok: true, id: cx.id };
 }
 
 function abrirCaixa(db, p, quem) {
-  if (caixaAtual(db).caixa) return { ok: false, erro: 'Já existe um caixa aberto.' };
+  if (!terminalDe(p && p._terminal)) return { ok: false, erro: 'Este computador não se identificou. Recarregue a página.' };
+  if (caixaDe(db, p)) return { ok: false, erro: 'Este computador já tem um caixa aberto.' };
   const valor = Number(p.valor_abertura);
   if (!Number.isFinite(valor) || valor < 0) return { ok: false, erro: 'Valor de abertura inválido.' };
   // Loja do caixa: usa a informada (validada) ou a loja padrão.
@@ -36,8 +52,8 @@ function abrirCaixa(db, p, quem) {
     const lp = db.prepare('SELECT id FROM lojas WHERE ativo=1 ORDER BY id LIMIT 1').get();
     lojaId = lp ? lp.id : null;
   }
-  const r = db.prepare('INSERT INTO caixas (usuario_abertura, valor_abertura, loja_id) VALUES (?,?,?)')
-    .run(quem.id, arred(valor), lojaId);
+  const r = db.prepare('INSERT INTO caixas (usuario_abertura, valor_abertura, loja_id, terminal, terminal_desc) VALUES (?,?,?,?,?)')
+    .run(quem.id, arred(valor), lojaId, terminalDe(p._terminal), descricaoTerminal(p));
   auditar(db, quem, 'caixa_aberto', `R$ ${valor.toFixed(2)} (loja ${lojaId || '—'})`);
   return { ok: true, id: Number(r.lastInsertRowid), loja_id: lojaId };
 }
@@ -48,7 +64,7 @@ function abrirCaixa(db, p, quem) {
 // continua contando para a loja em que foi feito — o fechamento segue separando
 // certo. Só as PRÓXIMAS vendas passam a baixar do estoque da nova loja.
 function trocarLoja(db, p, quem) {
-  const cx = caixaAtual(db).caixa;
+  const cx = caixaDe(db, p);
   if (!cx) return { ok: false, erro: 'Nenhum caixa aberto.' };
   const lojaId = Number(p && p.loja_id) || 0;
   if (!lojaId) return { ok: false, erro: 'Informe a loja.' };
@@ -65,7 +81,7 @@ function trocarLoja(db, p, quem) {
 }
 
 function movimentoCaixa(db, p, quem) {
-  const cx = caixaAtual(db).caixa;
+  const cx = caixaDe(db, p);
   if (!cx) return { ok: false, erro: 'Nenhum caixa aberto.' };
   const valor = Number(p.valor);
   if (!['sangria', 'suprimento'].includes(p.tipo)) return { ok: false, erro: 'Tipo inválido.' };
@@ -166,7 +182,7 @@ function resumoCaixa(db, caixaId) {
 }
 
 function fecharCaixa(db, p, quem) {
-  const cx = caixaAtual(db).caixa;
+  const cx = caixaDe(db, p);
   if (!cx) return { ok: false, erro: 'Nenhum caixa aberto.' };
   const resumo = resumoCaixa(db, cx.id);
   const informado = Number(p.valor_informado);
@@ -227,7 +243,7 @@ function taxaDaForma(forma, parcelas, taxas) {
 
 // ---------- Venda ----------
 function registrarVenda(db, p, quem) {
-  const cx = caixaAtual(db).caixa;
+  const cx = caixaDe(db, p);
   if (!cx) return { ok: false, erro: 'Abra o caixa antes de vender.' };
   const itens = Array.isArray(p.itens) ? p.itens : [];
   const pagamentos = Array.isArray(p.pagamentos) ? p.pagamentos : [];
@@ -601,7 +617,7 @@ function obterVenda(db, id) {
 }
 
 function listarVendas(db, p) {
-  const caixaId = p.caixa_id || (caixaAtual(db).caixa || {}).id;
+  const caixaId = p.caixa_id || (caixaDe(db, p) || {}).id;
   if (!caixaId) return { ok: true, vendas: [] };
   const vendas = db.prepare(`
     SELECT v.id, v.total, v.status, v.criado_em, c.nome AS cliente, u.nome AS vendedor,
@@ -665,6 +681,6 @@ function cancelarVenda(db, p, quem) {
 }
 
 export {
-  caixaAtual, abrirCaixa, trocarLoja, movimentoCaixa, resumoCaixa, fecharCaixa,
+  caixaAtual, caixasAbertosDeOutros, assumirCaixa, abrirCaixa, trocarLoja, movimentoCaixa, resumoCaixa, fecharCaixa,
   registrarVenda, obterVenda, listarVendas, listarVendasGeral, cancelarVenda
 };

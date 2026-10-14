@@ -165,7 +165,10 @@ CREATE TABLE IF NOT EXISTS caixas (
   valor_abertura REAL NOT NULL DEFAULT 0,
   valor_fechamento_informado REAL,
   valor_fechamento_calculado REAL,
-  obs TEXT
+  obs TEXT,
+  -- v3.31.1: o computador/navegador dono deste caixa (cada PDV tem o seu)
+  terminal TEXT,
+  terminal_desc TEXT
 );
 
 CREATE TABLE IF NOT EXISTS caixa_movimentos (

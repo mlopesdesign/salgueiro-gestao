@@ -11,6 +11,7 @@
 // SEMPRE em dois tempos: `analisar()` confere tudo e devolve o que daria erro,
 // `confirmar()` grava. Sem isso uma planilha com um código errado gravaria meia
 // importação e deixaria o estoque torto.
+import { caixaDoTerminal } from './caixa-terminal.js';
 import { auditar } from './util.js';
 import * as estoques from './estoques.js';
 
@@ -207,9 +208,7 @@ function confirmar(db, p, quem) {
   const prontas = a.vendas.filter(v => v.pode);
   if (!prontas.length) return { ok: false, erro: 'Nenhuma venda pronta para importar. Corrija a planilha e tente de novo.' };
 
-  const caixa = db.prepare(
-    'SELECT id, loja_id FROM caixas WHERE fechado_em IS NULL ORDER BY id DESC LIMIT 1'
-  ).get();
+  const caixa = caixaDoTerminal(db, p._terminal);   // caixa DESTE computador (v3.31.1)
   if (!caixa) return { ok: false, erro: 'Nenhum caixa aberto. Abra o caixa antes de importar.' };
 
   // Loja escolhida na tela (a do WhatsApp) ou, se não vier, a do caixa.

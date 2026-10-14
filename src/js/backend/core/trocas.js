@@ -16,6 +16,7 @@
 //    dinheiro NÃO entra ali: `resumoCaixa` já soma por `venda_pagamentos`.
 //  · O SELECT da venda precisa trazer `loja_id`, senão `estoques.daLoja()`
 //    recebe undefined e `estoque_saldos` deixa de bater com `variacoes.estoque`.
+import { caixaDoTerminal } from './caixa-terminal.js';
 import * as valesTroca from './vales_troca.js';
 import { auditar } from './util.js';
 import * as estoques from './estoques.js';
@@ -126,9 +127,7 @@ function registrar(db, p, quem) {
   const _localId = _local ? _local.id : null;
   db.exec('BEGIN');
   try {
-    const caixa = db.prepare(
-      'SELECT id, loja_id FROM caixas WHERE fechado_em IS NULL ORDER BY id DESC LIMIT 1'
-    ).get();
+    const caixa = caixaDoTerminal(db, p._terminal);   // caixa DESTE computador (v3.31.1)
     if (!caixa) { db.exec('ROLLBACK'); return { ok: false, erro: 'Nenhum caixa aberto. Abra o caixa antes de fazer trocas.' }; }
 
     // 5a. Criar devolução. forma_reembolso guarda o destino do excedente
@@ -333,9 +332,7 @@ function registrarRapida(db, p, quem) {
 
   db.exec('BEGIN');
   try {
-    const caixa = db.prepare(
-      'SELECT id, loja_id FROM caixas WHERE fechado_em IS NULL ORDER BY id DESC LIMIT 1'
-    ).get();
+    const caixa = caixaDoTerminal(db, p._terminal);   // caixa DESTE computador (v3.31.1)
     if (!caixa) { db.exec('ROLLBACK'); return { ok: false, erro: 'Nenhum caixa aberto. Abra o caixa antes de fazer trocas.' }; }
 
     // Sem venda de origem, o local é o da loja do caixa aberto.

@@ -147,7 +147,7 @@ const rotas = {
   },
 
   // Dashboard
-  'dashboard:resumo': () => dashboard.resumo(db, sessao.usuario),
+  'dashboard:resumo': (p) => dashboard.resumo(db, sessao.usuario, p && p._terminal),
   'permissoes:catalogo': () => ({ ok: true, catalogo: permissoes.CATALOGO, defaults: permissoes.DEFAULTS }),
 
   // Configurações (white-label)
@@ -1083,7 +1083,9 @@ const rotas = {
   'financeiro:fluxo': (p) => financeiro.fluxo(db, p || {}),
 
   // PDV / Caixa
-  'pdv:caixaAtual': () => pdv.caixaAtual(db),
+  'pdv:caixaAtual': (p) => pdv.caixaAtual(db, p || {}),
+  'pdv:caixasDeOutros': (p) => pdv.caixasAbertosDeOutros(db, p || {}),
+  'pdv:assumirCaixa': (p) => pdv.assumirCaixa(db, p || {}, sessao.usuario),
   'pdv:abrirCaixa': (p) => pdv.abrirCaixa(db, p, sessao.usuario),
   'pdv:movimentoCaixa': (p) => pdv.movimentoCaixa(db, p, sessao.usuario),
   'pdv:resumoCaixa': (p) => pdv.resumoCaixa(db, p.caixa_id),
@@ -2402,7 +2404,7 @@ const PERM_ROTA = {
   'estoques:zerar': 'estoque.movimentar',
   'pdv:caixaAtual': 'pdv.ver', 'pdv:resumoCaixa': 'pdv.ver', 'pdv:listarVendas': 'pdv.ver', 'pdv:listarVendasGeral': 'pdv.ver', 'pdv:obterVenda': 'pdv.ver',
   'pdv:venda': 'pdv.vender',
-  'pdv:abrirCaixa': 'caixa.abrir_fechar', 'pdv:fecharCaixa': 'caixa.abrir_fechar',
+  'pdv:abrirCaixa': 'caixa.abrir_fechar', 'pdv:assumirCaixa': 'caixa.abrir_fechar', 'pdv:caixasDeOutros': 'pdv.ver', 'pdv:fecharCaixa': 'caixa.abrir_fechar',
   'pdv:movimentoCaixa': 'caixa.sangria',
   'pdv:cancelarVenda': 'pdv.cancelar',
   'devolucoes:itensVenda': 'pdv.devolucao', 'devolucoes:registrar': 'pdv.devolucao', 'devolucoes:listar': 'pdv.devolucao',

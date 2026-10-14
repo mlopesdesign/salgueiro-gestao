@@ -65,7 +65,7 @@ window.__pedirFechar = () => {
 const $app = document.getElementById('app');
 let usuario = null;
 let categoriasCache = [];
-let APP_VERSION = '3.31.0'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
+let APP_VERSION = '3.31.1'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
 
 // API dupla: no aplicativo usa IPC (preload); num terminal em rede (navegador),
 // conversa com o servidor do computador principal via HTTP com token de sessão.
@@ -81,15 +81,31 @@ let APP_VERSION = '3.31.0'; // fallback; valor real vem de NL_APPVERSION via api
 //   • o que deu errado fica guardado neste navegador e é enviado ao
 //     computador principal assim que a conexão volta (log do aplicativo).
 const DIAG_CHAVE = 'salg_diag_eventos';
+// Código DESTE aparelho (computador com o programa ou navegador do terminal).
+// v3.31.1: é ele que diz de quem é o caixa — cada PDV tem o seu e um nunca
+// mexe no do outro (ver backend/core/caixa-terminal.js). Vai em TODO pedido
+// como `_terminal`. Guardado no próprio aparelho; sem armazenamento, vale só
+// enquanto a página estiver aberta.
+let _idMemoria = null;
 function _terminalId() {
   try {
     let id = localStorage.getItem('salg_terminal_id');
     if (!id) {
-      id = 'T-' + Math.random().toString(16).slice(2, 6).toUpperCase();
+      const local = typeof window.Neutralino !== 'undefined' && !window.__TERMINAL_REDE;
+      id = (local ? 'PC-' : 'T-') + Math.random().toString(16).slice(2, 10).toUpperCase();
       localStorage.setItem('salg_terminal_id', id);
     }
     return id;
-  } catch { return 'T-?'; }
+  } catch {
+    if (!_idMemoria) _idMemoria = 'T-' + Math.random().toString(16).slice(2, 10).toUpperCase();
+    return _idMemoria;
+  }
+}
+function _comTerminal(payload) {
+  const t = _terminalId();
+  if (payload == null) return { _terminal: t };
+  if (typeof payload === 'object' && !Array.isArray(payload)) return { ...payload, _terminal: t };
+  return payload;
 }
 function _diagGuardar(ev) {
   try {
@@ -153,7 +169,7 @@ function criarApiRede() {
       const resp = await fetch('/api', {
         method: 'POST', signal: ctrl.signal,
         headers: { 'Content-Type': 'application/json', ...(token ? { 'X-Token': token } : {}) },
-        body: JSON.stringify({ canal, payload })
+        body: JSON.stringify({ canal, payload: _comTerminal(payload) })
       });
       const r = await resp.json();
       const ms = Date.now() - ini;
@@ -193,7 +209,7 @@ let _apiLocal = null;
 const api = NO_APP
   ? (async (canal, payload) => {
       if (!_apiLocal) _apiLocal = (await import('./backend/servidor.js')).api;
-      return _apiLocal(canal, payload);
+      return _apiLocal(canal, _comTerminal(payload));
     })
   : criarApiRede();
 const EM_REDE = !NO_APP; // true quando rodando num terminal via navegador

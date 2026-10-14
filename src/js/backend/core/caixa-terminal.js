@@ -1,0 +1,61 @@
+// CAIXA POR COMPUTADOR (v3.31.1)
+// ---------------------------------------------------------------------------
+// Relato do Marcio: "o PDV está trocando de loja sozinho... as pessoas estão
+// trabalhando na loja principal, quando vem a venda está sendo feita na loja
+// errada. Cada computador trabalha com seu PDV, sendo ele web ou não, e não
+// interfere no outro jamais."
+//
+// A CAUSA: o sistema tinha UM caixa aberto para todo mundo. Toda consulta era
+// "o último caixa aberto" (`WHERE fechado_em IS NULL ORDER BY id DESC LIMIT 1`).
+// O computador principal e o navegador do Camarote usavam o MESMO caixa: quando
+// um trocava de loja, o outro passava a vender na loja dele; quando um abria
+// caixa, o outro passava a usar o novo; quando um fechava, fechava o dos dois.
+//
+// AGORA: cada caixa pertence a um computador/navegador (`caixas.terminal`).
+// O terminal é identificado por um código guardado no próprio aparelho
+// (app.js → `_terminal` em todo pedido). Toda consulta de "caixa aberto"
+// passa por AQUI e procura SÓ o caixa daquele terminal. Nunca há "último caixa
+// aberto de qualquer um" — essa consulta não pode voltar a existir.
+
+// Código do terminal de um pedido. `__SALG_TERMINAL_TESTE` existe SÓ para os
+// testes automáticos (testes/harness.mjs) — o sistema nunca o define.
+export function terminalDe(terminal) {
+  return String(terminal || globalThis.__SALG_TERMINAL_TESTE || '').trim();
+}
+
+export function caixaDoTerminal(db, terminal) {
+  const t = terminalDe(terminal);
+  if (!t) return null;
+  return db.prepare(`
+    SELECT cx.*, u.nome AS aberto_por, lj.nome AS loja,
+           COALESCE(lj.sem_desconto,0) AS loja_sem_desconto,
+           COALESCE(lj.usa_frete,0) AS loja_usa_frete
+      FROM caixas cx
+      LEFT JOIN usuarios u ON u.id = cx.usuario_abertura
+      LEFT JOIN lojas lj ON lj.id = cx.loja_id
+     WHERE cx.fechado_em IS NULL AND cx.terminal = ?
+     ORDER BY cx.id DESC LIMIT 1
+  `).get(t) || null;
+}
+
+// Caixas abertos que NÃO são deste terminal — para a tela de abertura poder
+// oferecer "assumir" (computador formatado, navegador limpo, ou o caixa que
+// estava aberto antes desta versão, que não tinha dono).
+export function caixasDeOutros(db, terminal) {
+  const t = terminalDe(terminal);
+  return db.prepare(`
+    SELECT cx.id, cx.aberto_em, cx.valor_abertura, cx.terminal, cx.terminal_desc,
+           u.nome AS aberto_por, lj.nome AS loja,
+           (SELECT COUNT(*) FROM vendas v WHERE v.caixa_id = cx.id) AS vendas
+      FROM caixas cx
+      LEFT JOIN usuarios u ON u.id = cx.usuario_abertura
+      LEFT JOIN lojas lj ON lj.id = cx.loja_id
+     WHERE cx.fechado_em IS NULL AND (cx.terminal IS NULL OR cx.terminal <> ?)
+     ORDER BY cx.id DESC
+  `).all(t);
+}
+
+export function descricaoTerminal(p) {
+  if (p && p._rede) return `navegador ${p._ip || ''}`.trim();
+  return 'computador principal (programa instalado)';
+}

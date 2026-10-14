@@ -110,6 +110,12 @@ async function atenderTerminal(canal, payload, token, ip) {
     if (SOMENTE_LOCAL.has(canal)) {
       return { ok: false, erro: 'Esta função só está disponível no computador principal.' };
     }
+    // Pedido vindo de navegador: marca a origem do lado do servidor (v3.31.1).
+    // `_terminal` (o código do aparelho) vem do próprio navegador.
+    if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+      payload._rede = true;
+      payload._ip = ip || '';
+    }
     const sess = (token && sessoes.get(token)) || { usuario: null };
     if (token && sessoes.has(token)) sessoes.get(token).ultimo = Date.now();
 

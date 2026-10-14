@@ -3,6 +3,14 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.31.1',
+    data: '2026-10-14',
+    itens: [
+      '🏬 CADA COMPUTADOR COM O SEU CAIXA — O PDV NÃO TROCA MAIS DE LOJA SOZINHO. Até aqui existia UM caixa aberto para todos: o computador principal e a loja que usa o navegador vendiam no MESMO caixa. Quando um trocava de loja, o outro passava a vender na loja errada; quando um abria ou fechava o caixa, mexia no do outro. Agora cada computador e cada navegador tem o próprio caixa, com a própria loja — um nunca interfere no outro. Os relatórios continuam juntando tudo.',
+      '🔓 DEPOIS DE ATUALIZAR: cada PDV abre o próprio caixa. O caixa que estava aberto antes aparece na tela de abertura, em "Caixas abertos em outros computadores", com o botão "Assumir neste computador" — use no computador que era dono dele. O mesmo botão serve se um computador for reinstalado ou o navegador for limpo.',
+    ],
+  },
+  {
     versao: '3.31.0',
     data: '2026-10-14',
     itens: [
