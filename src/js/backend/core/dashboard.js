@@ -3,6 +3,7 @@ const arred = (n) => Math.round((Number(n) || 0) * 100) / 100;
 import { pode } from './permissoes.js';
 // Troca não é venda — regra única do sistema. Ver core/vendas-sql.js.
 import { NAO_TROCA, RECEBIDO_BRUTO, trocasDoPeriodo } from './vendas-sql.js';
+import { freteDoPeriodo } from './frete.js';
 
 function ymd(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -33,6 +34,7 @@ function resumo(db, usuario) {
   const hoje = {
     qtd: hojeRaw.qtd,
     total: arred(hojeRaw.total),
+    frete: freteDoPeriodo(db, (x) => `date(${x}.criado_em)=date('now','localtime')`).valor,
     trocas: arred(hojeTroca.total),
     devolvido: arred(hojeDevol.v),
     ticket: hojeRaw.qtd > 0 ? arred(hojeRaw.total / hojeRaw.qtd) : 0
@@ -99,7 +101,10 @@ function resumo(db, usuario) {
 
   // Devolução comum (fora da troca) já é abatida do CMV das vendas.
   const custoLiq = arred(cmv.custo - (mesDevol.custo_dev || 0));
-  const receitaLiq = arred(mesRaw.total - mesDevol.v); // só venda
+  // Frete do mês (v3.31.0): entra no faturamento, mas NÃO no lucro — é
+  // repassado a quem entrega (Mercado Envios, Correios...), não é margem de peça.
+  const freteMes = freteDoPeriodo(db, (x) => `date(${x}.criado_em) BETWEEN ? AND ?`, [mesIni, hojeStr]).valor;
+  const receitaLiq = arred(mesRaw.total - mesDevol.v - freteMes); // só venda de peça
   // Lucro bruto = margem das vendas + margem das trocas.
   const lucroBruto = arred((receitaLiq - custoLiq) + lucroTroca);
   const baseMargem = arred(receitaLiq + (mes.trocas || 0));
@@ -230,7 +235,7 @@ function resumo(db, usuario) {
   const verFin = pode(usuario, 'dashboard.financeiro');
   const verFinanceiro = pode(usuario, 'financeiro.ver');
   const mesOut = verFin
-    ? { qtd: mes.qtd, total: mes.total, trocas: mes.trocas, lucro_trocas: lucroTroca, devolvido: mes.devolvido, custo: custoLiq, lucro_bruto: lucroBruto, margem }
+    ? { qtd: mes.qtd, total: mes.total, frete: freteMes, trocas: mes.trocas, lucro_trocas: lucroTroca, devolvido: mes.devolvido, custo: custoLiq, lucro_bruto: lucroBruto, margem }
     : { qtd: mes.qtd, total: null, trocas: null, lucro_trocas: null, devolvido: null, custo: null, lucro_bruto: null, margem: null };
 
   // top_produtos: sem receita para quem não tem permissão financeira
@@ -243,7 +248,7 @@ function resumo(db, usuario) {
 
   return {
     ok: true,
-    hoje: { qtd: hoje.qtd, total: verFin ? hoje.total : null, trocas: verFin ? hoje.trocas : null,
+    hoje: { qtd: hoje.qtd, total: verFin ? hoje.total : null, frete: verFin ? hoje.frete : null, trocas: verFin ? hoje.trocas : null,
             devolvido: verFin ? hoje.devolvido : null, ticket: verFin ? hoje.ticket : null },
     mes: mesOut,
     serie: serieOut,

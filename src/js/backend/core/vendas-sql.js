@@ -95,4 +95,13 @@ function trocasDoPeriodo(db, onde, params = []) {
   return { qtd: r.qtd || 0, credito: a(r.credito), recebido, devolvido, saldo: a(recebido - devolvido) };
 }
 
-export { NAO_TROCA, RECEBIDO, RECEBIDO_BRUTO, SQL_TROCAS, trocasDoPeriodo };
+// Dinheiro recebido pelas PEÇAS (v3.31.0): o recebido da venda menos o frete.
+// Use onde o recebido é RATEADO entre os itens (origem própria/consignada,
+// repasse do fornecedor): o frete não é preço de peça — sem isto, uma venda
+// com frete faria cada peça parecer mais cara do que foi vendida.
+function RECEBIDO_PRODUTOS(alias = 'v') {
+  const a = alias ? `${alias}.` : '';
+  return `((${RECEBIDO(alias)}) - COALESCE(${a}frete,0))`;
+}
+
+export { NAO_TROCA, RECEBIDO, RECEBIDO_BRUTO, RECEBIDO_PRODUTOS, SQL_TROCAS, trocasDoPeriodo };

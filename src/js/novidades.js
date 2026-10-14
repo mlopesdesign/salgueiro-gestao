@@ -3,6 +3,16 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.31.0',
+    data: '2026-10-14',
+    itens: [
+      '🌐 LOJA PELO NAVEGADOR NÃO CONGELA MAIS POR CAUSA DO PRINCIPAL. O computador principal atendia os terminais em fila de um só: quando ele imprimia um cupom ou uma etiqueta (até 25 segundos), quando um relatório demorava ou quando o navegador abria uma conexão de reserva, TODOS os terminais ficavam parados esperando. Agora ele atende vários ao mesmo tempo e a impressão roda separada. No teste: o pedido que levava 5 a 8 segundos passou a levar menos de meio segundo.',
+      '⚠️ AVISO NO TERMINAL QUANDO O PRINCIPAL NÃO RESPONDE. Em vez de a tela simplesmente parar, aparece uma faixa vermelha "Sem resposta do computador principal desde HH:MM" — ela some sozinha quando a conexão volta. Nenhum pedido fica esperando para sempre: passou de 35 segundos, a tela avisa.',
+      '🩺 DIAGNÓSTICO DE TRAVAMENTOS. O sistema passou a registrar tudo o que acontece na rede: cada pedido dos terminais com o tempo que levou, o que demorou, o que ficou sem resposta, quando um terminal perdeu contato, quando o sistema abriu e fechou (e se caiu), backup na nuvem e impressões. Para ver: Configurações → Rede → Diagnóstico de travamentos, escolhendo o dia. Fica guardado 30 dias e dá para salvar em arquivo.',
+      '🚚 FRETE NAS VENDAS COM ENTREGA. Em Configurações → Lojas, marque "Esta loja vende com entrega" (loja WhatsApp). No pagamento aparece Entrega — Retirada no balcão, Mercado Envios, Correios, Motoboy, Transportadora — obrigatória, e o valor do frete, que soma no total. O frete aparece no cupom, no fechamento do caixa, no relatório de vendas (com quantas entregas de cada tipo) e no painel. Ele entra no faturamento mas não no lucro: é repassado a quem entrega.',
+    ],
+  },
+  {
     versao: '3.30.1',
     data: '2026-10-07',
     itens: [

@@ -75,7 +75,28 @@ const rotas = {
   'avisos:confirmar': (p) => mensagens.confirmarAviso(db, sessao.usuario, p),
   'avisos:listar': (p) => mensagens.listarAvisos(db, sessao.usuario, p),
   'avisos:encerrar': (p) => mensagens.encerrarAviso(db, sessao.usuario, p),
-  'app:garantirExtensao': async () => { await ambiente.garantirExtensaoRede(); return { ok: true }; },
+  // Grava o servidor de rede embutido no disco. Se ele MUDOU (veio numa
+  // atualização) e o acesso em rede está ligado, o sistema reabre UMA vez para
+  // a extensão nova entrar no ar — o Neutralino já tinha iniciado a antiga
+  // antes deste código rodar. Uma vez por versão, nunca em laço. (v3.31.0)
+  'app:garantirExtensao': async () => {
+    const r = await ambiente.garantirExtensaoRede();
+    if (!r || !r.mudou) return { ok: true, mudou: false };
+    let ativa = false;
+    try { await pronto(); ativa = config.obter(db).config.rede_ativa === '1'; } catch { /* */ }
+    const chave = `salg_ps1_reabriu_${ambiente.versaoApp()}`;
+    let jaReabriu = false;
+    try { jaReabriu = localStorage.getItem(chave) === '1'; } catch { /* */ }
+    ambiente.registrarLog('EXTENSAO', `servidor de rede novo gravado no disco (rede ${ativa ? 'ligada' : 'desligada'})`);
+    if (ativa && !jaReabriu) {
+      try { localStorage.setItem(chave, '1'); } catch { /* */ }
+      ambiente.registrarLog('APP', 'reabrindo para carregar o servidor de rede novo');
+      try { await db.salvarAgora(); } catch { /* */ }
+      setTimeout(() => ambiente.reiniciarApp(), 400);
+      return { ok: true, mudou: true, reabrindo: true };
+    }
+    return { ok: true, mudou: true };
+  },
 
   // Autenticação
   // ATENÇÃO: sessao.usuario é gerenciado pelo chamador (api() para app local,
@@ -1139,6 +1160,28 @@ const rotas = {
   },
 
   // Acesso em rede (multiterminal)
+  // ── Diagnóstico de travamentos (v3.31.0) ──────────────────────────────────
+  // Terminal no navegador manda "estou vivo" a cada 30 s: cada um vira linha
+  // no log da rede, e um buraco nessas linhas mostra QUANDO a loja perdeu o
+  // contato com o computador principal.
+  'rede:ping': () => ({ ok: true, agora: Date.now() }),
+  // O terminal guarda o que deu errado enquanto estava sem conexão e manda
+  // tudo de uma vez quando ela volta. Vai para o log do aplicativo.
+  'rede:logTerminal': (p) => {
+    const evs = Array.isArray(p && p.eventos) ? p.eventos.slice(-200) : [];
+    const quem = (sessao.usuario && sessao.usuario.nome) || 'sem login';
+    const term = String((p && p.terminal) || '?').slice(0, 40);
+    for (const e of evs) {
+      ambiente.registrarLog('TERMINAL', `${term} (${quem}) ${String(e.quando || '').slice(0, 19)} ` +
+        `${String(e.tipo || '').slice(0, 20)} ${String(e.canal || '').slice(0, 60)} ${Number(e.ms) || 0}ms ` +
+        `${String(e.erro || '').slice(0, 160)}`);
+    }
+    return { ok: true, recebidos: evs.length };
+  },
+  'rede:diagnostico': async (p) => {
+    const dia = /^\d{4}-\d{2}-\d{2}$/.test((p && p.dia) || '') ? p.dia : null;
+    return { ok: true, ...(await ambiente.lerLogs(dia)) };
+  },
   'rede:status': () => {
     const cfg = config.obter(db).config;
     return { ok: true, ...rede.status(cfg.rede_porta), ativa_config: cfg.rede_ativa === '1' };
@@ -2154,7 +2197,7 @@ async function _restaurarBytes(bytes, opcoes) {
 }
 
 function exigirLogin(canal) {
-  return !['app:versao', 'auth:login', 'auth:sessao', 'config:obter',
+  return !['app:versao', 'auth:login', 'auth:sessao', 'config:obter', 'rede:logTerminal',
            'licenca:status', 'licenca:renovar',
            'dev:entrar', 'dev:aplicar', 'dev:remover',
            'dev:trocarSenha', 'dev:setores', 'dev:resetarFabrica'].includes(canal);
@@ -2378,7 +2421,7 @@ const PERM_ROTA = {
   'backup:manual': 'config.gerenciar', 'backup:restaurar': 'config.gerenciar',
   'backup:listarLocais': 'config.gerenciar', 'backup:restaurarLocal': 'config.gerenciar',
   'backup:preAtualizacao': 'config.gerenciar', 'backup:salvarAgora': 'config.gerenciar',
-  'rede:status': 'config.gerenciar', 'rede:aplicar': 'config.gerenciar',
+  'rede:status': 'config.gerenciar', 'rede:aplicar': 'config.gerenciar', 'rede:diagnostico': 'config.gerenciar',
   'rede:abrirNavegador': 'config.gerenciar',
   'auth:listarUsuarios': 'usuarios.gerenciar', 'auth:salvarUsuario': 'usuarios.gerenciar',
   'permissoes:catalogo': 'usuarios.gerenciar',
@@ -2391,6 +2434,9 @@ const PERM_ROTA = {
 let _pronto = null;
 
 async function _iniciar() {
+  // Cada abertura fica no log: abertura sem um "fechado pelo usuário" antes
+  // = o sistema caiu (ou o Windows o derrubou). (v3.31.0)
+  ambiente.registrarLog('APP', `aberto v${ambiente.versaoApp()}`);
   await licenca.iniciar();
   let bytesExistentes = await ambiente.lerBanco();
   // Adota o banco inicial APENAS na verdadeira primeira execução:
@@ -2682,7 +2728,7 @@ async function _iniciar() {
 
   // Acesso em rede: prepara a ponte com a extensão e religa se estava ativa
   try {
-    rede.preparar(processar);
+    rede.preparar(processar, ambiente.registrarLog);
     const cfgIni = config.obter(db).config;
     if (cfgIni.rede_ativa === '1' && licenca.moduloAtivo('rede')) {
       setTimeout(() => rede.iniciar({ porta: Number(cfgIni.rede_porta) || 8750 })
@@ -2695,8 +2741,17 @@ async function _iniciar() {
     nuvem.registrarOAuthListener();
     // Verifica 5s após o boot e depois a cada hora
     const _checkBackup = async () => {
-      try { if (await nuvem.precisaBackupDiario()) await nuvem.fazerBackupTodos(db); }
-      catch { /* silencioso — sem internet ou não configurado */ }
+      try {
+        if (await nuvem.precisaBackupDiario()) {
+          // registrado no log: o backup prende o sistema enquanto copia o banco,
+          // e um terminal lento nessa hora fica explicado (v3.31.0)
+          const ini = Date.now();
+          ambiente.registrarLog('BACKUP-NUVEM', 'começou');
+          await nuvem.fazerBackupTodos(db);
+          ambiente.registrarLog('BACKUP-NUVEM', `terminou em ${Date.now() - ini}ms`);
+        }
+      }
+      catch (e) { ambiente.registrarLog('BACKUP-NUVEM', `falhou: ${e && e.message ? e.message : e}`); }
     };
     setTimeout(_checkBackup, 5000);
     setInterval(_checkBackup, 3600000);
@@ -2705,6 +2760,7 @@ async function _iniciar() {
   // Garante que nenhuma escrita pendente se perca ao fechar o sistema
   // (o index.html chama este gancho quando o usuário clica no X)
   window.__fecharComSalvamento = async () => {
+    try { await ambiente.registrarLog('APP', 'fechado pelo usuário (X / Alt+F4)'); } catch (_) {}
     try { await db.salvarAgora(); } catch (_) {}
     await ambiente.sairApp();
   };
@@ -2718,7 +2774,11 @@ export function pronto() {
 // A função que o frontend usa: mesma assinatura da V1.
 export async function api(canal, payload) {
   await pronto();
+  const _ini = Date.now();
   const r = await processar(canal, payload, sessao);
+  // O sistema ocupado aqui também segura os terminais: fica no log. (v3.31.0)
+  const _ms = Date.now() - _ini;
+  if (_ms >= 3000) ambiente.registrarLog('SISTEMA-LENTO', `local ${canal} ${_ms}ms`);
   // Gerencia sessao APENAS para o app local (terminais em rede usam sessoes Map em rede.js)
   if (canal === 'auth:login'  && r && r.ok) sessao.usuario = r.usuario;
   if (canal === 'auth:logout') sessao.usuario = null;

@@ -30,14 +30,15 @@ function moedaF(v) {
 function registrar(db, p, quem) {
   // ── 1. Validar venda de origem ──────────────────────────────────────────────
   const venda = db.prepare(
-    'SELECT id, status, cliente_id, loja_id, total, subtotal, desconto FROM vendas WHERE id=?'
+    'SELECT id, status, cliente_id, loja_id, total, subtotal, desconto, COALESCE(frete,0) frete FROM vendas WHERE id=?'
   ).get(p.venda_id);
   if (!venda) return { ok: false, erro: 'Venda de origem não encontrada.' };
   // 'troca' também: a peça que saiu numa troca pode ser trocada de novo (cadeia).
   if (venda.status !== 'concluida' && venda.status !== 'troca') return { ok: false, erro: 'Só é possível trocar itens de vendas concluídas.' };
 
   const sub = arred(Number(venda.subtotal) || 0);
-  const tot = arred(Number(venda.total) || 0);
+  // frete não é preço de peça: fica fora do fator (v3.31.0)
+  const tot = arred((Number(venda.total) || 0) - (Number(venda.frete) || 0));
   const fator = sub > 0 ? tot / sub : 1; // proporciona desconto geral da venda original
 
   // REGRA (decidida pelo Marcio em 04/08/2026): o desconto da compra original

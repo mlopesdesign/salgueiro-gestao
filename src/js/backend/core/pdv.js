@@ -5,6 +5,7 @@ import { NAO_TROCA, trocasDoPeriodo } from './vendas-sql.js';
 import * as valesTroca from './vales_troca.js';
 import * as pontos from './pontos.js';
 import * as estoques from './estoques.js';
+import { tipoFreteValido, rotuloFrete, freteDoPeriodo } from './frete.js';
 
 const FORMAS = ['dinheiro', 'pix', 'debito', 'credito', 'crediario', 'vale', 'cortesia'];
 const arred = (n) => Math.round(n * 100) / 100;
@@ -13,7 +14,8 @@ const arred = (n) => Math.round(n * 100) / 100;
 function caixaAtual(db) {
   const caixa = db.prepare(`
     SELECT cx.*, u.nome AS aberto_por, lj.nome AS loja,
-           COALESCE(lj.sem_desconto,0) AS loja_sem_desconto FROM caixas cx
+           COALESCE(lj.sem_desconto,0) AS loja_sem_desconto,
+           COALESCE(lj.usa_frete,0) AS loja_usa_frete FROM caixas cx
     LEFT JOIN usuarios u ON u.id = cx.usuario_abertura
     LEFT JOIN lojas lj ON lj.id = cx.loja_id
     WHERE cx.fechado_em IS NULL ORDER BY cx.id DESC LIMIT 1
@@ -51,7 +53,7 @@ function trocarLoja(db, p, quem) {
   const lojaId = Number(p && p.loja_id) || 0;
   if (!lojaId) return { ok: false, erro: 'Informe a loja.' };
   if (lojaId === cx.loja_id) return { ok: false, erro: 'O caixa já está nesta loja.' };
-  const l = db.prepare('SELECT id, nome, COALESCE(sem_desconto,0) sem_desconto FROM lojas WHERE id=? AND ativo=1').get(lojaId);
+  const l = db.prepare('SELECT id, nome, COALESCE(sem_desconto,0) sem_desconto, COALESCE(usa_frete,0) usa_frete FROM lojas WHERE id=? AND ativo=1').get(lojaId);
   if (!l) return { ok: false, erro: 'Loja inválida ou inativa.' };
 
   db.prepare('UPDATE caixas SET loja_id=? WHERE id=?').run(lojaId, cx.id);
@@ -59,7 +61,7 @@ function trocarLoja(db, p, quem) {
 
   const est = estoques.daLoja(db, lojaId);
   return { ok: true, loja_id: lojaId, loja: l.nome, estoque: est ? est.nome : null,
-           sem_desconto: l.sem_desconto ? 1 : 0 };
+           sem_desconto: l.sem_desconto ? 1 : 0, usa_frete: l.usa_frete ? 1 : 0 };
 }
 
 function movimentoCaixa(db, p, quem) {
@@ -149,6 +151,9 @@ function resumoCaixa(db, caixaId) {
     consignados,
     sangrias, suprimentos,
     trocas,
+    // Frete das vendas com entrega (v3.31.0): já está DENTRO de total_vendas
+    // (é dinheiro que entrou) — aqui só o quanto e como, para a linha própria.
+    frete: freteDoPeriodo(db, (a) => `${a}.caixa_id = ?`, [caixaId]),
     qtd_vendas: nVendas.n,
     // VENDA É VENDA, TROCA É TROCA. `total_vendas` é só venda; a diferença
     // recebida nas trocas fica em `trocas.recebido`, em linha própria. As duas
@@ -346,8 +351,24 @@ function registrarVenda(db, p, quem) {
   // consignação é gerada normalmente — o fornecedor continua a receber a parte dele.
   // O acréscimo da taxa entra no que o cliente paga, mas NÃO no preço da peça:
   // a soma dos itens continua sendo o custo, e o total fica subtotal+acréscimo.
-  const total = arred(subtotal - descontoGeral - cortesiaTotal + acrescimo);
-  if (total < 0) return { ok: false, erro: 'Desconto geral maior que o subtotal.' };
+  // ── Frete (v3.31.0) ─────────────────────────────────────────────────────────
+  // Só nas lojas que vendem com entrega. Lá, COMO a peça saiu é obrigatório;
+  // retirada no balcão não tem frete. Nas outras lojas o frete é recusado —
+  // terminal em rede pode montar o payload à mão. O frete soma no total: é
+  // dinheiro que entrou (ver core/frete.js).
+  let frete = arred(Number(p.frete) || 0);
+  let freteTipo = p.frete_tipo ? String(p.frete_tipo) : null;
+  if (frete < 0) return { ok: false, erro: 'Valor de frete inválido.' };
+  if (cx.loja_usa_frete) {
+    if (!freteTipo) return { ok: false, erro: 'Informe como foi a entrega (retirada no balcão, Mercado Envios...).' };
+    if (!tipoFreteValido(freteTipo)) return { ok: false, erro: 'Forma de entrega inválida.' };
+    if (freteTipo === 'retirada' && frete > 0) return { ok: false, erro: 'Retirada no balcão não tem frete.' };
+  } else if (frete > 0 || freteTipo) {
+    return { ok: false, erro: `A loja ${cx.loja || 'deste caixa'} não vende com entrega — sem frete aqui.` };
+  }
+
+  const total = arred(subtotal - descontoGeral - cortesiaTotal + acrescimo + frete);
+  if (total - frete < 0) return { ok: false, erro: 'Desconto geral maior que o subtotal.' };
 
   // pagamentos (a cortesia não entra na conta do que foi recebido)
   let pago = 0, dinheiro = 0;
@@ -434,11 +455,13 @@ function registrarVenda(db, p, quem) {
     const motivoFinal = aCusto ? (String(p.desconto_motivo || '').trim() || null) : descMotivo;
 
     const rv = db.prepare(`INSERT INTO vendas (caixa_id, loja_id, cliente_id, usuario_id, subtotal, desconto, total, obs,
-                                               desconto_autorizado_por, desconto_motivo, tipo_venda, acrescimo)
-                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`)
+                                               desconto_autorizado_por, desconto_motivo, tipo_venda, acrescimo,
+                                               frete, frete_tipo)
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
       .run(cx.id, cx.loja_id || null, clienteId, quem.id, subtotal,
            arred(descontoGeral + cortesiaTotal), total, p.obs || null,
-           autorFinal, motivoFinal, aCusto ? 'custo' : 'normal', acrescimo);
+           autorFinal, motivoFinal, aCusto ? 'custo' : 'normal', acrescimo,
+           frete, freteTipo);
     const vendaId = Number(rv.lastInsertRowid);
 
     const insItem = db.prepare(`INSERT INTO venda_itens (venda_id, variacao_id, qtd, preco_unit, desconto, total)
@@ -544,14 +567,15 @@ function registrarVenda(db, p, quem) {
     // creditar pontos ao cliente identificado (após resgate para não resgatar e recreditar)
     let pontosGanhos = 0;
     if (p.cliente_id) {
-      pontosGanhos = pontos.calcularGanho(db, total);
+      pontosGanhos = pontos.calcularGanho(db, arred(total - frete));   // frete não dá ponto
       if (pontosGanhos > 0) {
         pontos.creditar(db, { clienteId: p.cliente_id, pontos: pontosGanhos, origem: 'venda', origemId: vendaId }, quem);
       }
     }
 
     db.exec('COMMIT');
-    auditar(db, quem, 'venda', `#${vendaId} R$ ${total.toFixed(2)}`);
+    auditar(db, quem, 'venda', `#${vendaId} R$ ${total.toFixed(2)}` +
+      (freteTipo ? ` · ${rotuloFrete(freteTipo)}${frete ? ' frete R$ ' + frete.toFixed(2) : ''}` : ''));
     const resultado = obterVenda(db, vendaId);
     resultado.pontos_ganhos = pontosGanhos;
     if (avisosEstoque.length) resultado.avisos_estoque = avisosEstoque;

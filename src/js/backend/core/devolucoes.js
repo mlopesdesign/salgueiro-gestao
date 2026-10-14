@@ -6,7 +6,7 @@ const arred = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
 // Itens ainda devolvíveis de uma venda (vendido − já devolvido)
 function itensVenda(db, venda_id) {
-  const venda = db.prepare('SELECT id, status, cliente_id, total, subtotal, desconto FROM vendas WHERE id=?').get(venda_id);
+  const venda = db.prepare('SELECT id, status, cliente_id, total, subtotal, desconto, COALESCE(frete,0) frete FROM vendas WHERE id=?').get(venda_id);
   if (!venda) return { ok: false, erro: 'Venda não encontrada.' };
   if (venda.status !== 'concluida' && venda.status !== 'troca') return { ok: false, erro: 'Só é possível devolver itens de vendas concluídas.' };
   const itens = db.prepare(`
@@ -27,7 +27,7 @@ function itensVenda(db, venda_id) {
   const descontoGeral = arred(Number(venda.desconto) || 0);
   const subtotalVenda = arred(Number(venda.subtotal) || 0);
   const fatorDesconto = (descontoGeral > 0 && subtotalVenda > 0)
-    ? (Number(venda.total) / subtotalVenda)  // ex: 152/160 = 0.95
+    ? ((Number(venda.total) - (Number(venda.frete) || 0)) / subtotalVenda)  // ex: 152/160 = 0.95 — frete fora (v3.31.0)
     : 1;
 
   for (const i of itens) {

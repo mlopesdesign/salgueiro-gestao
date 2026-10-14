@@ -9,12 +9,12 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.30.1 |
-| **Data do último build** | 2026-10-07 |
+| **Versão atual** | 3.31.0 |
+| **Data do último build** | 2026-10-14 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.30.1 em 2026-10-07 ✓ (28 módulos core · 159 rotas · 37 tabelas) |
-| **5 lugares da versão** | os 5 em 3.30.1 ✓ |
+| **GRAPHIFY** | atualizado para 3.31.0 em 2026-10-14 ✓ (29 módulos core · 162 rotas · 37 tabelas) |
+| **5 lugares da versão** | os 5 em 3.31.0 ✓ |
 
 ---
 
@@ -25,6 +25,76 @@
 pelo Desktop Commander (`start_process`, powershell) → confiro no GitHub → aviso.
 O "dois cliques em PUBLICAR.bat" está REVOGADO. Detalhe: regra 3 do `REGRAS-CRITICAS.md`.
 **v3.30.0 publicada assim** (07/10/2026 00:24 UTC, 6.485.691 bytes conferidos).
+
+## v3.31.0 — REDE SEM FILA · DIAGNÓSTICO DE TRAVAMENTOS · FRETE (2026-10-14)
+
+| Campo | Valor |
+|---|---|
+| Tag | `v3.31.0` |
+| Título | v3.31.0 — Rede sem fila · Diagnóstico de travamentos · Frete nas vendas com entrega |
+| Asset | `Portable\resources.neu` — 6.539.728 bytes — sha256 `5f4ce1b98d5786ee1480285eb22542cad4f792138a924e81c01bd9fec19e1cf6` |
+| Backup | `backups\pre-v3.31.0-2026-10-14\` (inclui o servidor-rede antigo e o novo, e `teste-rede-windows\` com o mock de teste) |
+
+### Relato: a loja Camarote (navegador) travou de novo
+
+**Causa achada no código (provada em teste):** o servidor de rede (`extensions/rede/servidor-rede.ps1`,
+embutido em `servidor-rede-embutido.js`) atendia **um terminal por vez**:
+lia o pedido com espera de até 5 s, mandava ao sistema e **ficava parado** até 20 s
+esperando a resposta; e a **impressão silenciosa** (Edge 12 s + SumatraPDF 12 s,
+download sem prazo se faltar o Sumatra) rodava **dentro do mesmo laço**. Cupom ou
+etiqueta impresso no principal = todos os terminais congelados.
+Teste com o antigo × novo (mock do Neutralino em Node, pwsh 7 no Linux E Windows
+PowerShell 5.1 real no PC do Marcio):
+
+| Caso | Antigo | Novo |
+|---|---|---|
+| conexão ociosa + pedido | 5.100 ms | 242–346 ms |
+| 3 pedidos durante um de 8 s | 7.750 ms | 24–39 ms |
+| pedido durante impressão de 6 s | esperava | 20–55 ms |
+
+**Novo servidor:** conexões numa lista lidas só quando chega dado; pedido pendente
+guardado por `reqId` e respondido quando a resposta chega (vários ao mesmo tempo);
+30 s sem resposta → 504 com mensagem clara; impressão num **runspace** separado
+(`$codigoImpressao`, `Verificar-Impressoes`, prazo 60 s); corpo do pedido vai em
+TEXTO para o app (`v=2`, app faz o JSON.parse) e a resposta volta em TEXTO
+(`json`) — o PowerShell não remonta JSON (custava segundos em relatório grande).
+`core/rede.js` aceita os dois formatos (o antigo ainda roda no 1º boot após atualizar).
+**O app reabre UMA vez** depois da atualização quando a rede está ligada
+(`app:garantirExtensao` → `garantirExtensaoRede` devolve `mudou`; trava por
+`localStorage salg_ps1_reabriu_<versão>`), porque o Neutralino inicia a extensão
+antes do JS gravar o .ps1 novo.
+**Fonte do .ps1:** `extensions/rede/servidor-rede.ps1` → `node tools/gerar-rede-embutida.js`
+(NUNCA editar o embutido à mão). Gancho de teste `teste_espera_ms` no runspace.
+
+**Log (pedido do Marcio):** `%APPDATA%\SalgueiroGestao\logs\rede-AAAA-MM-DD.log`
+(extensão: cada pedido IP/canal/ms, LENTO ≥3 s, SEM-RESPOSTA, VIVO a cada 5 min,
+IMPRESSAO, SERVIDOR/EXTENSAO) e `app-AAAA-MM-DD.log` (app: aberto/fechado,
+SISTEMA-LENTO ≥2 s terminal / ≥3 s local, BACKUP-NUVEM, TERMINAL = eventos que o
+navegador guardou offline e mandou ao voltar). 30 dias. Tela: Configurações → Rede
+→ 🩺 Diagnóstico (cartões, terminais com "maior silêncio", linha do tempo, salvar).
+**Terminal:** prazo 35 s por pedido, faixa vermelha "Sem resposta desde HH:MM",
+`rede:ping` a cada 30 s, eventos em `localStorage salg_diag_eventos` → `rede:logTerminal`.
+
+**Próximo passo com o Camarote:** depois de atualizar o computador PRINCIPAL, no
+próximo travamento abrir o Diagnóstico daquele dia. Buraco nos `rede:ping` do IP
+do Camarote sem nada no principal = rede/internet; SISTEMA-LENTO/BACKUP-NUVEM na
+mesma hora = principal ocupado; "SISTEMA CAIU" = principal reiniciou/caiu.
+
+### Frete (loja WhatsApp)
+`lojas.usa_frete`, `vendas.frete` + `vendas.frete_tipo` (schema + migração).
+Regra única `core/frete.js` (FRETE_TIPOS, `freteDoPeriodo`). Frete SOMA no
+`vendas.total` (gaveta/formas batem sozinhas) e aparece separado: cupom, caixa,
+relatório de vendas (cartão + tipos), painel. **Fora do lucro** (dashboard) e
+**fora de rateio de peça**: `RECEBIDO_PRODUTOS` em vendas-sql.js (3 rateios do
+relatório), fator do evento, `trocas.js` e `devolucoes.js` descontam o frete.
+Servidor recusa: loja com entrega sem tipo; retirada com valor; frete em loja sem
+entrega. Pontos não contam frete. Importação de planilha NÃO tem frete (insere direto).
+**ARMADILHA repetida:** `vendasPeriodo` monta o `resumo` do retorno campo a campo —
+campo novo some se não for posto lá (aconteceu com o frete; o teste pegou).
+**ARMADILHA:** comentário com `;` dentro de CREATE TABLE no schema.sql quebra o
+`split(';')` do db.js e do harness — a tabela inteira some. Nunca `;` em comentário.
+
+Testes novos: `teste-frete.mjs` (29), `teste-loja-sem-desconto.mjs` (25, v3.30.0).
 
 ## 0.0000 v3.30.1 — FECHAR PERGUNTA ANTES · SALVAMENTO FINAL VOLTOU (2026-10-07)
 

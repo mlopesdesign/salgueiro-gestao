@@ -150,6 +150,7 @@ CREATE TABLE IF NOT EXISTS lojas (
   nome TEXT NOT NULL UNIQUE,
   estoque_id INTEGER REFERENCES estoques(id),
   sem_desconto INTEGER NOT NULL DEFAULT 0,      -- v3.30.0: loja que nunca dá desconto (ex.: venda online)
+  usa_frete INTEGER NOT NULL DEFAULT 0,         -- v3.31.0: loja que vende com entrega (pede frete no PDV)
   ativo INTEGER NOT NULL DEFAULT 1,
   criado_em TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
@@ -193,6 +194,10 @@ CREATE TABLE IF NOT EXISTS vendas (
   -- autoriza nem sempre tem login (dono, gerente por telefone, sócio).
   desconto_autorizado_por TEXT,
   desconto_motivo TEXT,
+  -- v3.31.0: entrega. `frete` soma no total (é dinheiro que entrou),
+  -- `frete_tipo` = como saiu (retirada, mercado_envios, correios...).
+  frete REAL NOT NULL DEFAULT 0,
+  frete_tipo TEXT,
   criado_em TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
 

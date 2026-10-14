@@ -281,24 +281,93 @@ export async function dialogoAbrir(titulo) {
 // Garante que extensions/rede/servidor-rede.ps1 está atualizado no disco.
 // Chamado no boot: quando resources.neu é atualizado pelo auto-updater,
 // o PS1 embutido também é atualizado na próxima inicialização.
+//
+// v3.31.0: devolve { mudou } — o Neutralino já iniciou a extensão ANTES deste
+// código rodar, então o arquivo novo só vale depois de reabrir o sistema.
+// Quem chama decide se reabre (só quando o acesso em rede está ligado).
 export async function garantirExtensaoRede() {
   try {
     const dir = `${NL_CWD}/extensions/rede`;
     await _garantirDir(dir);
     const dest = `${dir}/servidor-rede.ps1`;
+    let atual = null;
+    try { atual = await Neutralino.filesystem.readFile(dest); } catch { /* não existe */ }
+    if (atual === SERVIDOR_REDE_PS1) return { mudou: false };
     // Escrever o PS1 embutido em UTF-8
     const enc = new TextEncoder();
     const bytes = enc.encode(SERVIDOR_REDE_PS1);
     await Neutralino.filesystem.writeBinaryFile(dest, bytes.buffer);
+    // confere a gravação — sem isso um disco protegido faria o sistema reabrir à toa
+    let gravado = null;
+    try { gravado = await Neutralino.filesystem.readFile(dest); } catch { /* */ }
+    return { mudou: gravado === SERVIDOR_REDE_PS1 };
   } catch (e) {
     // Não crítico: o PS1 pode já existir do instalador
     console.warn('garantirExtensaoRede:', e);
+    return { mudou: false };
   }
+}
+
+// ── LOG DE DIAGNÓSTICO (v3.31.0) ────────────────────────────────────────────
+// Um arquivo por dia em %APPDATA%/SalgueiroGestao/logs/app-AAAA-MM-DD.log, ao
+// lado do rede-AAAA-MM-DD.log que a extensão grava. Mesmo formato de linha:
+//   HH:MM:SS.mmm TIPO          mensagem
+// A gravação é enfileirada e nunca trava quem chama — se falhar, segue a vida.
+let _dirLogs = null;
+const _filaLog = [];
+let _gravandoLog = false;
+export async function dirLogs() {
+  if (_dirLogs) return _dirLogs;
+  const base = await Neutralino.os.getPath('data');
+  _dirLogs = `${base}/SalgueiroGestao/logs`;
+  await _garantirDir(_dirLogs);
+  return _dirLogs;
+}
+const _2 = (n) => String(n).padStart(2, '0');
+export function dataLocal(d = new Date()) {
+  return `${d.getFullYear()}-${_2(d.getMonth() + 1)}-${_2(d.getDate())}`;
+}
+export function registrarLog(tipo, msg) {
+  const d = new Date();
+  const hora = `${_2(d.getHours())}:${_2(d.getMinutes())}:${_2(d.getSeconds())}.${String(d.getMilliseconds()).padStart(3, '0')}`;
+  _filaLog.push({ dia: dataLocal(d), linha: `${hora} ${String(tipo).padEnd(13)} ${String(msg).replace(/[\r\n]+/g, ' ')}\r\n` });
+  return _esvaziarLog();
+}
+async function _esvaziarLog() {
+  if (_gravandoLog) return;
+  _gravandoLog = true;
+  try {
+    const dir = await dirLogs();
+    while (_filaLog.length) {
+      const dia = _filaLog[0].dia;
+      let bloco = '';
+      while (_filaLog.length && _filaLog[0].dia === dia) bloco += _filaLog.shift().linha;
+      try { await Neutralino.filesystem.appendFile(`${dir}/app-${dia}.log`, bloco); } catch { /* segue */ }
+    }
+  } catch { /* sem pasta de log: não é motivo para parar o sistema */ }
+  finally { _gravandoLog = false; }
+}
+// Lê os logs de um dia (rede + aplicativo) e lista os dias que existem.
+export async function lerLogs(dia) {
+  const dir = await dirLogs();
+  let dias = [];
+  try {
+    const itens = await Neutralino.filesystem.readDirectory(dir);
+    const set = new Set();
+    for (const it of itens) {
+      const m = /^(rede|app)-(\d{4}-\d{2}-\d{2})\.log$/.exec(it.entry || '');
+      if (m) set.add(m[2]);
+    }
+    dias = [...set].sort().reverse();
+  } catch { /* pasta vazia */ }
+  const ler = async (nome) => { try { return await Neutralino.filesystem.readFile(`${dir}/${nome}`); } catch { return ''; } };
+  const d = dia || dias[0] || dataLocal();
+  return { dir, dias, dia: d, rede: await ler(`rede-${d}.log`), app: await ler(`app-${d}.log`) };
 }
 
 // ── App ──────────────────────────────────────────────────────────────────────
 export function versaoApp() {
-  try { return NL_APPVERSION; } catch { return '3.30.1'; }
+  try { return NL_APPVERSION; } catch { return '3.31.0'; }
 }
 
 export async function reiniciarApp() {

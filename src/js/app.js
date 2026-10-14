@@ -65,27 +65,126 @@ window.__pedirFechar = () => {
 const $app = document.getElementById('app');
 let usuario = null;
 let categoriasCache = [];
-let APP_VERSION = '3.30.1'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
+let APP_VERSION = '3.31.0'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
 
 // API dupla: no aplicativo usa IPC (preload); num terminal em rede (navegador),
 // conversa com o servidor do computador principal via HTTP com token de sessão.
+// ── Terminal no navegador: prazo, aviso e diagnóstico (v3.31.0) ─────────────
+// Relato: a loja que usa o navegador "travou". Antes, um pedido sem resposta
+// ficava esperando para sempre, sem aviso nenhum — a tela simplesmente parava.
+// Agora:
+//   • cada pedido tem prazo (35 s); estourou, a tela avisa em vez de congelar;
+//   • uma faixa vermelha no topo mostra desde quando está sem resposta e some
+//     sozinha quando a conexão volta;
+//   • a cada 30 s o terminal dá sinal de vida (rede:ping) — fica no log da
+//     rede do computador principal, e um buraco nessas linhas mostra a queda;
+//   • o que deu errado fica guardado neste navegador e é enviado ao
+//     computador principal assim que a conexão volta (log do aplicativo).
+const DIAG_CHAVE = 'salg_diag_eventos';
+function _terminalId() {
+  try {
+    let id = localStorage.getItem('salg_terminal_id');
+    if (!id) {
+      id = 'T-' + Math.random().toString(16).slice(2, 6).toUpperCase();
+      localStorage.setItem('salg_terminal_id', id);
+    }
+    return id;
+  } catch { return 'T-?'; }
+}
+function _diagGuardar(ev) {
+  try {
+    const l = JSON.parse(localStorage.getItem(DIAG_CHAVE) || '[]');
+    const d = new Date();
+    const p2 = (n) => String(n).padStart(2, '0');
+    // hora LOCAL do terminal (toISOString sairia em UTC, 3 h adiantada)
+    l.push({ quando: `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`, ...ev });
+    localStorage.setItem(DIAG_CHAVE, JSON.stringify(l.slice(-200)));
+  } catch { /* navegador sem armazenamento: segue */ }
+}
+function _diagPendentes() {
+  try { return JSON.parse(localStorage.getItem(DIAG_CHAVE) || '[]'); } catch { return []; }
+}
+let _semConexaoDesde = null;
+function _avisoConexao(ligado) {
+  let b = document.getElementById('aviso-conexao');
+  if (!ligado) { if (b) b.remove(); return; }
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'aviso-conexao';
+    b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:100000;background:#B3261E;color:#fff;' +
+      'font:600 14px/1.3 system-ui,sans-serif;text-align:center;padding:9px 14px;box-shadow:0 2px 10px rgba(0,0,0,.25)';
+    document.body.appendChild(b);
+  }
+  const d = new Date(_semConexaoDesde || Date.now());
+  b.textContent = `⚠️ Sem resposta do computador principal desde ${String(d.getHours()).padStart(2, '0')}:` +
+    `${String(d.getMinutes()).padStart(2, '0')} — tentando de novo sozinho. Não feche a venda até esta faixa sumir.`;
+}
 function criarApiRede() {
   let token = sessionStorage.getItem('salg_token') || null;
-  return async (canal, payload) => {
+  let enviandoDiag = false;
+  const marcarFalha = () => { if (!_semConexaoDesde) _semConexaoDesde = Date.now(); _avisoConexao(true); };
+  async function enviarDiag() {
+    const eventos = _diagPendentes();
+    if (enviandoDiag || !eventos.length) return;
+    enviandoDiag = true;
+    try {
+      const ctrl = new AbortController();
+      const tm = setTimeout(() => ctrl.abort(), 10000);
+      const resp = await fetch('/api', {
+        method: 'POST', signal: ctrl.signal,
+        headers: { 'Content-Type': 'application/json', ...(token ? { 'X-Token': token } : {}) },
+        body: JSON.stringify({ canal: 'rede:logTerminal', payload: { terminal: _terminalId(), eventos } })
+      });
+      clearTimeout(tm);
+      const r = await resp.json();
+      if (r && r.ok) {
+        // tira só o que foi enviado (pode ter chegado evento novo no meio)
+        const agora = _diagPendentes();
+        localStorage.setItem(DIAG_CHAVE, JSON.stringify(agora.slice(eventos.length)));
+      }
+    } catch { /* manda na próxima */ }
+    finally { enviandoDiag = false; }
+  }
+  async function chamar(canal, payload) {
+    const ini = Date.now();
+    const ctrl = new AbortController();
+    const tm = setTimeout(() => ctrl.abort(), 35000);
     try {
       const resp = await fetch('/api', {
-        method: 'POST',
+        method: 'POST', signal: ctrl.signal,
         headers: { 'Content-Type': 'application/json', ...(token ? { 'X-Token': token } : {}) },
         body: JSON.stringify({ canal, payload })
       });
       const r = await resp.json();
+      const ms = Date.now() - ini;
+      if (r && r.sem_resposta) {
+        _diagGuardar({ tipo: 'SEM-RESPOSTA', canal, ms, erro: r.erro });
+        marcarFalha();
+      } else {
+        if (_semConexaoDesde) {
+          _diagGuardar({ tipo: 'VOLTOU', canal, ms: Date.now() - _semConexaoDesde, erro: 'conexão voltou' });
+          _semConexaoDesde = null;
+          _avisoConexao(false);
+        }
+        if (ms >= 5000) _diagGuardar({ tipo: 'LENTO', canal, ms });
+        if (_diagPendentes().length) enviarDiag();
+      }
       if (canal === 'auth:login' && r.ok && r.token) { token = r.token; sessionStorage.setItem('salg_token', token); }
       if (canal === 'auth:logout') { token = null; sessionStorage.removeItem('salg_token'); }
       return r;
-    } catch {
-      return { ok: false, erro: 'Sem conexão com o computador principal. Verifique se ele está ligado com o sistema aberto.' };
-    }
-  };
+    } catch (e) {
+      const ms = Date.now() - ini;
+      const prazo = e && e.name === 'AbortError';
+      _diagGuardar({ tipo: prazo ? 'PRAZO-ESGOTADO' : 'SEM-CONEXAO', canal, ms, erro: String((e && e.message) || e) });
+      marcarFalha();
+      return { ok: false, erro: prazo
+        ? 'O computador principal não respondeu em 35 segundos. Tente de novo.'
+        : 'Sem conexão com o computador principal. Verifique se ele está ligado com o sistema aberto.' };
+    } finally { clearTimeout(tm); }
+  }
+  // sinal de vida a cada 30 s (só com alguém logado)
+  setInterval(() => { if (token) chamar('rede:ping', { terminal: _terminalId() }); }, 30000);
+  return chamar;
 }
 // No app desktop o Neutralino está presente → rotas locais (backend no WebView).
 // Num terminal em rede (navegador) → HTTP, como na V1.
@@ -842,6 +941,7 @@ async function viewDashboard(alvo) {
         <div class="rotulo">Vendas de hoje</div>
         <div class="valor">${verFin ? moeda(d.hoje.total) : d.hoje.qtd + (d.hoje.qtd === 1 ? ' venda' : ' vendas')}</div>
         <div class="card-rodape">${d.hoje.qtd} venda(s)${verFin ? ' · ticket ' + moeda(d.hoje.ticket) : ''}</div>
+        ${verFin && d.hoje.frete > 0 ? `<div class="card-rodape" style="font-size:11px">🚚 sendo ${moeda(d.hoje.frete)} de frete</div>` : ''}
         ${verFin && d.hoje.trocas > 0 ? `<div class="card-rodape" style="font-size:11px">🔁 diferença de trocas: ${moeda(d.hoje.trocas)}</div>` : ''}
         ${verFin && d.hoje.devolvido > 0 ? `<div class="card-rodape" style="color:var(--dourado,#e6a817);font-size:11px">↩ devoluções: ${moeda(d.hoje.devolvido)}</div>` : ''}
       </div>
@@ -849,6 +949,7 @@ async function viewDashboard(alvo) {
         <div class="rotulo">Vendas do mês</div>
         <div class="valor">${verFin ? moeda(d.mes.total) : d.mes.qtd + (d.mes.qtd === 1 ? ' venda' : ' vendas')}</div>
         <div class="card-rodape">${d.mes.qtd} venda(s) concluída(s)</div>
+        ${verFin && d.mes.frete > 0 ? `<div class="card-rodape" style="font-size:11px">🚚 sendo ${moeda(d.mes.frete)} de frete (fora do lucro)</div>` : ''}
         ${verFin && d.mes.trocas > 0 ? `<div class="card-rodape" style="font-size:11px">🔁 diferença de trocas: ${moeda(d.mes.trocas)}</div>` : ''}
         ${verFin && d.mes.devolvido > 0 ? `<div class="card-rodape" style="color:var(--dourado,#e6a817);font-size:11px">↩ devoluções: ${moeda(d.mes.devolvido)}</div>` : ''}
       </div>

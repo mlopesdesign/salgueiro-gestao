@@ -8,7 +8,7 @@ const arred = (n) => Math.round(n * 100) / 100;
 function listar(db, p) {
   const incluirInativas = p && p.todas;
   const linhas = db.prepare(`
-    SELECT l.id, l.nome, l.ativo, l.estoque_id, COALESCE(l.sem_desconto,0) AS sem_desconto,
+    SELECT l.id, l.nome, l.ativo, l.estoque_id, COALESCE(l.sem_desconto,0) AS sem_desconto, COALESCE(l.usa_frete,0) AS usa_frete,
            e.nome  AS estoque_nome,
            e.tipo  AS estoque_tipo,
            e.principal AS estoque_principal,
@@ -35,6 +35,9 @@ function salvar(db, p, quem) {
       if (p.sem_desconto !== undefined) {
         db.prepare('UPDATE lojas SET sem_desconto=? WHERE id=?').run(p.sem_desconto ? 1 : 0, p.id);
       }
+      if (p.usa_frete !== undefined) {
+        db.prepare('UPDATE lojas SET usa_frete=? WHERE id=?').run(p.usa_frete ? 1 : 0, p.id);
+      }
       if (p.estoque_id !== undefined && p.estoque_id !== null && p.estoque_id !== '') {
         const eid = Number(p.estoque_id) || null;
         db.prepare('UPDATE lojas SET estoque_id=? WHERE id=?').run(eid, p.id);
@@ -46,6 +49,7 @@ function salvar(db, p, quem) {
     const r = db.prepare('INSERT INTO lojas (nome) VALUES (?)').run(nome);
     const idLoja = Number(r.lastInsertRowid);
     if (p.sem_desconto) db.prepare('UPDATE lojas SET sem_desconto=1 WHERE id=?').run(idLoja);
+    if (p.usa_frete) db.prepare('UPDATE lojas SET usa_frete=1 WHERE id=?').run(idLoja);
 
     // estoque_id pode ser:
     //   'proprio' (ou omitido) → criar estoque próprio vazio para esta loja

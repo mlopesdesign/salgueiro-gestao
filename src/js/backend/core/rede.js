@@ -17,6 +17,7 @@ const SOMENTE_LOCAL = new Set([
 let estado = { ativa: false, porta: 8750, ips: [], erro: null, extensaoPronta: false };
 const sessoes = new Map(); // token → { usuario, ultimo }
 let _processar = null;
+let _log = () => {};   // registrarLog do ambiente (v3.31.0)
 
 function limparSessoes() {
   const agora = Date.now();
@@ -57,9 +58,13 @@ export async function imprimir({ conteudo, impressora, tipo }) {
 }
 
 // Registra os ouvintes uma única vez (chamado pelo servidor.js no boot)
-export function preparar(processar) {
+export function preparar(processar, registrarLog) {
   _processar = processar;
-  Neutralino.events.on('rede.extensao.pronta', () => { estado.extensaoPronta = true; });
+  if (typeof registrarLog === 'function') _log = registrarLog;
+  Neutralino.events.on('rede.extensao.pronta', (ev) => {
+    estado.extensaoPronta = true;
+    estado.extensaoVersao = (ev.detail && ev.detail.v) || 1;
+  });
   Neutralino.events.on('rede.status', (ev) => {
     const d = ev.detail || {};
     estado.ativa = !!d.ativa;
@@ -75,15 +80,31 @@ export function preparar(processar) {
   });
   Neutralino.events.on('rede.api', async (ev) => {
     const d = ev.detail || {};
-    const corpo = await atenderTerminal(d.canal, d.payload, d.token);
+    // v3.31.0: a extensão nova (v=2) manda o corpo do pedido em TEXTO e
+    // recebe a resposta em TEXTO — o PowerShell não desmonta nem remonta JSON
+    // (custava segundos em relatório grande). A antiga (sem v) continua aceita:
+    // no primeiro boot depois da atualização ela ainda está rodando.
+    const ini = Date.now();
+    let canal = d.canal, payload = d.payload;
+    if (d.v === 2) {
+      try { const c = JSON.parse(d.corpo || '{}'); canal = c.canal; payload = c.payload; }
+      catch { canal = '?'; payload = null; }
+    }
+    const corpo = await atenderTerminal(canal, payload, d.token, d.ip);
+    const ms = Date.now() - ini;
+    if (ms >= 2000) _log('SISTEMA-LENTO', `${d.ip || '?'} ${canal} ${ms}ms dentro do sistema`);
     try {
-      await Neutralino.extensions.dispatch(EXT_ID, 'rede.resposta', { reqId: d.reqId, corpo });
-    } catch (e) { console.error('[rede] resposta falhou:', e); }
+      await Neutralino.extensions.dispatch(EXT_ID, 'rede.resposta',
+        d.v === 2 ? { reqId: d.reqId, json: JSON.stringify(corpo) } : { reqId: d.reqId, corpo });
+    } catch (e) {
+      _log('ERRO-RESPOSTA', `${canal} ${e && e.message ? e.message : e}`);
+      console.error('[rede] resposta falhou:', e);
+    }
   });
 }
 
 // Mesma lógica de sessões da V1 (rede.js): cada terminal tem token próprio.
-async function atenderTerminal(canal, payload, token) {
+async function atenderTerminal(canal, payload, token, ip) {
   try {
     limparSessoes();
     if (SOMENTE_LOCAL.has(canal)) {
@@ -108,6 +129,7 @@ async function atenderTerminal(canal, payload, token) {
     return await _processar(canal, payload, sess);
   } catch (e) {
     console.error('[rede]', canal, e);
+    _log('ERRO', `${ip || '?'} ${canal} ${e && e.message ? e.message : e}`);
     return { ok: false, erro: e.message || 'Erro interno.' };
   }
 }

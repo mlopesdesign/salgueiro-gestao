@@ -3,7 +3,7 @@
 > Mapa técnico gerado automaticamente por `tools/graphify.js`.
 > **Não edite à mão.** Regere com `node tools/graphify.js` a cada alteração estrutural.
 
-**Versão:** 3.30.1 · **Gerado em:** 2026-10-07
+**Versão:** 3.31.0 · **Gerado em:** 2026-10-14
 **Aplicação:** `br.com.mllopes.salgueirogestao` (Neutralino 6 + WebView2)
 **Cliente:** Boutique do Salgueiro · **Autor:** ML Lopes Design
 
@@ -76,47 +76,48 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `config.js` | 85 | 2 | obter, salvar |
 | `consignacao.js` | 95 | 3 | acertar, listar, resumo |
 | `crediario.js` | 108 | 5 | aniversariantes, excluirCliente, obterCliente, parcelasAbertas, receberParcela |
-| `dashboard.js` | 264 | 2 | resumo |
+| `dashboard.js` | 269 | 2 | resumo |
 | `devolucoes.js` | 127 | 3 | itensVenda, listar, registrar |
 | `estoque.js` | 176 | 5 | buscarVariacoes, kardex, listarCompleto, movimentar, reposicao |
 | `estoques.js` | 474 | 20 | aplicar, aplicarEstrito, arred, conferirSaldo, conteudo, daLoja, desativar, garantirDaLoja, +13 |
 | `financeiro.js` | 142 | 5 | baixar, excluir, fluxo, listar, salvar |
+| `frete.js` | 51 | 0 | FRETE_TIPOS, freteDoPeriodo, rotuloFrete, tipoFreteValido |
 | `importar-vendas.js` | 303 | 6 | COLUNAS, analisar, confirmar |
 | `licenca.js` | 288 | 25 | DEV_USUARIO, MODULOS, NOME_PLANO, PLANOS, SETORES, devAplicar, devEntrar, devRemover, +14 |
 | `logo-default.js` | 4 | 0 | LOGO_DEFAULT |
-| `lojas.js` | 95 | 5 | arred, desativar, excluir, listar, lojaPadrao, salvar |
+| `lojas.js` | 99 | 5 | arred, desativar, excluir, listar, lojaPadrao, salvar |
 | `mensagens.js` | 406 | 21 | JANELA_POPUP_H, ONLINE_TTL_S, confirmarAviso, contatos, encerrarAviso, enviar, enviarAviso, historico, +4 |
 | `nuvem.js` | 353 | 14 | desconectar, fazerBackup, fazerBackupTodos, iniciarOAuth, obterStatus, precisaBackupDiario, registrarOAuthListener, salvarClientId |
-| `pdv.js` | 646 | 13 | abrirCaixa, caixaAtual, cancelarVenda, fecharCaixa, listarVendas, listarVendasGeral, movimentoCaixa, obterVenda, +3 |
+| `pdv.js` | 670 | 13 | abrirCaixa, caixaAtual, cancelarVenda, fecharCaixa, listarVendas, listarVendasGeral, movimentoCaixa, obterVenda, +3 |
 | `permissoes.js` | 94 | 3 | CATALOGO, DEFAULTS, TODAS, efetivas, normalizar, pode |
 | `pontos.js` | 110 | 9 | ajustar, calcularGanho, calcularResgate, creditar, debitar, getConfig, historico, saldo, +1 |
 | `produtos.js` | 455 | 7 | excluirCategoria, excluirProduto, listarCategorias, listarProdutos, obterProduto, salvarCategoria, salvarProduto |
-| `rede.js` | 150 | 3 | SOMENTE_LOCAL, imprimir, iniciar, listarImpressoras, parar, preparar, status |
-| `relatorios.js` | 1611 | 22 | TAXAS_PADRAO, comprasAcompanhadas, consignadosMensal, curvaAbc, estoqueDetalhado, eventosVenda, maisVendidos, pecasParadas, +6 |
-| `trocas.js` | 430 | 3 | DESTINOS, registrar, registrarRapida |
+| `rede.js` | 172 | 3 | SOMENTE_LOCAL, imprimir, iniciar, listarImpressoras, parar, preparar, status |
+| `relatorios.js` | 1623 | 22 | TAXAS_PADRAO, comprasAcompanhadas, consignadosMensal, curvaAbc, estoqueDetalhado, eventosVenda, maisVendidos, pecasParadas, +6 |
+| `trocas.js` | 431 | 3 | DESTINOS, registrar, registrarRapida |
 | `updater.js` | 50 | 1 | verificarAtualizacao |
 | `util.js` | 68 | 4 | auditar, codigoInterno, dvEan13, hashSenha, verificarSenha |
 | `vales_troca.js` | 122 | 9 | VALIDADE_PADRAO_DIAS, consultar, criar, estaVencido, listar, usar |
-| `vendas-sql.js` | 99 | 5 | NAO_TROCA, RECEBIDO, RECEBIDO_BRUTO, SQL_TROCAS, trocasDoPeriodo |
+| `vendas-sql.js` | 108 | 6 | NAO_TROCA, RECEBIDO, RECEBIDO_BRUTO, RECEBIDO_PRODUTOS, SQL_TROCAS, trocasDoPeriodo |
 
 ## 5. Backend (raiz)
 
 | Arquivo | Linhas | Funções |
 |---|---|---|
-| `ambiente.js` | 316 | 6 |
-| `db.js` | 686 | 5 |
-| `servidor-rede-embutido.js` | 615 | 17 |
-| `servidor.js` | 2727 | 15 |
+| `ambiente.js` | 385 | 7 |
+| `db.js` | 702 | 5 |
+| `servidor-rede-embutido.js` | 844 | 27 |
+| `servidor.js` | 2787 | 15 |
 
 ## 6. Telas (`src/js`)
 
 | Arquivo | Linhas | Exporta |
 |---|---|---|
-| `app.js` | 1981 | EM_REDE, ajustarLarguraModal, api, aplicarTema, campoTroco |
+| `app.js` | 2082 | EM_REDE, ajustarLarguraModal, api, aplicarTema, campoTroco |
 | `catalogo.js` | 262 | viewCatalogo |
 | `clientes.js` | 538 | viewClientes |
 | `compras.js` | 229 | viewCompras |
-| `configuracoes.js` | 1802 | viewConfiguracoes |
+| `configuracoes.js` | 1929 | viewConfiguracoes |
 | `estoque.js` | 927 | abrirEtiquetas, ean13Svg, formMovimento, formMovimentoProduto, viewEstoque |
 | `estoques.js` | 989 | viewEstoques |
 | `etiquetas.js` | 169 | abrirEtiquetasLote, imprimirFolhaEtiquetas |
@@ -124,14 +125,14 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `impressao.js` | 179 | LIMITES, PADRAO, aplicarEstiloImpressao, cssCupomArquivo, cssCupomTela |
 | `mensagens.js` | 758 | abrirBalao, encerrarTelaMensagens, iniciarMensagens, pararMensagens, viewMensagens |
 | `neutralino.js` | 2 | — |
-| `novidades.js` | 1022 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
-| `pdv.js` | 2444 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
+| `novidades.js` | 1032 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
+| `pdv.js` | 2504 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
 | `ranking.js` | 360 | viewRanking |
-| `relatorios.js` | 1819 | viewRelatorios |
+| `relatorios.js` | 1823 | viewRelatorios |
 
 ---
 
-## 7. Rotas da API (159)
+## 7. Rotas da API (162)
 
 Toda comunicação tela ↔ backend passa por `api('canal:acao', payload)`.
 A coluna **Permissão** vem de `PERMISSAO_ROTA` em `servidor.js` — sem entrada ali,
@@ -144,7 +145,7 @@ a rota exige apenas sessão válida.
 |---|---|---|
 | `app:versao` | — | `({ ok: true, version: ambiente.versaoApp() })` |
 | `app:recuperacao` | — | `({ ok: true, recuperacao: RECUPERACAO_BOOT })` |
-| `app:garantirExtensao` | — | `{ await ambiente.garantirExtensaoRede(); return { ok: true }…` |
+| `app:garantirExtensao` | — | `{` |
 
 ### `auth:*`
 
@@ -408,6 +409,9 @@ a rota exige apenas sessão válida.
 
 | Canal | Permissão | Destino |
 |---|---|---|
+| `rede:ping` | — | `({ ok: true, agora: Date.now() })` |
+| `rede:logTerminal` | — | `{` |
+| `rede:diagnostico` | `config.gerenciar` | `{` |
 | `rede:status` | `config.gerenciar` | `{` |
 | `rede:abrirNavegador` | `config.gerenciar` | `{` |
 | `rede:aplicar` | `config.gerenciar` | `{` |
@@ -481,10 +485,10 @@ a rota exige apenas sessão válida.
 | `transferencias` | id, origem_id, destino_id, usuario_id, obs, criado_em |
 | `transferencia_itens` | id, transferencia_id, variacao_id, qtd |
 | `clientes` | id, nome, cpf, telefone, email, endereco, nascimento, limite_credito, obs, generico, ativo, criado_em |
-| `lojas` | id, nome, estoque_id, sem_desconto, ativo, criado_em |
+| `lojas` | id, nome, estoque_id, sem_desconto, usa_frete, ativo, criado_em |
 | `caixas` | id, loja_id, aberto_em, fechado_em, usuario_abertura, usuario_fechamento, valor_abertura, valor_fechamento_informado, valor_fechamento_calculado, obs |
 | `caixa_movimentos` | id, caixa_id, tipo, valor, motivo, usuario_id, criado_em |
-| `vendas` | id, caixa_id, loja_id, cliente_id, usuario_id, subtotal, desconto, total, status, obs, desconto_autorizado_por, desconto_motivo, criado_em |
+| `vendas` | id, caixa_id, loja_id, cliente_id, usuario_id, subtotal, desconto, total, status, obs, desconto_autorizado_por, desconto_motivo, frete, frete_tipo, criado_em |
 | `venda_itens` | id, venda_id, variacao_id, qtd, preco_unit, desconto, total |
 | `venda_pagamentos` | id, venda_id, forma, valor, parcelas, troco, autorizado_por, beneficiario, cortesia_valor |
 | `crediario_parcelas` | id, venda_id, cliente_id, numero, valor, vencimento, pago_em, valor_pago |

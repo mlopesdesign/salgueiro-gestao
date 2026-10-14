@@ -476,6 +476,22 @@ function migrar(db) {
     } catch (e) { console.error('[migração] lojas.sem_desconto:', e.message); }
   }
 
+  // v3.31.0 — FRETE da venda com entrega (loja WhatsApp / internet).
+  // `vendas.frete` soma no total; `vendas.frete_tipo` diz como a peça saiu.
+  // `lojas.usa_frete` liga o campo no PDV daquela loja.
+  if (tabelaExiste('lojas') && !temColuna('lojas', 'usa_frete')) {
+    try { db.exec('ALTER TABLE lojas ADD COLUMN usa_frete INTEGER NOT NULL DEFAULT 0'); console.log('[migração] lojas.usa_frete adicionado'); }
+    catch (e) { console.error('[migração] lojas.usa_frete:', e.message); }
+  }
+  if (tabelaExiste('vendas') && !temColuna('vendas', 'frete')) {
+    try { db.exec('ALTER TABLE vendas ADD COLUMN frete REAL NOT NULL DEFAULT 0'); console.log('[migração] vendas.frete adicionado'); }
+    catch (e) { console.error('[migração] vendas.frete:', e.message); }
+  }
+  if (tabelaExiste('vendas') && !temColuna('vendas', 'frete_tipo')) {
+    try { db.exec('ALTER TABLE vendas ADD COLUMN frete_tipo TEXT'); console.log('[migração] vendas.frete_tipo adicionado'); }
+    catch (e) { console.error('[migração] vendas.frete_tipo:', e.message); }
+  }
+
   if (!temColuna('vendas', 'acrescimo')) {
     try {
       db.exec('ALTER TABLE vendas ADD COLUMN acrescimo REAL NOT NULL DEFAULT 0');

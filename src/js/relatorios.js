@@ -128,7 +128,11 @@ async function abaVendas(corpo, per) {
     <div>
       <div class="cards">
         <div class="card"><div class="rotulo">Vendas</div><div class="valor">${r.resumo.qtd}</div></div>
-        <div class="card"><div class="rotulo">Faturamento</div><div class="valor">${moeda(r.resumo.total)}</div></div>
+        <div class="card"><div class="rotulo">Faturamento</div><div class="valor">${moeda(r.resumo.total)}</div>
+          ${(r.resumo.frete || {}).valor > 0 ? `<div class="card-rodape">inclui ${moeda(r.resumo.frete.valor)} de frete</div>` : ''}</div>
+        ${(r.resumo.frete || {}).qtd > 0 ? `<div class="card"><div class="rotulo">🚚 Frete cobrado</div>
+          <div class="valor">${moeda(r.resumo.frete.valor)}</div>
+          <div class="card-rodape">${r.resumo.frete.por_tipo.map(x => `${esc(x.rotulo)}: ${x.qtd}${x.valor > 0 ? ' · ' + moeda(x.valor) : ''}`).join('<br>')}</div></div>` : ''}
         ${(r.resumo.qtd_trocas || 0) > 0 ? `<div class="card"><div class="rotulo">Diferença de trocas</div>
           <div class="valor">${moeda(r.resumo.trocas || 0)}</div>
           <div class="card-rodape">${r.resumo.qtd_trocas} troca(s) · entra no total como troca</div></div>

@@ -1,5 +1,6 @@
 // PDV — frente de caixa
 import { api, el, esc, moeda, toast, modal, getConfig, pode, ehAdmin, podeVerTela, setorAtivo, EM_REDE, campoTroco, trocoDinheiro } from './app.js';
+import { FRETE_TIPOS, rotuloFrete } from './backend/core/frete.js';
 
 // Formas de pagamento disponíveis (respeita setores desligados pelo Dev).
 // 'troca' NÃO entra: é lançada pelo sistema quando o crédito de uma troca abate
@@ -17,6 +18,9 @@ let refresco = null;   // função para redesenhar a tela
 // não aplica categoria do cliente, desconto à vista nem resgate de pontos.
 // A trava que vale é a do servidor (core/pdv.js); esta só evita o susto.
 let lojaSemDesconto = false;
+// Loja que vende com ENTREGA (v3.31.0) — ex.: loja WhatsApp. No pagamento
+// aparece "Entrega" (como a peça sai, obrigatório) e o valor do frete.
+let lojaUsaFrete = false;
 
 // Peças da venda montada na tela — usado pela pergunta "Fechar o sistema?"
 // (app.js). Só conta se o PDV estiver aberto: fora dele o carrinho já não existe.
@@ -139,11 +143,12 @@ async function telaAbertura(alvo) {
 function telaVenda(alvo, caixa, manterVenda = false) {
   if (!manterVenda) { itens = []; cliente = null; }
   lojaSemDesconto = !!(caixa && caixa.loja_sem_desconto);
+  lojaUsaFrete = !!(caixa && caixa.loja_usa_frete);
   const tela = el(`
     <div>
       <div class="pagina-topo">
         <h1>PDV — Venda${caixa && caixa.loja ? ` <button type="button" id="b-loja" title="Trocar de loja sem fechar o caixa nem perder a venda"
-          style="font-size:13px;font-weight:600;color:var(--vinho);background:#F6E9E9;border:1px solid transparent;padding:3px 10px;border-radius:20px;vertical-align:middle;cursor:pointer">🏬 <span id="b-loja-nome">${esc(caixa.loja)}</span> ▾</button>` : ''}${lojaSemDesconto ? ` <span title="Esta loja não aceita desconto" style="font-size:12px;font-weight:600;color:#8a6d0b;background:#FFF6DA;border:1px solid #EAD48A;padding:3px 10px;border-radius:20px;vertical-align:middle">🚫 sem desconto</span>` : ''}</h1>
+          style="font-size:13px;font-weight:600;color:var(--vinho);background:#F6E9E9;border:1px solid transparent;padding:3px 10px;border-radius:20px;vertical-align:middle;cursor:pointer">🏬 <span id="b-loja-nome">${esc(caixa.loja)}</span> ▾</button>` : ''}${lojaUsaFrete ? ` <span title="Esta loja vende com entrega — o pagamento pede o frete" style="display:inline-block;white-space:nowrap;font-size:12px;font-weight:600;color:#1f5f8b;background:#E6F1F9;border:1px solid #B5D3EA;padding:3px 10px;border-radius:20px;vertical-align:middle">🚚 com entrega</span>` : ''}${lojaSemDesconto ? ` <span title="Esta loja não aceita desconto" style="display:inline-block;white-space:nowrap;font-size:12px;font-weight:600;color:#8a6d0b;background:#FFF6DA;border:1px solid #EAD48A;padding:3px 10px;border-radius:20px;vertical-align:middle">🚫 sem desconto</span>` : ''}</h1>
         <div style="display:flex;gap:8px">
           <button class="btn btn-suave" id="b-consulta">🔍 Consultar preço (F3)</button>
           <button class="btn btn-suave" id="b-troca" style="color:var(--vinho);font-weight:700">🔄 Troca (F6)</button>
@@ -783,6 +788,7 @@ function modalPagamento(total, descontoGeral, pontosResgate, aoConcluir, descont
   const minimoAvista  = Number(cfg.desconto_avista_minimo || 100);
 
   let descontoAvista = 0; // calculado em desenhar()
+  let freteValor = 0, freteTipo = '';   // v3.31.0 — só em loja com entrega
 
   const pagamentos = [{ forma: 'dinheiro', valor: total, parcelas: 1 }];
 
@@ -801,8 +807,17 @@ function modalPagamento(total, descontoGeral, pontosResgate, aoConcluir, descont
       : `<button type="button" id="pg-ir-custo" class="btn btn-suave"
            style="width:100%;margin-bottom:10px;font-size:13px;color:var(--vinho);font-weight:600">
            🏷️ Vender a preço de custo…</button>`}
+    ${lojaUsaFrete ? `<div class="frete-box">
+      <div class="campo" style="margin:0"><label>🚚 Entrega *</label>
+        <select id="pg-frete-tipo"><option value="">— como a peça vai sair? —</option>
+          ${FRETE_TIPOS.map(([v, n]) => `<option value="${v}">${esc(n)}</option>`).join('')}</select></div>
+      <div class="campo" style="margin:0"><label>Valor do frete (R$)</label>
+        <input id="pg-frete" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00"></div>
+    </div>` : ''}
     <div id="pg-linhas"></div>
     <button class="btn btn-suave" id="pg-add" type="button">+ Adicionar forma de pagamento</button>
+    <div id="pg-frete-row" class="tot-linha" style="margin-top:14px;display:none"><span>🚚 Frete</span><b id="pg-frete-val"></b></div>
+    <div id="pg-totalfrete-row" class="tot-linha" style="display:none"><span><b>Total com frete</b></span><b id="pg-totalfrete-val"></b></div>
     <div class="tot-linha" style="margin-top:14px"><span>Pago</span><b id="pg-pago">R$ 0,00</b></div>
     <div id="pg-avista-row" style="display:none" class="tot-linha">
       <span style="color:var(--verde,#2e7d32)">🏷️ Desconto à vista</span>
@@ -811,6 +826,11 @@ function modalPagamento(total, descontoGeral, pontosResgate, aoConcluir, descont
     <div class="tot-linha"><span id="pg-rotulo">Troco</span><b id="pg-troco">R$ 0,00</b></div>
     <div class="erro" id="pg-erro"></div>
   `, async (m, fechar) => {
+    // Entrega: nas lojas com frete, COMO a peça sai é obrigatório (v3.31.0)
+    if (lojaUsaFrete && !freteTipo) {
+      m.querySelector('#pg-erro').textContent = 'Escolha a entrega: retirada no balcão, Mercado Envios, Correios...';
+      return;
+    }
     // Dinheiro: quanto o cliente deu é OBRIGATÓRIO (v3.30.0) — é dele que sai
     // o troco. Só em dinheiro; nas outras formas o campo nem aparece.
     for (const pg of pagamentos) {
@@ -841,6 +861,7 @@ function modalPagamento(total, descontoGeral, pontosResgate, aoConcluir, descont
       desconto_token: descontoJustificativa ? descontoJustificativa.token : null,
       cliente_id: cliente ? cliente.id : null,
       pontos_resgatar: pontosResgate ? pontosResgate.pontos : 0,
+      ...(lojaUsaFrete ? { frete: freteValor, frete_tipo: freteTipo } : {}),
       // Em dinheiro vai o que o cliente DEU: o servidor calcula o troco
       // (pago − total) e grava em venda_pagamentos.troco; a gaveta conta
       // valor − troco. Assim o cupom sai com "Troco" e o caixa bate.
@@ -928,15 +949,15 @@ function modalPagamento(total, descontoGeral, pontosResgate, aoConcluir, descont
       descontoAvista = novoAvista;
       const totalLiquido = total - descontoAvista;
       // Auto-ajuste apenas quando há 1 pagamento
-      if (pagamentos.length === 1) pagamentos[0].valor = totalLiquido;
+      if (pagamentos.length === 1) pagamentos[0].valor = arred(totalLiquido + freteValor);
     }
     // Acréscimo da taxa: recalcula e, com um pagamento só, já ajusta o valor
     const novoAcr = calcAcrescimo();
     if (novoAcr !== acrescimoTaxa) {
       acrescimoTaxa = novoAcr;
-      if (pagamentos.length === 1) pagamentos[0].valor = arred(total + acrescimoTaxa);
+      if (pagamentos.length === 1) pagamentos[0].valor = arred(total + acrescimoTaxa + freteValor);
     }
-    const totalLiquido = arred(total - descontoAvista + acrescimoTaxa);
+    const totalLiquido = arred(total - descontoAvista + acrescimoTaxa + freteValor);
 
     // Atalho para o modo preço de custo, aqui dentro do pagamento.
     // Fecha este modal e aciona o mesmo botão da barra — um caminho só, para
@@ -1066,6 +1087,19 @@ function modalPagamento(total, descontoGeral, pontosResgate, aoConcluir, descont
     const pago = pagamentos.reduce((s, p) =>
       s + (p.forma === 'cortesia' ? 0 : (Number(p.valor) || 0)), 0);
     const aReceber = Math.max(0, totalLiquido - cortesiaTotal);
+    // o título acompanha o total de verdade (frete, à vista, taxa) — v3.31.0
+    const $h2 = m.querySelector('header h2');
+    if ($h2) $h2.textContent = `Pagamento — total ${moeda(totalLiquido)}`;
+    // Frete em linha própria (v3.31.0)
+    const $fr = m.querySelector('#pg-frete-row'), $ft = m.querySelector('#pg-totalfrete-row');
+    if ($fr && $ft) {
+      const mostra = lojaUsaFrete && freteValor > 0;
+      $fr.style.display = mostra ? '' : 'none'; $ft.style.display = mostra ? '' : 'none';
+      if (mostra) {
+        m.querySelector('#pg-frete-val').textContent = moeda(freteValor);
+        m.querySelector('#pg-totalfrete-val').textContent = moeda(totalLiquido);
+      }
+    }
     m.querySelector('#pg-pago').textContent = moeda(pago);
     const dif = pago - aReceber;
     // Troco total = o que passou do total + o que o cliente deu a mais em dinheiro
@@ -1081,9 +1115,31 @@ function modalPagamento(total, descontoGeral, pontosResgate, aoConcluir, descont
   }
   m.querySelector('#pg-add').onclick = () => {
     const pago = pagamentos.reduce((s, p) => s + (Number(p.valor) || 0), 0);
-    pagamentos.push({ forma: 'pix', valor: Math.max(0, (total - descontoAvista) - pago), parcelas: 1 });
+    pagamentos.push({ forma: 'pix', valor: Math.max(0, arred(_totalLiq - pago)), parcelas: 1 });
     desenhar();
   };
+  // Entrega e frete (v3.31.0). Mudou o frete: com uma forma de pagamento só,
+  // ela acompanha o novo total; com várias, o rodapé mostra quanto falta.
+  const $ftipo = m.querySelector('#pg-frete-tipo');
+  const $fval = m.querySelector('#pg-frete');
+  if ($ftipo && $fval) {
+    const aplicarFrete = (novo) => {
+      const antes = freteValor;
+      freteValor = arred(Math.max(0, Number(novo) || 0));
+      if (pagamentos.length === 1 && freteValor !== antes) {
+        pagamentos[0].valor = arred((Number(pagamentos[0].valor) || 0) + (freteValor - antes));
+      }
+      desenhar();
+    };
+    $ftipo.onchange = () => {
+      freteTipo = $ftipo.value;
+      const retirada = freteTipo === 'retirada';
+      $fval.disabled = retirada;
+      if (retirada) { $fval.value = ''; aplicarFrete(0); }
+      else { desenhar(); if (freteTipo) setTimeout(() => { try { $fval.focus(); } catch {} }, 30); }
+    };
+    $fval.addEventListener('input', () => aplicarFrete($fval.value));
+  }
   desenhar();
 }
 
@@ -1137,6 +1193,7 @@ async function imprimirCupom(d) {
       <table>
         <tr><td>Subtotal</td><td style="text-align:right">${moeda(d.venda.subtotal)}</td></tr>
         ${d.venda.desconto > 0 ? `<tr><td>Desconto</td><td style="text-align:right">-${moeda(d.venda.desconto)}</td></tr>` : ''}
+        ${d.venda.frete_tipo ? `<tr><td>Entrega: ${esc(rotuloFrete(d.venda.frete_tipo))}</td><td style="text-align:right">${d.venda.frete > 0 ? moeda(d.venda.frete) : '—'}</td></tr>` : ''}
         <tr><td><b>TOTAL</b></td><td style="text-align:right"><b>${moeda(d.venda.total)}</b></td></tr>
       </table>
       <table>${d.pagamentos.map(linhaPg).join('')}</table>
@@ -1298,8 +1355,9 @@ async function modalTrocarLoja(caixa, tela) {
     const r = await api('pdv:trocarLoja', { loja_id: id });
     if (!r.ok) { m.querySelector('#tl-erro').textContent = r.erro; return; }
     caixa.loja_id = r.loja_id; caixa.loja = r.loja;
-    const mudouDesconto = !!r.sem_desconto !== lojaSemDesconto;
+    const mudouDesconto = !!r.sem_desconto !== lojaSemDesconto || !!r.usa_frete !== lojaUsaFrete;
     caixa.loja_sem_desconto = r.sem_desconto ? 1 : 0;
+    caixa.loja_usa_frete = r.usa_frete ? 1 : 0;
     const badge = tela.querySelector('#b-loja-nome');
     if (badge) badge.textContent = r.loja;
     try { localStorage.setItem('salgueiro_loja_id', String(r.loja_id)); } catch {}
@@ -1347,6 +1405,8 @@ async function modalFechamento(caixa, aoConcluir) {
     <div class="tot-linha"><span>Abertura</span><b>${moeda(r.caixa.valor_abertura)}</b></div>
     ${formasHtml || '<p style="color:var(--texto-suave)">Nenhuma venda neste caixa.</p>'}
     <div class="tot-linha"><span><b>Vendas (${r.qtd_vendas})</b></span><b>${moeda(r.total_vendas)}</b></div>
+    ${(r.frete || {}).qtd > 0 ? `<div class="tot-linha"><span style="font-size:12.5px">&nbsp;&nbsp;🚚 sendo frete (${r.frete.qtd} entrega${r.frete.qtd > 1 ? 's' : ''})</span><b style="font-size:12.5px">${moeda(r.frete.valor)}</b></div>
+      ${r.frete.por_tipo.map(x => `<div class="tot-linha"><span style="font-size:12px;color:var(--texto-suave)">&nbsp;&nbsp;&nbsp;&nbsp;${esc(x.rotulo)} (${x.qtd})</span><span style="font-size:12px;color:var(--texto-suave)">${moeda(x.valor)}</span></div>`).join('')}` : ''}
     ${trocasHtml}
     ${(r.trocas || {}).qtd > 0 ? `<div class="tot-linha" style="border-top:1px solid var(--borda);margin-top:6px;padding-top:8px">
       <span><b>Total recebido (vendas + trocas)</b></span><b>${moeda(r.total_recebido)}</b></div>` : ''}

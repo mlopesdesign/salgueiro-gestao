@@ -542,7 +542,7 @@ async function abaLojas(corpo) {
         ? (l.estoque_principal ? `${esc(l.estoque_nome)} <span style="font-size:10px;color:var(--texto-suave)">(central)</span>` : esc(l.estoque_nome))
         : '<span style="color:var(--texto-suave);font-size:11px">— usa central —</span>';
       const tr = el(`<tr>
-        <td><b>${esc(l.nome)}</b>${l.sem_desconto ? ' <span class="pill" style="background:#FFF6DA;color:#8a6d0b;border:1px solid #EAD48A">🚫 sem desconto</span>' : ''}</td>
+        <td><b>${esc(l.nome)}</b>${l.usa_frete ? ' <span class="pill" style="background:#E6F1F9;color:#1f5f8b;border:1px solid #B5D3EA">🚚 com entrega</span>' : ''}${l.sem_desconto ? ' <span class="pill" style="background:#FFF6DA;color:#8a6d0b;border:1px solid #EAD48A">🚫 sem desconto</span>' : ''}</td>
         <td style="font-size:12px">${nomeEst}</td>
         <td class="num">${l.qtd_caixas || 0}</td>
         <td>${l.ativo ? '<span class="pill pill-ok">ativa</span>' : '<span class="pill pill-baixo">inativa</span>'}</td>
@@ -596,13 +596,22 @@ async function formLoja(l, aoConcluir) {
         <small style="color:var(--texto-suave)">Para venda online, por exemplo. No PDV desta loja some o campo de
         desconto e não entra desconto de espécie nenhuma — manual, à vista, de categoria do cliente nem resgate de pontos.</small></span>
     </label>
+    <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer;border:1px dashed var(--borda);
+      border-radius:8px;padding:10px 12px;margin:0 0 10px">
+      <input type="checkbox" id="lj-frete" ${l && l.usa_frete ? 'checked' : ''} style="margin-top:3px">
+      <span><b>🚚 Esta loja vende com entrega (frete)</b><br>
+        <small style="color:var(--texto-suave)">Para a loja WhatsApp / internet. No pagamento aparece <b>Entrega</b>
+        (retirada no balcão, Mercado Envios, Correios, motoboy…) — obrigatória — e o <b>valor do frete</b>, que soma
+        no total da venda e aparece separado no caixa, nos relatórios e no painel.</small></span>
+    </label>
     <div class="erro" id="lj-erro"></div>
   `, async (wrap, fechar) => {
     const nome = wrap.querySelector('#lj-nome').value.trim();
     if (!nome) { wrap.querySelector('#lj-erro').textContent = 'Informe o nome da loja.'; return; }
     const estoqueId = wrap.querySelector('#lj-estoque').value; // 'proprio' ou número
     const payload = { id: l ? l.id : undefined, nome, estoque_id: estoqueId,
-      sem_desconto: wrap.querySelector('#lj-semdesc').checked ? 1 : 0 };
+      sem_desconto: wrap.querySelector('#lj-semdesc').checked ? 1 : 0,
+      usa_frete: wrap.querySelector('#lj-frete').checked ? 1 : 0 };
     const r = await api('lojas:salvar', payload);
     if (!r.ok) { wrap.querySelector('#lj-erro').textContent = r.erro; return; }
     toast('Loja salva.'); fechar(); aoConcluir && aoConcluir();
@@ -1212,6 +1221,124 @@ async function abaRede(corpo) {
     const s = await api('rede:status');
     if (s.ok) renderStatus(s);
   };
+
+  painelDiagnostico(corpo);
+}
+
+// ---- Diagnóstico de travamentos (v3.31.0) ----
+// Lê os logs do dia (servidor de rede + aplicativo) e mostra, em português, o
+// que aconteceu: pedidos dos terminais, o que demorou, o que ficou sem resposta,
+// quando um terminal perdeu contato e quando o sistema abriu/fechou.
+async function painelDiagnostico(corpo, diaEscolhido) {
+  const r = await api('rede:diagnostico', { dia: diaEscolhido || null });
+  const antigo = corpo.querySelector('#diag-painel');
+  const painel = el(`<div class="painel" id="diag-painel" style="padding:22px;margin-top:16px">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+      <h3 style="margin:0">🩺 Diagnóstico de travamentos</h3>
+      <select id="dg-dia" style="margin-left:auto;min-width:150px"></select>
+      <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="dg-problemas" checked> só problemas</label>
+      <button class="btn btn-suave" id="dg-salvar">💾 Salvar arquivo</button>
+      <button class="btn btn-suave" id="dg-atualizar">↻ Atualizar</button>
+    </div>
+    <div id="dg-corpo"></div>
+  </div>`);
+  if (antigo) antigo.replaceWith(painel); else corpo.appendChild(painel);
+  const alvo = painel.querySelector('#dg-corpo');
+  if (!r.ok) { alvo.innerHTML = `<p style="color:var(--vermelho)">${esc(r.erro)}</p>`; return; }
+
+  const selDia = painel.querySelector('#dg-dia');
+  const dias = r.dias.length ? r.dias : [r.dia];
+  const fmtDia = (d) => d.split('-').reverse().join('/');
+  selDia.innerHTML = dias.map(d => `<option value="${d}" ${d === r.dia ? 'selected' : ''}>${fmtDia(d)}</option>`).join('');
+  selDia.onchange = () => painelDiagnostico(corpo, selDia.value);
+  painel.querySelector('#dg-atualizar').onclick = () => painelDiagnostico(corpo, selDia.value);
+
+  // junta as duas fontes numa linha do tempo
+  const linhas = [];
+  const ler = (txt, fonte) => {
+    for (const l of String(txt || '').replace(/^﻿/, '').split(/\r?\n/)) {
+      const m = /^(\d{2}:\d{2}:\d{2}\.\d{3}) (\S+)\s+(.*)$/.exec(l);
+      if (m) linhas.push({ hora: m[1], tipo: m[2], msg: m[3], fonte });
+    }
+  };
+  ler(r.rede, 'rede'); ler(r.app, 'app');
+  linhas.sort((x, y) => x.hora.localeCompare(y.hora));
+
+  // resumo
+  const conta = (t) => linhas.filter(l => l.tipo === t).length;
+  const ok = conta('OK'), lentos = conta('LENTO'), semResp = conta('SEM-RESPOSTA');
+  const quedasTerm = linhas.filter(l => l.tipo === 'TERMINAL' && /SEM-CONEXAO|PRAZO-ESGOTADO|SEM-RESPOSTA/.test(l.msg)).length;
+  const sisLento = conta('SISTEMA-LENTO');
+  // sistema que abriu sem ter sido fechado pelo usuário = caiu ou foi derrubado
+  let quedasSistema = 0, aberto = false;
+  for (const l of linhas) {
+    if (l.tipo !== 'APP') continue;
+    if (/^aberto/.test(l.msg)) { if (aberto) { l.queda = true; quedasSistema++; } aberto = true; }
+    else if (/^fechado|^reabrindo/.test(l.msg)) aberto = false;
+  }
+  // terminais vistos (IP → primeira e última vez)
+  const terms = new Map();
+  for (const l of linhas) {
+    if (l.fonte !== 'rede' || !['OK', 'LENTO', 'SEM-RESPOSTA', 'TELA'].includes(l.tipo)) continue;
+    const ip = l.msg.split(' ')[0];
+    const t = terms.get(ip) || { ip, prim: l.hora, ult: l.hora, n: 0, maiorBuraco: 0, buracoEm: '' };
+    const seg = (h) => { const [a, b, c] = h.split(':'); return (+a) * 3600 + (+b) * 60 + parseFloat(c); };
+    const gap = seg(l.hora) - seg(t.ult);
+    if (gap > t.maiorBuraco) { t.maiorBuraco = gap; t.buracoEm = t.ult; }
+    t.ult = l.hora; if (l.tipo !== 'TELA') t.n++;
+    terms.set(ip, t);
+  }
+  const card = (rot, val, cor) => `<div class="card"><div class="rotulo">${rot}</div><div class="valor" style="${cor ? `color:${cor}` : ''}">${val}</div></div>`;
+  const temDados = linhas.length > 0;
+  const PROBLEMA = new Set(['LENTO', 'SEM-RESPOSTA', 'ERRO-LACO', 'ERRO-FATAL', 'ERRO-CONEXAO', 'ERRO-WS', 'INCOMPLETO',
+    'ATRASADA', 'TERMINAL-SAIU', 'SISTEMA-LENTO', 'ERRO', 'ERRO-RESPOSTA', 'TERMINAL', 'GRANDE-DEMAIS', 'SERVIDOR',
+    'EXTENSAO', 'APP', 'BACKUP-NUVEM', 'IMPRESSAO']);
+  const corTipo = (l) => l.queda || ['SEM-RESPOSTA', 'ERRO-LACO', 'ERRO-FATAL', 'ERRO', 'ERRO-RESPOSTA', 'ERRO-WS'].includes(l.tipo)
+    || (l.tipo === 'TERMINAL' && /SEM-CONEXAO|PRAZO|SEM-RESPOSTA/.test(l.msg)) ? 'var(--vermelho)'
+    : ['LENTO', 'SISTEMA-LENTO', 'INCOMPLETO', 'ATRASADA', 'TERMINAL-SAIU'].includes(l.tipo) ? '#9A6B15'
+    : ['OK', 'TELA'].includes(l.tipo) ? 'var(--texto-suave)' : 'var(--texto)';
+
+  const desenhar = () => {
+    const so = painel.querySelector('#dg-problemas').checked;
+    const vis = linhas.filter(l => !so || PROBLEMA.has(l.tipo) || l.queda ||
+      (l.tipo === 'VIVO' && /(lentos=[1-9]|sem_resposta=[1-9])/.test(l.msg)));
+    alvo.innerHTML = !temDados
+      ? `<p style="color:var(--texto-suave)">Nada registrado em ${fmtDia(r.dia)}. O registro começa a valer nesta versão
+         (o servidor de rede novo entra no ar quando o sistema abre com o acesso em rede ligado).</p>`
+      : `<div class="cards">
+          ${card('Pedidos atendidos', ok + lentos)}
+          ${card('Demorados (3 s ou mais)', lentos, lentos ? '#9A6B15' : '')}
+          ${card('Sem resposta (30 s)', semResp, semResp ? 'var(--vermelho)' : '')}
+          ${card('Terminal perdeu contato', quedasTerm, quedasTerm ? 'var(--vermelho)' : '')}
+          ${card('Sistema ocupado', sisLento, sisLento ? '#9A6B15' : '')}
+          ${card('Sistema caiu', quedasSistema, quedasSistema ? 'var(--vermelho)' : '')}
+        </div>
+        ${terms.size ? `<table style="margin:4px 0 14px"><thead><tr><th>Terminal (endereço)</th><th class="num">Pedidos</th>
+          <th>Primeiro</th><th>Último</th><th>Maior silêncio</th></tr></thead><tbody>
+          ${[...terms.values()].map(t => `<tr><td><b>${esc(t.ip)}</b></td><td class="num">${t.n}</td><td>${t.prim.slice(0, 8)}</td>
+            <td>${t.ult.slice(0, 8)}</td><td style="${t.maiorBuraco > 120 ? 'color:var(--vermelho);font-weight:600' : ''}">
+            ${t.maiorBuraco >= 60 ? `${Math.round(t.maiorBuraco / 60)} min a partir de ${t.buracoEm.slice(0, 5)}` : '—'}</td></tr>`).join('')}
+          </tbody></table>` : ''}
+        <div style="font:12px/1.55 ui-monospace,Consolas,monospace;background:var(--fundo);border:1px solid var(--borda);
+          border-radius:8px;padding:10px 12px;max-height:55vh;overflow:auto">
+          ${vis.length ? vis.map(l => `<div style="color:${corTipo(l)}"><span style="opacity:.65">${l.hora.slice(0, 8)}</span>
+            <b style="display:inline-block;min-width:118px">${esc(l.queda ? 'SISTEMA CAIU' : l.tipo)}</b>
+            ${esc(l.queda ? 'abriu de novo sem ter sido fechado pelo usuário' : l.msg)}</div>`).join('')
+            : '<div style="color:var(--verde)">✅ Nenhum problema registrado neste dia.</div>'}
+        </div>
+        <p style="font-size:11.5px;color:var(--texto-suave);margin:8px 0 0">Arquivos em ${esc(r.dir)} — guardados por 30 dias.</p>`;
+  };
+  painel.querySelector('#dg-problemas').onchange = desenhar;
+  painel.querySelector('#dg-salvar').onclick = () => {
+    const txt = `Salgueiro Gestão — diagnóstico de ${fmtDia(r.dia)}\r\n\r\n` +
+      linhas.map(l => `${l.hora} [${l.fonte}] ${l.tipo} ${l.msg}`).join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['﻿' + txt], { type: 'text/plain;charset=utf-8' }));
+    a.download = `diagnostico-salgueiro-${r.dia}.txt`;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  };
+  desenhar();
 }
 
 // ---- Aba: Licença ----

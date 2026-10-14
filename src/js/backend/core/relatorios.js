@@ -1,6 +1,7 @@
 // Relatórios — vendas por período, curva ABC, peças paradas
 // Troca não é venda — regra única do sistema. Ver core/vendas-sql.js.
-import { NAO_TROCA, RECEBIDO, trocasDoPeriodo } from './vendas-sql.js';
+import { NAO_TROCA, RECEBIDO, RECEBIDO_PRODUTOS, trocasDoPeriodo } from './vendas-sql.js';
+import { freteDoPeriodo } from './frete.js';
 const arred = (n) => Math.round(n * 100) / 100;
 
 // Subquery que retorna o total já devolvido de uma venda (alias v)
@@ -21,6 +22,8 @@ const _devSub = `COALESCE((SELECT SUM(d.valor_devolvido) FROM devolucoes d WHERE
 // Usar em TODO lugar do relatório que fala em faturamento. Não recalcular
 // `v.total - devolvido` solto numa consulta nova: é assim que o furo volta.
 const _recebido = RECEBIDO('v');
+// rateio entre peças: sem o frete (v3.31.0 — ver vendas-sql.js)
+const _recebidoProdutos = RECEBIDO_PRODUTOS('v');
 
 // p: { de: 'YYYY-MM-DD', ate: 'YYYY-MM-DD' }
 function vendasPeriodo(db, p) {
@@ -49,6 +52,11 @@ function vendasPeriodo(db, p) {
   resumo.qtd_trocas = _trc.qtd;
   resumo.trocas_detalhe = _trc;
   resumo.total_geral = arred((resumo.total || 0) + _trc.saldo);
+  // Frete (v3.31.0): já está dentro do faturamento (é dinheiro que entrou);
+  // aqui sai separado — quanto e como (Mercado Envios, retirada...).
+  resumo.frete = freteDoPeriodo(db,
+    (x) => `date(${x}.criado_em) BETWEEN ? AND ?` + (lojaId ? ` AND ${x}.loja_id = ?` : ''),
+    lojaId ? [de, ate, lojaId] : [de, ate]);
 
   const porDia = db.prepare(`
     SELECT date(v.criado_em) dia,
@@ -124,7 +132,7 @@ function vendasPeriodo(db, p) {
            SUM(vi.qtd) pecas,
            SUM(vi.total) tabela,
            SUM((vi.total - ${_devItem})
-               * CASE WHEN v.subtotal > 0 THEN CAST((${_recebido}) AS REAL) / v.subtotal ELSE 0 END) recebido
+               * CASE WHEN v.subtotal > 0 THEN CAST((${_recebidoProdutos}) AS REAL) / v.subtotal ELSE 0 END) recebido
       FROM venda_itens vi
       JOIN vendas v ON v.id = vi.venda_id
       JOIN variacoes va ON va.id = vi.variacao_id
@@ -138,7 +146,8 @@ function vendasPeriodo(db, p) {
     consignado: { pecas: acha(1).pecas || 0, total: arred(acha(1).recebido || 0), tabela: arred(acha(1).tabela || 0) },
     proprio: { pecas: acha(0).pecas || 0, total: arred(acha(0).recebido || 0), tabela: arred(acha(0).tabela || 0) }
   };
-  const _difO = arred(arred(resumo.total) - origem.proprio.total - origem.consignado.total);
+  // o acerto de centavos fecha com o faturamento SEM o frete — frete não é peça (v3.31.0)
+  const _difO = arred(arred(resumo.total) - ((resumo.frete && resumo.frete.valor) || 0) - origem.proprio.total - origem.consignado.total);
   if (Math.abs(_difO) > 0.005) origem.proprio.total = arred(origem.proprio.total + _difO);
 
   return { ok: true, de, ate,
@@ -146,7 +155,9 @@ function vendasPeriodo(db, p) {
               // Troca é troca: contada e somada à parte, e o total geral é a soma das duas.
               trocas: arred(resumo.trocas || 0), qtd_trocas: resumo.qtd_trocas || 0,
               trocas_detalhe: resumo.trocas_detalhe,
-              total_geral: arred(resumo.total_geral || 0), origem },
+              total_geral: arred(resumo.total_geral || 0), origem,
+              // frete: já dentro do total; aqui o quanto e o como (v3.31.0)
+              frete: resumo.frete },
     por_dia: porDia, por_vendedor: porVendedor, por_categoria: porCategoria };
 }
 
@@ -463,7 +474,7 @@ function relatorioEvento(db, p) {
   const ar = lojaId ? [inicio, fim, lojaId] : [inicio, fim];
 
   const vendas = db.prepare(`
-    SELECT v.id, v.criado_em, v.subtotal, v.desconto, v.total,
+    SELECT v.id, v.criado_em, v.subtotal, v.desconto, v.total, COALESCE(v.frete,0) frete, v.frete_tipo,
            COALESCE(c.nome,'') cliente, COALESCE(u.nome,'') vendedor,
            ${_devSub} devolvido
     FROM vendas v
@@ -543,7 +554,8 @@ function relatorioEvento(db, p) {
   for (const v of mapa.values()) {
     if (!v.itens.length) continue;
     const somaItens = arred(v.itens.reduce((s, i) => s + i.total, 0));
-    const fator = somaItens > 0 ? v.total / somaItens : 0;
+    // frete não é preço de peça: fica fora do rateio (v3.31.0)
+    const fator = somaItens > 0 ? (v.total - (v.frete || 0)) / somaItens : 0;
     let acumulado = 0;
     for (const it of v.itens) {
       it.recebido = arred(it.total * fator);
@@ -883,7 +895,7 @@ function relatorioEvento(db, p) {
     SELECT COALESCE(pr.consignado,0) consignado,
            SUM(vi.qtd) pecas,
            SUM(vi.total + vi.desconto) tabela,
-           SUM(vi.total * CASE WHEN v.subtotal > 0 THEN CAST((${_recebido}) AS REAL) / v.subtotal ELSE 0 END) recebido
+           SUM(vi.total * CASE WHEN v.subtotal > 0 THEN CAST((${_recebidoProdutos}) AS REAL) / v.subtotal ELSE 0 END) recebido
       FROM venda_itens vi
       JOIN vendas v ON v.id = vi.venda_id
       JOIN variacoes va ON va.id = vi.variacao_id
@@ -915,7 +927,7 @@ function relatorioEvento(db, p) {
     SELECT pr.id, pr.nome, pr.fornecedor_id, COALESCE(pr.pct_fornecedor,0) pct,
            SUM(vi.qtd) pecas,
            SUM(vi.total + vi.desconto) tabela,
-           SUM(vi.total * CASE WHEN v.subtotal > 0 THEN CAST((${_recebido}) AS REAL) / v.subtotal ELSE 0 END) recebido
+           SUM(vi.total * CASE WHEN v.subtotal > 0 THEN CAST((${_recebidoProdutos}) AS REAL) / v.subtotal ELSE 0 END) recebido
       FROM venda_itens vi
       JOIN vendas v ON v.id = vi.venda_id
       JOIN variacoes va ON va.id = vi.variacao_id
