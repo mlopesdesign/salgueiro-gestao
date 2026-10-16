@@ -1,0 +1,8 @@
+v3.31.2 — Tela de Backup sem travar o principal · Diagnóstico mais claro
+
+- backup:listarLocais guarda a radiografia de cada backup (só abre arquivo novo)
+- LENTO no terminal só conta com a aba visível
+- Diagnóstico: cada aviso do terminal cruza com o log do principal e explica onde estava a demora
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01UiSBBjrVtHruCRtEum4jQN

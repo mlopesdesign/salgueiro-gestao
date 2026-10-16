@@ -9,12 +9,12 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.31.1 |
-| **Data do último build** | 2026-10-14 |
+| **Versão atual** | 3.31.2 |
+| **Data do último build** | 2026-10-16 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.31.1 em 2026-10-14 ✓ (30 módulos core · 164 rotas · 37 tabelas) |
-| **5 lugares da versão** | os 5 em 3.31.1 ✓ |
+| **GRAPHIFY** | atualizado para 3.31.2 em 2026-10-16 ✓ (30 módulos core · 164 rotas · 37 tabelas) |
+| **5 lugares da versão** | os 5 em 3.31.2 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
 
 ---
 
@@ -25,6 +25,39 @@
 pelo Desktop Commander (`start_process`, powershell) → confiro no GitHub → aviso.
 O "dois cliques em PUBLICAR.bat" está REVOGADO. Detalhe: regra 3 do `REGRAS-CRITICAS.md`.
 **v3.30.0 publicada assim** (07/10/2026 00:24 UTC, 6.485.691 bytes conferidos).
+
+## v3.31.2 — BACKUP SEM TRAVAR O PRINCIPAL · DIAGNÓSTICO MAIS CLARO (2026-10-16)
+
+| Campo | Valor |
+|---|---|
+| Tag | `v3.31.2` |
+| Título | v3.31.2 — Tela de Backup sem travar o principal · Diagnóstico mais claro |
+| Asset | `Portable\resources.neu` — 6.553.772 bytes — sha256 `d679da63d8ced04b7ad2921697c0b61d744b463f91cb60ee0360f7044484e034` |
+| Backup | `backups\pre-v3.31.2-2026-10-16\` |
+
+**Print do Diagnóstico (16/10, PC principal):** `SISTEMA-LENTO local backup:listarLocais 11555ms`
+e o terminal T-2D55493E com LENTO em `mensagens:resumo` e `rede:ping` (5–7 s) SEM
+nenhum LENTO correspondente no principal; nada caiu, nenhum SEM-RESPOSTA.
+**Leitura:** a demora do terminal estava fora do principal (rede/Wi-Fi ou aba do
+navegador em segundo plano — o Chrome atrasa timers de aba escondida).
+
+**Correções:**
+- `servidor.js` `backup:listarLocais`: radiografia de cada backup guardada em
+  `localStorage 'salg_radiografia_backups'` (chave = nome, assinatura `tamanho|quando`);
+  só backup novo/alterado é aberto. O banco atual continua sendo radiografado sempre.
+- `app.js` `chamar()`: LENTO só é gravado se a aba estava visível no início E no fim.
+- `configuracoes.js` `painelDiagnostico`: cada linha TERMINAL com LENTO/SEM-RESPOSTA/
+  PRAZO-ESGOTADO ganha nota (↳) cruzando com o log da rede do principal (mesmo canal,
+  −90 s a +2 s do horário em que o principal recebeu o aviso): não chegou → rede;
+  principal rápido → rede/navegador; principal lento → estava ocupado.
+
+**Build:** o `.neu` agora sai de `~/empacotar.mjs` na VM (asar igual ao @electron/asar,
+com integrity; ignora `.fuse_hidden*`, `tools/` só arquivos do 1º nível sem `.log`).
+Conferido por `~/conferir-asar.mjs`: 75 arquivos, 0 diferentes do disco. O build
+3.31.1 tinha 2 `.fuse_hidden` lixo dentro — sumiram.
+**Testes:** `RAIZ=~/salg node testes/teste-*.mjs` (caminho SEM espaço). Falhas
+pré-existentes iguais: consignado-rel 6, origem-vendas 4; catalogo/tela-catalogo/
+dom-aviso-custo/estoque-grade não rodam (fn.mjs ausente / URL com espaço).
 
 ## v3.31.1 — CADA COMPUTADOR COM O SEU CAIXA (2026-10-14)
 

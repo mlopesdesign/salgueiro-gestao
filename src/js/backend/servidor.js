@@ -293,10 +293,27 @@ const rotas = {
     // Radiografa cada backup para a tela mostrar o que há dentro ANTES de
     // restaurar — o usuário nunca mais escolhe um arquivo vazio às cegas.
     const atual = await radiografar(db.exportar());
+    // v3.31.2 — o diagnóstico mostrou esta tela levando 11,5 s no computador
+    // principal: ela abria TODOS os backups (um banco inteiro cada) toda vez.
+    // Enquanto isso o sistema fica ocupado e os terminais esperam. Backup não
+    // muda depois de gravado: a radiografia fica guardada pelo nome+tamanho+data
+    // e só arquivo novo é aberto.
+    const CHAVE = 'salg_radiografia_backups';
+    let memo = {};
+    try { memo = JSON.parse(localStorage.getItem(CHAVE) || '{}') || {}; } catch { memo = {}; }
+    const novoMemo = {};
     const backups = [];
     for (const b of r.backups) {
-      let info = null;
-      try { info = await radiografar(await ambiente.lerBackupLocal(b.nome)); } catch {}
+      const assinatura = `${b.tamanho}|${b.quando}`;
+      let info = memo[b.nome] && memo[b.nome].a === assinatura ? memo[b.nome].i : null;
+      if (!info) {
+        try {
+          const rx = await radiografar(await ambiente.lerBackupLocal(b.nome));
+          info = { vendas: rx.vendas, produtos: rx.produtos, clientes: rx.clientes,
+                   tabelasOk: rx.tabelasOk, temDados: rx.temDados, totalDados: rx.totalDados };
+        } catch { info = null; }
+      }
+      if (info) novoMemo[b.nome] = { a: assinatura, i: info };
       backups.push({
         ...b,
         vendas: info ? info.vendas : -1,
@@ -308,6 +325,7 @@ const rotas = {
         perdeDados: !!(info && info.totalDados < atual.totalDados)
       });
     }
+    try { localStorage.setItem(CHAVE, JSON.stringify(novoMemo)); } catch { /* sem cache: só fica lento */ }
     return { ok: true, pasta: r.pasta, atual, backups };
   },
 

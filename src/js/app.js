@@ -65,7 +65,7 @@ window.__pedirFechar = () => {
 const $app = document.getElementById('app');
 let usuario = null;
 let categoriasCache = [];
-let APP_VERSION = '3.31.1'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
+let APP_VERSION = '3.31.2'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
 
 // API dupla: no aplicativo usa IPC (preload); num terminal em rede (navegador),
 // conversa com o servidor do computador principal via HTTP com token de sessão.
@@ -163,6 +163,10 @@ function criarApiRede() {
   }
   async function chamar(canal, payload) {
     const ini = Date.now();
+    // Aba em segundo plano (minimizada ou atrás de outra): o navegador atrasa
+    // de propósito o que roda nela, e o tempo medido sai inflado sem nada estar
+    // lento. Só conta como LENTO o que aconteceu com a tela à vista. (v3.31.2)
+    const visivelIni = document.visibilityState === 'visible';
     const ctrl = new AbortController();
     const tm = setTimeout(() => ctrl.abort(), 35000);
     try {
@@ -182,7 +186,7 @@ function criarApiRede() {
           _semConexaoDesde = null;
           _avisoConexao(false);
         }
-        if (ms >= 5000) _diagGuardar({ tipo: 'LENTO', canal, ms });
+        if (ms >= 5000 && visivelIni && document.visibilityState === 'visible') _diagGuardar({ tipo: 'LENTO', canal, ms });
         if (_diagPendentes().length) enviarDiag();
       }
       if (canal === 'auth:login' && r.ok && r.token) { token = r.token; sessionStorage.setItem('salg_token', token); }

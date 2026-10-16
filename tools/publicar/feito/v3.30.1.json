@@ -1,0 +1,7 @@
+{
+  "tag": "v3.30.1",
+  "titulo": "v3.30.1 — O sistema não fecha mais sem perguntar",
+  "asset": "Portable\\resources.neu",
+  "notas": "tools\\publicar\\notas-v3.30.1.md",
+  "sha256": "721a9c5d0d9e4302b6eb874ef5abe43d1206b0d7c50adb1037754a33b5dcd5f4"
+}

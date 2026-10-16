@@ -1264,6 +1264,26 @@ async function painelDiagnostico(corpo, diaEscolhido) {
   ler(r.rede, 'rede'); ler(r.app, 'app');
   linhas.sort((x, y) => x.hora.localeCompare(y.hora));
 
+  // Terminal disse "demorou": quanto o COMPUTADOR PRINCIPAL levou para o mesmo
+  // pedido? Se lá foi rápido, o tempo se perdeu no caminho (rede) ou no próprio
+  // navegador — não no sistema. (v3.31.2)
+  const segDia = (h) => { const [a, b, c] = h.split(':'); return (+a) * 3600 + (+b) * 60 + parseFloat(c); };
+  for (const l of linhas) {
+    if (l.tipo !== 'TERMINAL') continue;
+    const m = /\d{4}-\d{2}-\d{2}[ T](\d{2}:\d{2}:\d{2})\S*\s+(LENTO|SEM-RESPOSTA|PRAZO-ESGOTADO)\s+(\S+)\s+(\d+)ms/.exec(l.msg);
+    if (!m) continue;
+    // Usa a hora em que o PRINCIPAL recebeu o aviso (o relógio do terminal pode
+    // estar diferente): o aviso chega logo depois do pedido demorado.
+    const recebido = segDia(l.hora), canal = m[3], msTerm = +m[4];
+    const cand = linhas.filter(x => x.fonte === 'rede' && ['OK', 'LENTO', 'SEM-RESPOSTA'].includes(x.tipo) &&
+      x.msg.split(' ')[1] === canal && segDia(x.hora) <= recebido + 2 && segDia(x.hora) >= recebido - 90);
+    if (!cand.length) { l.nota = 'o mesmo pedido não aparece no registro do principal → provavelmente nem chegou lá (rede/internet)'; continue; }
+    const msSrv = Math.max(...cand.map(x => +((/(\d+)ms/.exec(x.msg) || [0, 0])[1])));
+    l.nota = msSrv < msTerm / 2
+      ? `no principal levou ${msSrv}ms → os outros ${msTerm - msSrv}ms ficaram na rede ou no navegador`
+      : `no principal também demorou (${msSrv}ms) → o computador principal estava ocupado`;
+  }
+
   // resumo
   const conta = (t) => linhas.filter(l => l.tipo === t).length;
   const ok = conta('OK'), lentos = conta('LENTO'), semResp = conta('SEM-RESPOSTA');
@@ -1323,7 +1343,8 @@ async function painelDiagnostico(corpo, diaEscolhido) {
           border-radius:8px;padding:10px 12px;max-height:55vh;overflow:auto">
           ${vis.length ? vis.map(l => `<div style="color:${corTipo(l)}"><span style="opacity:.65">${l.hora.slice(0, 8)}</span>
             <b style="display:inline-block;min-width:118px">${esc(l.queda ? 'SISTEMA CAIU' : l.tipo)}</b>
-            ${esc(l.queda ? 'abriu de novo sem ter sido fechado pelo usuário' : l.msg)}</div>`).join('')
+            ${esc(l.queda ? 'abriu de novo sem ter sido fechado pelo usuário' : l.msg)}
+            ${l.nota ? `<div style="margin:0 0 3px 126px;color:var(--texto-suave);font-style:italic">↳ ${esc(l.nota)}</div>` : ''}</div>`).join('')
             : '<div style="color:var(--verde)">✅ Nenhum problema registrado neste dia.</div>'}
         </div>
         <p style="font-size:11.5px;color:var(--texto-suave);margin:8px 0 0">Arquivos em ${esc(r.dir)} — guardados por 30 dias.</p>`;

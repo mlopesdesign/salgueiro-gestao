@@ -3,6 +3,14 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.31.2',
+    data: '2026-10-16',
+    itens: [
+      '💾 A TELA DE BACKUP NÃO SEGURA MAIS O COMPUTADOR PRINCIPAL. Ao abrir Configurações → Backup, o principal abria cada backup guardado para contar vendas, produtos e clientes — com muitos backups levava mais de 11 segundos, e os terminais pelo navegador ficavam esperando. Agora ele guarda essa contagem e só abre o backup novo: a tela abre na hora.',
+      '🩺 DIAGNÓSTICO MAIS CLARO. Aba do navegador escondida atrás de outra não conta mais como lentidão (o navegador atrasa de propósito as abas em segundo plano). E cada aviso de LENTO ou SEM RESPOSTA de um terminal agora vem com uma linha explicando onde estava a demora: se o pedido nem chegou ao principal (rede), se o principal respondeu rápido (a demora ficou na rede ou no navegador) ou se o principal também demorou (estava ocupado).',
+    ],
+  },
+  {
     versao: '3.31.1',
     data: '2026-10-14',
     itens: [
