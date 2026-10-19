@@ -31,7 +31,7 @@ O "dois cliques em PUBLICAR.bat" está REVOGADO. Detalhe: regra 3 do `REGRAS-CRI
 | Campo | Valor |
 |---|---|
 | Tag | `v3.31.3` |
-| Título | v3.31.3 — Corrigido o travamento de madrugada no computador principal ("no such table: usuarios") |
+| Título | v3.31.3 — Corrigido o travamento de madrugada no computador principal (banco sem tabela usuarios) — aspas no título quebram o gh, NUNCA usar |
 | Asset | `Portable\resources.neu` — 6.557.464 bytes — sha256 `c4d742230c4ee387dfb1482762079a643b9fd19dbca0907c1df06b8855498069` |
 | Backup | `backups\pre-v3.31.3-2026-10-19\` |
 

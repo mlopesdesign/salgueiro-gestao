@@ -1,0 +1,7 @@
+{
+  "tag": "v3.31.3",
+  "titulo": "v3.31.3 — Corrigido o travamento de madrugada no computador principal (banco sem tabela usuarios)",
+  "asset": "Portable\\resources.neu",
+  "notas": "tools\\publicar\\notas-v3.31.3.md",
+  "sha256": "c4d742230c4ee387dfb1482762079a643b9fd19dbca0907c1df06b8855498069"
+}
