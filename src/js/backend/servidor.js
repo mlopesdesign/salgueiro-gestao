@@ -2366,8 +2366,28 @@ async function processar(canal, payload, sess) {
     finally { if (sess !== sessao) sessao.usuario = _salvoUsuario; }
   } catch (e) {
     console.error(`[api] ${canal}:`, e);
+    _vigiarBanco(e, canal);
     return { ok: false, erro: e.message || 'Erro interno.' };
   }
+}
+
+// v3.31.3 — rede de segurança. Se o banco em memória quebrar (memória do
+// sql.js esgotada → "Aborted(OOM)" e depois "no such table"), o sistema não
+// fica morto esperando alguém reiniciar no principal: registra no Diagnóstico
+// e se reabre sozinho. O disco guarda a última gravação boa (o _salvarEmDisco
+// recusa gravar banco vazio). Nunca em laço: só depois de 5 min aberto.
+const _ABERTO_EM = Date.now();
+let _reabrindoPorBanco = false;
+function _vigiarBanco(e, canal) {
+  const m = String((e && e.message) || e || '');
+  if (!/Aborted\(OOM\)|no such table: (usuarios|config|vendas|produtos|caixas)\b/.test(m)) return;
+  if (_reabrindoPorBanco) return;
+  _reabrindoPorBanco = true;
+  const min = Math.round((Date.now() - _ABERTO_EM) / 60000);
+  try { ambiente.registrarLog('BANCO-QUEBRADO', `${canal}: ${m.slice(0, 120)} (aberto há ${min} min)`); } catch { /* */ }
+  if (Date.now() - _ABERTO_EM < 5 * 60000) return;
+  try { ambiente.registrarLog('APP', 'reabrindo sozinho para recuperar o banco'); } catch { /* */ }
+  setTimeout(() => { ambiente.reiniciarApp().catch(() => {}); }, 1500);
 }
 
 // Permissão exigida por rota (defesa no backend; o admin sempre passa).

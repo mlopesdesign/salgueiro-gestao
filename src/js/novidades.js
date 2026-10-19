@@ -3,6 +3,14 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.31.3',
+    data: '2026-10-19',
+    itens: [
+      '🛑 CORRIGIDO O TRAVAMENTO DE MADRUGADA ("no such table: usuarios"). O banco estava num modo de gravação que perdia um pouco da memória a cada venda ou alteração. Depois de umas 128 gravações no dia (perto da 1 h da manhã) a memória acabava e o principal parava de atender — só voltava reiniciando. Agora o banco abre sempre no modo certo e a memória não diminui mais: no teste foram 1.000 gravações seguidas sem perda nenhuma.',
+      '🛟 SE O BANCO QUEBRAR, O PRINCIPAL SE REABRE SOZINHO. Fica registrado no Diagnóstico como BANCO-QUEBRADO e o sistema se reabre em poucos segundos, sem ninguém precisar ir até o computador. Ele também nunca grava um banco vazio por cima do arquivo bom.',
+    ],
+  },
+  {
     versao: '3.31.2',
     data: '2026-10-16',
     itens: [

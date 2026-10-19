@@ -9,12 +9,12 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.31.2 |
-| **Data do último build** | 2026-10-16 |
+| **Versão atual** | 3.31.3 |
+| **Data do último build** | 2026-10-19 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.31.2 em 2026-10-16 ✓ (30 módulos core · 164 rotas · 37 tabelas) |
-| **5 lugares da versão** | os 5 em 3.31.2 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
+| **GRAPHIFY** | atualizado para 3.31.3 em 2026-10-19 ✓ (30 módulos core · 164 rotas · 37 tabelas) |
+| **5 lugares da versão** | os 5 em 3.31.3 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
 
 ---
 
@@ -25,6 +25,48 @@
 pelo Desktop Commander (`start_process`, powershell) → confiro no GitHub → aviso.
 O "dois cliques em PUBLICAR.bat" está REVOGADO. Detalhe: regra 3 do `REGRAS-CRITICAS.md`.
 **v3.30.0 publicada assim** (07/10/2026 00:24 UTC, 6.485.691 bytes conferidos).
+
+## v3.31.3 — "no such table: usuarios" DE MADRUGADA: CAUSA PROVADA (2026-10-19)
+
+| Campo | Valor |
+|---|---|
+| Tag | `v3.31.3` |
+| Título | v3.31.3 — Corrigido o travamento de madrugada no computador principal ("no such table: usuarios") |
+| Asset | `Portable\resources.neu` — 6.557.464 bytes — sha256 `c4d742230c4ee387dfb1482762079a643b9fd19dbca0907c1df06b8855498069` |
+| Backup | `backups\pre-v3.31.3-2026-10-19\` |
+
+**Relato:** o principal para perto da 1 h; terminal (Camarote, login) mostra
+`no such table: usuarios`; só volta reiniciando o PDV no principal.
+
+**CAUSA (reproduzida, não hipótese):** `schema.sql` tinha `PRAGMA journal_mode = WAL`
+→ o arquivo do banco ficou com cabeçalho WAL (bytes 18/19 = 2). O sql.js asm tem
+**heap FIXO de 16 MB** (sem crescer: `emscripten_resize_heap` → abort "OOM"), e
+`db.export()` FECHA e REABRE a conexão a cada gravação. Cada reabertura em WAL
+vaza ~128 KB (índice do WAL). Gravação nº ~128 → `Aborted(OOM)` → a conexão fica
+sem esquema e TODA consulta responde `no such table: usuarios` até reiniciar.
+`radiografar` de backup WAL também vazava (30 backups = 3,9 MB por abertura da
+tela de Backup). Bisseção feita comando a comando do schema: o único que vaza é o
+PRAGMA WAL. Teste mínimo: WAL quebra na gravação 128; DELETE: 400/1000 gravações
+com memória constante. Simulação de noite (3 terminais em polling, 2 vendas/min,
+painel, relatórios): antes, 512 KB livres na 1ª hora e quebra; depois, 15,6 MB.
+A "hora marcada" = nº de gravações desde a abertura do programa, não o relógio.
+
+**Correção (ponto único, db.js):** `_semWal(bytes)` em `abrirDeBytes` troca o
+cabeçalho 2→1 numa CÓPIA antes de abrir (é o que `journal_mode=DELETE` grava; sem
+arquivo -wal no MEMFS é seguro) + `PRAGMA journal_mode=DELETE` no `criarBanco` +
+schema com `journal_mode = DELETE` (comentário SEM ponto e vírgula).
+**Rede de segurança:** `_salvarEmDisco` recusa gravar banco < 8 KB; `processar`
+→ `_vigiarBanco`: erro `Aborted(OOM)` ou `no such table: usuarios|config|vendas|
+produtos|caixas` grava `BANCO-QUEBRADO` no log e reabre o app sozinho (só se
+aberto há > 5 min, uma vez).
+**Teste novo:** `teste-banco-sem-wal.mjs` (13): reproduz o defeito antigo em
+processo separado (quebra na 128 com a mensagem do print) e prova o novo
+(1000 gravações, memória igual, cabeçalho 1, integridade ok, backup WAL lido sem
+vazar, trava de banco vazio).
+**ARMADILHA para o futuro:** NUNCA `journal_mode=WAL` no sql.js. Qualquer coisa
+que gaste memória do heap por gravação derruba o principal depois de horas.
+Obs.: o export() reabre sem `foreign_keys=ON` — as FKs só valem até a 1ª
+gravação desde sempre; não mexido (mudaria comportamento).
 
 ## v3.31.2 — BACKUP SEM TRAVAR O PRINCIPAL · DIAGNÓSTICO MAIS CLARO (2026-10-16)
 

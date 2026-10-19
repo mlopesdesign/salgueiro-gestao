@@ -1,5 +1,6 @@
 -- Salgueiro Gestão — esquema do banco (SQLite)
-PRAGMA journal_mode = WAL;
+-- v3.31.3 modo normal e nunca WAL - no sql.js o WAL vazava memoria a cada gravacao (ver db.js _semWal)
+PRAGMA journal_mode = DELETE;
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS usuarios (

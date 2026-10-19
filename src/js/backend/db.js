@@ -74,7 +74,14 @@ class SqlJsWrapper {
   }
   async _salvarEmDisco() {
     try {
-      await this._salvarBytes(this._db.export());
+      const bytes = this._db.export();
+      // Trava: um banco de verdade nunca tem menos de 8 KB. Se a conexão
+      // quebrou (ver _semWal), não deixa um arquivo vazio sobrescrever o bom.
+      if (!bytes || bytes.length < 8192) {
+        console.error('[db] gravação recusada: banco em memória vazio (' + (bytes ? bytes.length : 0) + ' bytes)');
+        return;
+      }
+      await this._salvarBytes(bytes);
     } catch (e) {
       console.error('[db] erro ao salvar em disco:', e.message || e);
     }
@@ -98,10 +105,30 @@ async function _initSqlJs() {
   return _SQL;
 }
 
+// v3.31.3 — CAUSA DO "no such table: usuarios" DE MADRUGADA (provado em teste).
+// O banco vinha em modo WAL (byte 18/19 do cabeçalho = 2, por causa do
+// "PRAGMA journal_mode = WAL" antigo do schema). No sql.js isso não serve para
+// nada e VAZA ~128 KB da memória fixa de 16 MB a cada gravação: o export()
+// fecha e reabre a conexão, e cada reabertura em WAL deixa memória para trás.
+// Na gravação nº ~128 do dia a memória acaba ("Aborted(OOM)") e a conexão fica
+// sem o esquema: todo pedido responde "no such table: usuarios" até reiniciar.
+// Cada radiografia de backup WAL também vazava (30 backups = 3,9 MB).
+// Correção: o banco SEMPRE abre em modo normal (cabeçalho 1/1, o mesmo que o
+// "PRAGMA journal_mode=DELETE" grava). Sem arquivo -wal ao lado, é seguro.
+function _semWal(bytes) {
+  if (!bytes || !bytes.length) return bytes;
+  const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  if (b.length > 19 && (b[18] === 2 || b[19] === 2)) {
+    const c = Uint8Array.from(b); c[18] = 1; c[19] = 1;
+    return c;
+  }
+  return b;
+}
+
 // Abre um banco a partir de bytes (ou vazio) — sem tocar em disco.
 export async function abrirDeBytes(bytes, salvarBytes) {
   const SQL = await _initSqlJs();
-  const dbInst = (bytes && bytes.length) ? new SQL.Database(bytes) : new SQL.Database();
+  const dbInst = (bytes && bytes.length) ? new SQL.Database(_semWal(bytes)) : new SQL.Database();
   return new SqlJsWrapper(dbInst, salvarBytes || (async () => {}));
 }
 
@@ -165,6 +192,8 @@ export async function criarBanco({ bytes, schema, salvarBytes }) {
       if (!/already exists/i.test(e.message)) console.error('[schema]', e.message);
     }
   }
+  // garante o modo normal mesmo em banco novo (ver _semWal) — v3.31.3
+  try { db._db.exec('PRAGMA journal_mode=DELETE'); } catch (e) { console.error('[db] journal_mode', e.message); }
   migrar(db);
   await semear(db);
   await db.salvarAgora();

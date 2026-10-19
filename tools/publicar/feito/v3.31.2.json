@@ -1,0 +1,7 @@
+{
+  "tag": "v3.31.2",
+  "titulo": "v3.31.2 — Tela de Backup sem travar o principal · Diagnóstico mais claro",
+  "asset": "Portable\\resources.neu",
+  "notas": "tools\\publicar\\notas-v3.31.2.md",
+  "sha256": "d679da63d8ced04b7ad2921697c0b61d744b463f91cb60ee0360f7044484e034"
+}

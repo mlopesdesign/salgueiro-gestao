@@ -65,7 +65,7 @@ window.__pedirFechar = () => {
 const $app = document.getElementById('app');
 let usuario = null;
 let categoriasCache = [];
-let APP_VERSION = '3.31.2'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
+let APP_VERSION = '3.31.3'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
 
 // API dupla: no aplicativo usa IPC (preload); num terminal em rede (navegador),
 // conversa com o servidor do computador principal via HTTP com token de sessão.

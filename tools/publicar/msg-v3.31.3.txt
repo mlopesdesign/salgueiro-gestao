@@ -1,0 +1,9 @@
+v3.31.3 — Corrigido o travamento de madrugada no computador principal ("no such table: usuarios")
+
+- Causa provada: banco em WAL + export() do sql.js vaza ~128 KB do heap fixo de 16 MB por gravação; na ~128ª o sql.js aborta (OOM) e a conexão perde o esquema
+- db.js: _semWal abre sempre em modo normal; criarBanco força journal_mode=DELETE; schema sem WAL
+- Rede de segurança: não grava banco vazio; BANCO-QUEBRADO no log e reabertura automática
+- teste-banco-sem-wal.mjs (13 asserções)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01UiSBBjrVtHruCRtEum4jQN
