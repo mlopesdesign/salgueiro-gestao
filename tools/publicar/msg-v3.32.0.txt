@@ -1,0 +1,10 @@
+v3.32.0 — Exportar e imprimir só o que está na tela do Estoque
+
+- core/filtro-estoque.js: regra única do filtro (tela e exportação)
+- estoque:listarCompleto / estoque:exportarXlsx aceitam { filtro }; totais do filtrado
+- Janela de exportação: "Só o que está na tela" ou "Estoque todo"
+- PDF e Excel com saldo por loja/almoxarifado e título do filtro
+- teste-exportar-estoque-filtro.mjs (29 asserções)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01UiSBBjrVtHruCRtEum4jQN

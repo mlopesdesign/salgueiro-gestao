@@ -9,12 +9,12 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.31.3 |
-| **Data do último build** | 2026-10-19 |
+| **Versão atual** | 3.32.0 |
+| **Data do último build** | 2026-10-21 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.31.3 em 2026-10-19 ✓ (30 módulos core · 164 rotas · 37 tabelas) |
-| **5 lugares da versão** | os 5 em 3.31.3 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
+| **GRAPHIFY** | atualizado para 3.32.0 em 2026-10-21 ✓ (31 módulos core · 164 rotas · 37 tabelas) |
+| **5 lugares da versão** | os 5 em 3.32.0 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
 
 ---
 
@@ -25,6 +25,36 @@
 pelo Desktop Commander (`start_process`, powershell) → confiro no GitHub → aviso.
 O "dois cliques em PUBLICAR.bat" está REVOGADO. Detalhe: regra 3 do `REGRAS-CRITICAS.md`.
 **v3.30.0 publicada assim** (07/10/2026 00:24 UTC, 6.485.691 bytes conferidos).
+
+## v3.32.0 — EXPORTAR SÓ O QUE ESTÁ NA TELA DO ESTOQUE (2026-10-21)
+
+| Campo | Valor |
+|---|---|
+| Tag | `v3.32.0` |
+| Título | v3.32.0 — Exportar e imprimir só o que está na tela do Estoque |
+| Asset | `Portable\resources.neu` — 6.565.539 bytes — sha256 `58dc2ffcce7185daf4f36edf424b1fa4fb22336408045e7d40306c93e3b1e3f0` |
+| Backup | `backups\pre-v3.32.0-2026-10-21\` |
+
+**Pedido:** Estoque → Movimentar filtrado em "Somente consignados · Fabi Leirosa
+Atelier", mas Exportar PDF/Excel saía o estoque inteiro. Quer exportar o
+fornecedor, um produto (ex.: camisa de enredo) ou tudo.
+(Print confirmou a loja já na v3.31.3.)
+
+**Regra ÚNICA:** `core/filtro-estoque.js` — `filtrarEstoque(lista, {tipo,
+fornecedor_id, termo})`, `descreverFiltro`, `filtroAtivo`. Usada pela tela
+(`estoque.js aplicarFiltro`, importa de `./backend/core/`) E pelo backend
+(`estoque.listarCompleto(db, filtro)` → totais do filtrado + `descricao`,
+`filtrado`). Rotas `estoque:listarCompleto` e `estoque:exportarXlsx` aceitam
+`{ filtro }`. Fornecedor só vale com tipo 'cons' (igual à tela).
+**Tela:** `_filtroTela` no módulo (zerado ao trocar de aba). Com filtro, a
+janela de PDF/Excel mostra rádio "Só o que está na tela — <descrição>"
+(marcado) / "Estoque todo"; sem filtro, sai tudo direto.
+**PDF:** título com a descrição, coluna por loja/almoxarifado (estoques:mapaLocais)
+com total no rodapé, folha deitada com 2+ locais. **Excel:** colunas
+Fornecedor + uma por local; arquivo `estoque-<filtro>-data.xlsx`.
+**Testes:** `teste-exportar-estoque-filtro.mjs` (29, contas à mão: Fabi 4 peças
+R$ 750; camisa de enredo 45 peças R$ 3.600; tela = exportação nos 5 filtros).
+Visual conferido no Chromium (janela + PDF deitado com colunas por loja).
 
 ## v3.31.3 — "no such table: usuarios" DE MADRUGADA: CAUSA PROVADA (2026-10-19)
 

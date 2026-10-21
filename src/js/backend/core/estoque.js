@@ -1,5 +1,6 @@
 // Movimentação de estoque, kardex e reposição
 import { auditar } from './util.js';
+import { filtrarEstoque, descreverFiltro, filtroAtivo } from './filtro-estoque.js';
 import * as estoques from './estoques.js';
 
 const arred = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -148,8 +149,10 @@ function reposicao(db) {
 }
 
 // Lista completo do estoque para exportação (PDF/Excel)
-function listarCompleto(db) {
-  const linhas = db.prepare(`
+// `filtro` opcional (v3.32.0): mesma regra da tela — ver core/filtro-estoque.js.
+// Os totais são do que foi filtrado, para o rodapé do PDF/Excel bater.
+function listarCompleto(db, filtro) {
+  const todas = db.prepare(`
     SELECT p.id AS produto_id, p.nome, p.referencia,
            COALESCE(c.nome,'Sem categoria') AS categoria,
            v.id AS variacao_id, v.cor, v.tamanho, v.codigo_barras,
@@ -165,10 +168,14 @@ function listarCompleto(db) {
     WHERE v.ativo = 1 AND p.ativo = 1
     ORDER BY p.nome, v.cor, v.tamanho
   `).all();
+  const linhas = filtrarEstoque(todas, filtro);
+  const forn = filtro && Number(filtro.fornecedor_id)
+    ? (todas.find(l => Number(l.fornecedor_id) === Number(filtro.fornecedor_id)) || {}).fornecedor : '';
+  const descricao = descreverFiltro(filtro, forn);
   const totalPecas = linhas.reduce((a, l) => a + (l.estoque || 0), 0);
   const totalCusto = linhas.reduce((a, l) => a + (l.estoque || 0) * (l.preco_custo || 0), 0);
   const totalVenda = linhas.reduce((a, l) => a + (l.estoque || 0) * (l.preco_venda || 0), 0);
-  return { ok: true, variacoes: linhas, totalPecas,
+  return { ok: true, variacoes: linhas, totalPecas, descricao, filtrado: filtroAtivo(filtro),
     totalCusto: Math.round(totalCusto * 100) / 100,
     totalVenda: Math.round(totalVenda * 100) / 100 };
 }

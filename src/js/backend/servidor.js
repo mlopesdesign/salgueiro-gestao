@@ -419,26 +419,40 @@ const rotas = {
   'estoque:kardex': (p) => estoque.kardex(db, p || {}),
   'estoque:reposicao': () => estoque.reposicao(db),
   // Lista completa devolve o NOME do arquivo em `foto` (miniatura sob demanda no front)
-  'estoque:listarCompleto': () => estoque.listarCompleto(db),
-  'estoque:exportarXlsx': () => {
-    const r = estoque.listarCompleto(db);
+  'estoque:listarCompleto': (p) => estoque.listarCompleto(db, (p || {}).filtro),
+  // v3.32.0: exporta o que a tela mostra (filtro) ou tudo (sem filtro), com o
+  // saldo de cada loja em coluna própria, igual à tela.
+  'estoque:exportarXlsx': (p) => {
+    const r = estoque.listarCompleto(db, (p || {}).filtro);
     if (!r.ok) return r;
+    if (!r.variacoes.length) return { ok: false, erro: 'Nada para exportar com esse filtro.' };
     const cfg = config.obter(db).config || {};
-    const ws = XLSX.utils.json_to_sheet(r.variacoes.map(v => ({
-      'Produto': v.nome, 'Referência': v.referencia || '', 'Categoria': v.categoria,
-      'Cor': v.cor || '', 'Tamanho': v.tamanho || '', 'Código de barras': v.codigo_barras || '',
-      'Estoque': v.estoque, 'Preço custo': v.preco_custo || 0, 'Preço venda': v.preco_venda || 0,
-      'Total custo': Math.round((v.estoque || 0) * (v.preco_custo || 0) * 100) / 100,
-      'Total venda': Math.round((v.estoque || 0) * (v.preco_venda || 0) * 100) / 100
-    })));
-    // Rodapé totais
+    const { locais, saldos } = estoques.mapaLocais(db);
+    const sMap = new Map(saldos.map(x => [`${x.variacao_id}:${x.estoque_id}`, x.qtd]));
+    const a2 = n => Math.round((Number(n) || 0) * 100) / 100;
+    const ws = XLSX.utils.json_to_sheet(r.variacoes.map(v => {
+      const linha = {
+        'Produto': v.nome, 'Referência': v.referencia || '', 'Categoria': v.categoria,
+        'Fornecedor': v.consignado ? (v.fornecedor || '') : '',
+        'Cor': v.cor || '', 'Tamanho': v.tamanho || '', 'Código de barras': v.codigo_barras || '',
+        'Estoque': v.estoque
+      };
+      for (const l of locais) linha[l.nome] = sMap.get(`${v.variacao_id}:${l.id}`) || 0;
+      linha['Preço custo'] = v.preco_custo || 0;
+      linha['Preço venda'] = v.preco_venda || 0;
+      linha['Total custo'] = a2((v.estoque || 0) * (v.preco_custo || 0));
+      linha['Total venda'] = a2((v.estoque || 0) * (v.preco_venda || 0));
+      return linha;
+    }));
+    // Rodapé: TOTAL embaixo da coluna Estoque e dos totais em R$
     const nRows = r.variacoes.length + 1;
-    XLSX.utils.sheet_add_aoa(ws, [['', '', '', '', '', 'TOTAL:', r.totalPecas, '', '', r.totalCusto, r.totalVenda]], { origin: `A${nRows + 1}` });
+    const vazios = n => Array(n).fill('');
+    XLSX.utils.sheet_add_aoa(ws, [[...vazios(6), 'TOTAL:', r.totalPecas, ...vazios(locais.length), '', '', r.totalCusto, r.totalVenda]], { origin: `A${nRows + 1}` });
     const wb = XLSX.utils.book_new();
     const loja = cfg.loja_nome || 'Salgueiro';
     XLSX.utils.book_append_sheet(wb, ws, 'Estoque');
     const b64 = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
-    return { ok: true, buffer: b64, loja };
+    return { ok: true, buffer: b64, loja, descricao: r.descricao, filtrado: r.filtrado };
   },
 
   // Exportação da lista de produtos com filtros e colunas escolhidas pelo usuário

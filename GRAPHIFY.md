@@ -3,7 +3,7 @@
 > Mapa técnico gerado automaticamente por `tools/graphify.js`.
 > **Não edite à mão.** Regere com `node tools/graphify.js` a cada alteração estrutural.
 
-**Versão:** 3.31.3 · **Gerado em:** 2026-10-19
+**Versão:** 3.32.0 · **Gerado em:** 2026-10-21
 **Aplicação:** `br.com.mllopes.salgueirogestao` (Neutralino 6 + WebView2)
 **Cliente:** Boutique do Salgueiro · **Autor:** ML Lopes Design
 
@@ -79,8 +79,9 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `crediario.js` | 109 | 5 | aniversariantes, excluirCliente, obterCliente, parcelasAbertas, receberParcela |
 | `dashboard.js` | 270 | 2 | resumo |
 | `devolucoes.js` | 128 | 3 | itensVenda, listar, registrar |
-| `estoque.js` | 176 | 5 | buscarVariacoes, kardex, listarCompleto, movimentar, reposicao |
+| `estoque.js` | 183 | 5 | buscarVariacoes, kardex, listarCompleto, movimentar, reposicao |
 | `estoques.js` | 474 | 20 | aplicar, aplicarEstrito, arred, conferirSaldo, conteudo, daLoja, desativar, garantirDaLoja, +13 |
+| `filtro-estoque.js` | 50 | 1 | descreverFiltro, filtrarEstoque, filtroAtivo |
 | `financeiro.js` | 142 | 5 | baixar, excluir, fluxo, listar, salvar |
 | `frete.js` | 51 | 0 | FRETE_TIPOS, freteDoPeriodo, rotuloFrete, tipoFreteValido |
 | `importar-vendas.js` | 302 | 6 | COLUNAS, analisar, confirmar |
@@ -108,7 +109,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `ambiente.js` | 385 | 7 |
 | `db.js` | 743 | 6 |
 | `servidor-rede-embutido.js` | 844 | 27 |
-| `servidor.js` | 2827 | 16 |
+| `servidor.js` | 2841 | 16 |
 
 ## 6. Telas (`src/js`)
 
@@ -119,14 +120,14 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `clientes.js` | 538 | viewClientes |
 | `compras.js` | 229 | viewCompras |
 | `configuracoes.js` | 1950 | viewConfiguracoes |
-| `estoque.js` | 927 | abrirEtiquetas, ean13Svg, formMovimento, formMovimentoProduto, viewEstoque |
+| `estoque.js` | 991 | abrirEtiquetas, ean13Svg, formMovimento, formMovimentoProduto, viewEstoque |
 | `estoques.js` | 989 | viewEstoques |
 | `etiquetas.js` | 169 | abrirEtiquetasLote, imprimirFolhaEtiquetas |
 | `financeiro.js` | 261 | viewFinanceiro |
 | `impressao.js` | 179 | LIMITES, PADRAO, aplicarEstiloImpressao, cssCupomArquivo, cssCupomTela |
 | `mensagens.js` | 758 | abrirBalao, encerrarTelaMensagens, iniciarMensagens, pararMensagens, viewMensagens |
 | `neutralino.js` | 2 | — |
-| `novidades.js` | 1056 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
+| `novidades.js` | 1064 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
 | `pdv.js` | 2538 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
 | `ranking.js` | 360 | viewRanking |
 | `relatorios.js` | 1823 | viewRelatorios |
@@ -282,7 +283,7 @@ a rota exige apenas sessão válida.
 | `estoque:movimentar` | `estoque.movimentar` | `estoque.movimentar(db, p, sessao.usuario)` |
 | `estoque:kardex` | `estoque.ver` | `estoque.kardex(db, p \|\| {})` |
 | `estoque:reposicao` | `estoque.ver` | `estoque.reposicao(db)` |
-| `estoque:listarCompleto` | `estoque.ver` | `estoque.listarCompleto(db)` |
+| `estoque:listarCompleto` | `estoque.ver` | `estoque.listarCompleto(db, (p \|\| {}).filtro)` |
 | `estoque:exportarXlsx` | `estoque.ver` | `{` |
 | `estoque:exportarXlsxFiltrado` | `produtos.ver` | `{` |
 

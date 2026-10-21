@@ -1,6 +1,7 @@
 // Módulo Estoque — movimentação, kardex, reposição e etiquetas
 import { api, el, esc, moeda, toast, modal, getConfig, ehAdmin, ajustarLarguraModal } from './app.js';
 import { abrirEtiquetasLote, imprimirFolhaEtiquetas } from './etiquetas.js';
+import { filtrarEstoque, descreverFiltro, filtroAtivo } from './backend/core/filtro-estoque.js';
 const dataBrH = (s) => s ? `${String(s).slice(0, 10).split('-').reverse().join('/')} ${String(s).slice(11, 16)}` : '—';
 
 // ---------- EAN-13 em SVG (sem dependências) ----------
@@ -26,32 +27,74 @@ export function ean13Svg(codigo) {
 }
 
 // ---------- Exportação estoque ----------
-// Abre um mini-formulário: a foto é OPCIONAL (deixa o PDF mais pesado, então
-// vem desmarcada). Marcando, cada peça sai com a miniatura ao lado do nome.
+// v3.32.0 — exporta o que a TELA mostra. A aba Movimentar guarda aqui o filtro
+// em uso (tipo, fornecedor, busca). Com filtro, a janela de exportação oferece
+// "Só o que está na tela" (marcado) ou "Estoque todo". Sem filtro, sai tudo.
+// O filtro é aplicado no backend pela MESMA regra da tela (core/filtro-estoque.js).
+let _filtroTela = null;      // null = nenhuma aba com filtro aberta
+let _fornNomeTela = '';
+
+function _blocoEscopo() {
+  if (!filtroAtivo(_filtroTela)) {
+    return `<p style="margin:0 2px 12px;font-size:13px">Sai o <b>estoque todo</b>. Para exportar só uma parte,
+      filtre a lista antes (consignados, fornecedor ou busca por nome/código).</p>`;
+  }
+  const desc = descreverFiltro(_filtroTela, _fornNomeTela);
+  return `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+      <label class="campo-check" style="display:flex;align-items:center;gap:10px;cursor:pointer">
+        <input type="radio" name="est-escopo" value="tela" checked style="width:16px;height:16px">
+        <span>🔎 <b>Só o que está na tela</b> — ${esc(desc)}</span>
+      </label>
+      <label class="campo-check" style="display:flex;align-items:center;gap:10px;cursor:pointer">
+        <input type="radio" name="est-escopo" value="tudo" style="width:16px;height:16px">
+        <span>📦 Estoque todo</span>
+      </label>
+    </div>`;
+}
+function _filtroEscolhido(mm) {
+  if (!filtroAtivo(_filtroTela)) return null;
+  const v = mm.querySelector('input[name=est-escopo]:checked');
+  return v && v.value === 'tudo' ? null : { ..._filtroTela };
+}
+
+// Abre um mini-formulário: escopo (tela ou tudo) e foto OPCIONAL (deixa o PDF
+// mais pesado, então vem desmarcada).
 async function exportarEstoquePdf() {
   modal('Exportar estoque em PDF', `
-    <div style="width:min(420px,86vw)">
+    <div style="width:min(460px,86vw)">
+      ${_blocoEscopo()}
       <label class="campo-check" style="display:flex;align-items:center;gap:10px;cursor:pointer">
         <input id="est-pdf-foto" type="checkbox" style="width:16px;height:16px">
         <span>📷 Incluir a foto de cada peça</span>
       </label>
       <p style="margin:10px 2px 0;font-size:12px;color:var(--texto-suave,#777)">
         Com foto o relatório fica mais bonito para conferência visual, mas
-        gera mais páginas e demora alguns segundos a mais. Sem marcar, sai a
-        lista enxuta de sempre.
+        gera mais páginas e demora alguns segundos a mais.
       </p>
     </div>
   `, async (mm, fechar) => {
     const incluirFoto = !!mm.querySelector('#est-pdf-foto')?.checked;
+    const filtro = _filtroEscolhido(mm);
     fechar();
-    await _gerarEstoquePdf(incluirFoto);
+    await _gerarEstoquePdf(incluirFoto, filtro);
   }, 'Gerar PDF');
 }
 
-async function _gerarEstoquePdf(incluirFoto) {
+async function _gerarEstoquePdf(incluirFoto, filtro) {
   toast('Gerando PDF…');
-  const r = await api('estoque:listarCompleto');
+  const r = await api('estoque:listarCompleto', { filtro });
   if (!r.ok) { toast(r.erro, true); return; }
+  if (!r.variacoes.length) { toast('Nada para exportar com esse filtro.', true); return; }
+
+  // Saldo por loja, em coluna — igual à tela.
+  let locais = [], sMap = new Map();
+  try {
+    const rl = await api('estoques:mapaLocais');
+    if (rl && rl.ok) {
+      locais = rl.locais || [];
+      sMap = new Map((rl.saldos || []).map(x => [`${x.variacao_id}:${x.estoque_id}`, x.qtd]));
+    }
+  } catch { /* sai sem as colunas por loja */ }
 
   // Foto: o banco guarda só o NOME do arquivo. Resolve todos de uma vez.
   if (incluirFoto) {
@@ -70,29 +113,47 @@ async function _gerarEstoquePdf(incluirFoto) {
   const celFotoPdf = v => !incluirFoto ? '' : (v._fotoData
     ? `<td class="est-foto"><img src="${v._fotoData}"></td>`
     : `<td class="est-foto"><span class="est-foto-vazia">👗</span></td>`);
-  let linhas = r.variacoes.map(v => `
+  const totLoja = locais.map(() => 0);
+  const linhas = r.variacoes.map(v => {
+    const porLoja = locais.map((l, k) => {
+      const q = sMap.get(`${v.variacao_id}:${l.id}`) || 0;
+      totLoja[k] += q;
+      return `<td class="num${q ? '' : ' zero'}">${q}</td>`;
+    }).join('');
+    return `
     <tr>
       ${celFotoPdf(v)}
-      <td>${esc(v.nome)}</td><td>${esc(v.referencia || '')}</td>
-      <td>${esc(v.categoria)}</td><td>${esc(v.cor || '')}</td>
-      <td>${esc(v.tamanho || '')}</td><td>${esc(v.codigo_barras || '')}</td>
-      <td class="num">${v.estoque}</td>
+      <td>${esc(v.nome)}${v.consignado && v.fornecedor && !(filtro && Number(filtro.fornecedor_id)) ? `<div class="forn">🤝 ${esc(v.fornecedor)}</div>` : ''}</td>
+      <td>${esc(v.referencia || '')}</td>
+      <td>${esc(v.cor || '')}</td><td>${esc(v.tamanho || '')}</td>
+      <td class="cod">${esc(v.codigo_barras || '')}</td>
+      <td class="num"><b>${v.estoque}</b></td>
+      ${porLoja}
       <td class="num">${moedaFmt(v.preco_venda || 0)}</td>
       <td class="num">${moedaFmt((v.estoque || 0) * (v.preco_venda || 0))}</td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
   const thFoto = incluirFoto ? '<th class="est-foto">Foto</th>' : '';
-  const colspanTot = incluirFoto ? 7 : 6;
+  const thLojas = locais.map(l => `<th class="num">${esc(l.nome)}</th>`).join('');
+  const colspanTot = (incluirFoto ? 6 : 5);
+  const deitado = locais.length >= 2;   // muitas colunas: folha deitada
+  const titulo = r.filtrado ? r.descricao : 'Estoque completo';
   const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">
-    <title>Estoque — ${esc(loja)}</title>
+    <title>Estoque — ${esc(titulo)}</title>
     <style>
-      body{font-family:Arial,sans-serif;font-size:10px;margin:10mm 8mm}
-      h2{margin:0 0 4px;font-size:14px}
+      @page{size:A4 ${deitado ? 'landscape' : 'portrait'};margin:8mm}
+      body{font-family:Arial,sans-serif;font-size:10px;margin:0}
+      h2{margin:0 0 2px;font-size:14px}
+      h3{margin:0 0 4px;font-size:12px;color:#8B1A1C}
       p.sub{margin:0 0 8px;color:#666;font-size:9px}
       table{width:100%;border-collapse:collapse}
-      th{background:#8B1A1C;color:#fff;padding:4px 3px;text-align:left;font-size:9px}
+      th{background:#8B1A1C;color:#fff;padding:4px 3px;text-align:left;font-size:9px;white-space:nowrap}
       td{padding:3px;border-bottom:1px solid #ddd;vertical-align:middle}
       tr:nth-child(even) td{background:#f9f9f9}
-      .num{text-align:right}
+      .num{text-align:right;white-space:nowrap}
+      td.zero{color:#bbb}
+      td.cod{font-family:Consolas,monospace;font-size:9px}
+      .forn{font-size:8.5px;color:#1d4ed8;margin-top:1px}
       .est-foto{width:44px}
       td.est-foto{padding:2px 3px}
       .est-foto img{width:38px;height:38px;object-fit:cover;border-radius:4px;
@@ -100,14 +161,15 @@ async function _gerarEstoquePdf(incluirFoto) {
       .est-foto-vazia{display:flex;align-items:center;justify-content:center;
         width:38px;height:38px;font-size:16px;color:#bbb;border:1px solid #eee;border-radius:4px}
       tfoot td{font-weight:700;background:#eee;border-top:2px solid #8B1A1C}
-      @media print{body{margin:5mm} tr{page-break-inside:avoid}}
+      @media print{tr{page-break-inside:avoid} thead{display:table-header-group}}
     </style></head><body>
     <h2>${esc(loja)} — Relatório de Estoque</h2>
+    <h3>${esc(titulo)}</h3>
     <p class="sub">Gerado em ${data} · ${r.variacoes.length} variações · ${r.totalPecas} peças</p>
     <table>
-      <thead><tr>${thFoto}<th>Produto</th><th>Ref</th><th>Categoria</th><th>Cor</th><th>Tam</th><th>Cód. barras</th><th class="num">Qtd</th><th class="num">Preço</th><th class="num">Total</th></tr></thead>
+      <thead><tr>${thFoto}<th>Produto</th><th>Ref</th><th>Cor</th><th>Tam</th><th>Cód. barras</th><th class="num">Qtd</th>${thLojas}<th class="num">Preço</th><th class="num">Total</th></tr></thead>
       <tbody>${linhas}</tbody>
-      <tfoot><tr><td colspan="${colspanTot}">TOTAIS</td><td class="num">${r.totalPecas}</td><td></td><td class="num">${moedaFmt(r.totalVenda)}</td></tr></tfoot>
+      <tfoot><tr><td colspan="${colspanTot}">TOTAIS</td><td class="num">${r.totalPecas}</td>${totLoja.map(t => `<td class="num">${t}</td>`).join('')}<td></td><td class="num">${moedaFmt(r.totalVenda)}</td></tr></tfoot>
     </table></body></html>`;
   const w = window.open('', '_blank', 'width=1000,height=700');
   if (!w) { toast('Permita popups para exportar PDF.', true); return; }
@@ -117,16 +179,27 @@ async function _gerarEstoquePdf(incluirFoto) {
 }
 
 async function exportarEstoqueXlsx() {
+  if (!filtroAtivo(_filtroTela)) { await _gerarEstoqueXlsx(null); return; }
+  modal('Exportar estoque em Excel', `<div style="width:min(460px,86vw)">${_blocoEscopo()}</div>`,
+    async (mm, fechar) => { const filtro = _filtroEscolhido(mm); fechar(); await _gerarEstoqueXlsx(filtro); },
+    'Gerar Excel');
+}
+
+async function _gerarEstoqueXlsx(filtro) {
   toast('Gerando Excel…');
-  const r = await api('estoque:exportarXlsx');
+  const r = await api('estoque:exportarXlsx', { filtro });
   if (!r.ok) { toast(r.erro || 'Erro ao gerar Excel.', true); return; }
   const bin = atob(r.buffer);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const url = URL.createObjectURL(blob);
+  const sufixo = r.filtrado
+    ? '-' + String(r.descricao || 'filtrado').normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50)
+    : '';
   const a = document.createElement('a');
-  a.href = url; a.download = `estoque-${new Date().toISOString().slice(0,10)}.xlsx`;
+  a.href = url; a.download = `estoque${sufixo}-${new Date().toISOString().slice(0,10)}.xlsx`;
   document.body.appendChild(a); a.click();
   setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
   toast('Excel baixado com sucesso.');
@@ -156,10 +229,12 @@ export async function viewEstoque(alvo) {
     b.onclick = () => {
       tela.querySelectorAll('.abas button').forEach(x => x.classList.toggle('ativa', x === b));
       corpo.innerHTML = '';
+      _filtroTela = null;   // só a aba Movimentar tem filtro de estoque
       abas[b.dataset.aba](corpo);
     };
   });
   alvo.appendChild(tela);
+  _filtroTela = null;
   tela.querySelector('#est-pdf').onclick = exportarEstoquePdf;
   tela.querySelector('#est-xlsx').onclick = exportarEstoqueXlsx;
   abaMovimentar(corpo);
@@ -342,22 +417,11 @@ function abaMovimentar(corpo) {
   // Filtra _todosItens conforme os selects e redesenha a tabela.
   function aplicarFiltro() {
     const tipo = fTipo.value;
-    const fid  = Number(fForn.value) || 0;
-    let lista = _todosItens;
-    if (tipo === 'proprios') {
-      lista = lista.filter(v => !v.consignado);
-    } else if (tipo === 'cons') {
-      lista = lista.filter(v => v.consignado);
-      if (fid) lista = lista.filter(v => v.fornecedor_id === fid);
-    }
-    const termo = busca.value.trim().toLowerCase();
-    if (termo) {
-      lista = lista.filter(v =>
-        (v.produto || '').toLowerCase().includes(termo) ||
-        (v.referencia || '').toLowerCase().includes(termo) ||
-        (v.codigo_barras || '').includes(busca.value.trim())
-      );
-    }
+    // Regra ÚNICA (core/filtro-estoque.js): a mesma que a exportação usa.
+    const filtro = { tipo, fornecedor_id: tipo === 'cons' ? (Number(fForn.value) || 0) : 0, termo: busca.value.trim() };
+    _filtroTela = filtro;
+    _fornNomeTela = filtro.fornecedor_id ? (fForn.options[fForn.selectedIndex] || {}).text || '' : '';
+    const lista = filtrarEstoque(_todosItens, filtro);
     const msg = tipo === 'proprios' ? 'Nenhum produto próprio no estoque.'
       : tipo === 'cons' ? 'Nenhum produto consignado no estoque.'
       : 'Nenhum produto cadastrado no estoque.';

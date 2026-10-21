@@ -3,6 +3,14 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.32.0',
+    data: '2026-10-21',
+    itens: [
+      '🔎 EXPORTAR SÓ O QUE ESTÁ NA TELA DO ESTOQUE. Em Estoque → Movimentar, filtre por consignados de um fornecedor, só peças da loja ou busque um produto (ex.: camisa de enredo) e clique em Exportar PDF ou Excel: aparece a escolha "Só o que está na tela" (já marcada) ou "Estoque todo". Sem filtro, sai o estoque todo, como antes.',
+      '📄 RELATÓRIO DE ESTOQUE MAIS COMPLETO. O título diz o que foi impresso (ex.: Consignados de Fabi Leirosa Atelier), cada loja e o almoxarifado ganham uma coluna com o saldo, igual à tela, e os totais são só do que foi filtrado. O Excel também traz as colunas por loja e o fornecedor.',
+    ],
+  },
+  {
     versao: '3.31.3',
     data: '2026-10-19',
     itens: [
