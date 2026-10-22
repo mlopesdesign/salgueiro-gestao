@@ -367,7 +367,7 @@ export async function lerLogs(dia) {
 
 // ── App ──────────────────────────────────────────────────────────────────────
 export function versaoApp() {
-  try { return NL_APPVERSION; } catch { return '3.32.0'; }
+  try { return NL_APPVERSION; } catch { return '3.33.0'; }
 }
 
 export async function reiniciarApp() {

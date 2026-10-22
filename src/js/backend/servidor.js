@@ -706,6 +706,7 @@ const rotas = {
     if (s.resumo !== false) {
       const q = r.resumo;
       add('Resumo', [
+        ...(r.loja ? [{ Indicador: 'Loja', Valor: r.loja }] : []),
         { Indicador: 'Período', Valor: `${r.inicio} até ${r.fim}` },
         { Indicador: 'Vendas', Valor: q.vendas },
         { Indicador: 'Peças', Valor: q.pecas },
@@ -771,6 +772,21 @@ const rotas = {
         'Desconto': a2(x.desconto || 0),
         'Recebido': a2(x.recebido ?? x.total)
       })), [34, 14, 12, 10, 13, 22, 16, 12, 12, 15, 12, 13]);
+    }
+    if (s.maisvendidos !== false && (r.mais_vendidos || []).length) {
+      add('Mais vendidos', r.mais_vendidos.map((x, i) => ({
+        'Posição': i + 1, 'Produto': x.produto, 'Referência': x.referencia || '',
+        'Fornecedor': x.consignado ? (x.fornecedor || '') : '',
+        'Peças': x.qtd, 'Recebido': a2(x.recebido)
+      })), [9, 34, 14, 22, 8, 13]);
+    }
+    if (r.loja_id) {
+      // Por loja (v3.33.0): abertura e fechamento de cada caixa no período
+      add('Abertura e fechamento', (r.caixas || []).map(c => ({
+        'Caixa': c.id, 'Abertura': c.aberto_em, 'Abriu': c.aberto_por || '',
+        'Fechamento': c.fechado_em || 'ainda aberto', 'Fechou': c.fechado_por || '',
+        'Computador': c.terminal || '', 'Troco inicial': a2(c.valor_abertura)
+      })), [8, 20, 18, 20, 18, 26, 13]);
     }
     if (s.pagamentos !== false) {
       add('Pagamentos', r.por_forma.map(g => ({

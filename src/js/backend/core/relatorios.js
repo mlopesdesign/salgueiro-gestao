@@ -685,7 +685,7 @@ function relatorioEvento(db, p) {
   // com o fornecedor (v3.11.0): sem isso não dá para saber, olhando a lista,
   // quanto daquele total vai embora no acerto.
   const prods = db.prepare(`
-    SELECT va.id variacao_id,
+    SELECT va.id variacao_id, pr.id produto_id,
            pr.nome produto, COALESCE(pr.referencia,'') referencia,
            COALESCE(va.cor,'') cor, COALESCE(va.tamanho,'') tamanho,
            COALESCE(pr.consignado,0) consignado,
@@ -1009,8 +1009,42 @@ function relatorioEvento(db, p) {
   };
   trocasResumo.saldo = arred(trocasResumo.recebido - trocasResumo.devolvido);
 
+  // Mais vendidos (v3.33.0): o PRODUTO (somando cor e tamanho), em ordem de
+  // peças. Vem da mesma lista consolidada, então fecha com "Produtos vendidos".
+  const _mv = new Map();
+  for (const x of prods) {
+    const a = _mv.get(x.produto_id) || { produto_id: x.produto_id, produto: x.produto,
+      referencia: x.referencia, consignado: x.consignado, fornecedor: x.fornecedor, qtd: 0, recebido: 0 };
+    a.qtd += Number(x.qtd) || 0;
+    a.recebido = arred(a.recebido + (x.recebido ?? x.total ?? 0));
+    _mv.set(x.produto_id, a);
+  }
+  const maisVendidos = [..._mv.values()].sort((a, b) =>
+    (b.qtd - a.qtd) || (b.recebido - a.recebido) || String(a.produto).localeCompare(String(b.produto)));
+
+  // Relatório POR LOJA (v3.33.0): os caixas daquela loja que estiveram abertos
+  // no período, com hora de abertura e de fechamento e quem fez cada uma.
+  let caixasLoja = [], nomeLoja = '';
+  if (lojaId) {
+    nomeLoja = (db.prepare('SELECT nome FROM lojas WHERE id=?').get(lojaId) || {}).nome || '';
+    caixasLoja = db.prepare(`
+      SELECT cx.id, cx.aberto_em, cx.fechado_em,
+             COALESCE(cx.valor_abertura,0) valor_abertura,
+             cx.valor_fechamento_informado, cx.valor_fechamento_calculado,
+             COALESCE(ua.nome,'') aberto_por, COALESCE(uf.nome,'') fechado_por,
+             COALESCE(cx.terminal_desc,'') terminal
+        FROM caixas cx
+        LEFT JOIN usuarios ua ON ua.id = cx.usuario_abertura
+        LEFT JOIN usuarios uf ON uf.id = cx.usuario_fechamento
+       WHERE cx.loja_id = ? AND cx.aberto_em <= ? AND (cx.fechado_em IS NULL OR cx.fechado_em >= ?)
+       ORDER BY cx.aberto_em, cx.id
+    `).all(lojaId, fim, inicio);
+  }
+
   return {
     ok: true, inicio, fim, pix_maquina: pixMaq, taxas,
+    loja_id: lojaId, loja: nomeLoja, caixas: caixasLoja,
+    mais_vendidos: maisVendidos,
     vendas, cortesias, descontos, vendas_custo: vendasCusto,
     trocas: trocasLista,
     por_produto: prods,

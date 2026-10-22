@@ -89,7 +89,9 @@ export async function viewRelatorios(alvo) {
     </div>`);
   const corpo = tela.querySelector('#aba-conteudo');
   const periodo = () => ({ de: tela.querySelector('#r-de').value, ate: tela.querySelector('#r-ate').value });
-  const abas = { vendas: abaVendas, evento: abaEvento, lojas: abaPorLoja, maisvendidos: abaMaisVendidos, consignados: abaConsignados, abc: abaAbc, paradas: abaParadas, estoque: abaEstoque, acompanhadas: abaAcompanhadas };
+  // Por loja (v3.33.0): o MESMO relatório completo do Evento, com a loja
+  // escolhida e o período com data e hora de abertura e de fechamento.
+  const abas = { vendas: abaVendas, evento: abaEvento, lojas: (c) => abaEvento(c, { porLoja: true }), maisvendidos: abaMaisVendidos, consignados: abaConsignados, abc: abaAbc, paradas: abaParadas, estoque: abaEstoque, acompanhadas: abaAcompanhadas };
   const rotuloAba = () => (tela.querySelector('.abas button.ativa')?.textContent || 'Relatório').trim();
   tela.querySelector('#r-imprimir').onclick = () => imprimirRelatorio(
     `${rotuloAba()} — ${tela.querySelector('#r-de').value} a ${tela.querySelector('#r-ate').value}`, corpo.innerHTML);
@@ -104,9 +106,9 @@ export async function viewRelatorios(alvo) {
     corpo.innerHTML = ''; abas[aba](corpo, periodo());
   }
   tela.querySelectorAll('.abas button').forEach(b => { b.onclick = () => trocar(b.dataset.aba); });
-  // A aba Evento tem período próprio (com hora) — não reage ao De/até geral
+  // Evento e Por loja têm período próprio (com hora) — não reagem ao De/até geral
   tela.querySelectorAll('#r-de, #r-ate').forEach(c => c.addEventListener('change', () => {
-    if (abaAtiva !== 'evento') trocar(abaAtiva);
+    if (abaAtiva !== 'evento' && abaAtiva !== 'lojas') trocar(abaAtiva);
   }));
   alvo.appendChild(tela);
   abaVendas(corpo, periodo());
@@ -185,6 +187,7 @@ function _inicioEventoPadrao() {
 const _SECOES = [
   ['resumo', 'Resumo do evento', true],
   ['produtos', 'Produtos vendidos', true],
+  ['maisvendidos', 'Mais vendidos', true],
   ['vendas', 'Lista de vendas', true],
   ['itens', 'Itens de cada venda', true],
   ['pagamentos', 'Formas de pagamento e taxas', true],
@@ -258,7 +261,8 @@ function _estiloEvento() {
   document.head.appendChild(st);
 }
 
-async function abaEvento(corpo) {
+async function abaEvento(corpo, opcoes) {
+  const porLoja = !!(opcoes && opcoes.porLoja);
   _estiloEvento();
   const _subCard = (getConfig && getConfig() || {}).relatorio_cards_detalhe !== '0';
   const ini = _inicioEventoPadrao();
@@ -269,11 +273,14 @@ async function abaEvento(corpo) {
   const bloco = el(`
     <div>
       <div class="painel" style="margin-bottom:14px">
-        <div class="barra"><b>🎪 Período do evento</b>
-          <span class="ev-dica">A loja abre num dia e fecha no outro — informe data <b>e</b> hora.</span></div>
+        <div class="barra"><b>${porLoja ? '🏬 Loja e período' : '🎪 Período do evento'}</b>
+          <span class="ev-dica">${porLoja
+            ? 'Escolha a loja e o período: data e hora de <b>abertura</b> até data e hora de <b>fechamento</b>.'
+            : 'A loja abre num dia e fecha no outro — informe data <b>e</b> hora.'}</span></div>
         <div class="ev-grid">
-          <label>Início<input id="ev-ini" type="datetime-local" value="${_dtLocal(ini)}"></label>
-          <label>Fim<input id="ev-fim" type="datetime-local" value="${_dtLocal(fim)}"></label>
+          ${porLoja ? '<label>Loja<select id="ev-loja"><option value="">Carregando…</option></select></label>' : ''}
+          <label>${porLoja ? 'Abertura (data e hora)' : 'Início'}<input id="ev-ini" type="datetime-local" value="${_dtLocal(ini)}"></label>
+          <label>${porLoja ? 'Fechamento (data e hora)' : 'Fim'}<input id="ev-fim" type="datetime-local" value="${_dtLocal(fim)}"></label>
           <label>Pix recebido<select id="ev-pix">
             <option value="0">Na chave — sem taxa</option>
             <option value="1">Na maquininha — 0,49%</option>
@@ -302,8 +309,12 @@ async function abaEvento(corpo) {
   };
   const params = () => ({
     inicio: q('#ev-ini').value, fim: q('#ev-fim').value,
-    pix_maquina: q('#ev-pix').value === '1'
+    pix_maquina: q('#ev-pix').value === '1',
+    ...(porLoja ? { loja_id: Number(q('#ev-loja').value) || 0 } : {})
   });
+  // Loja escolhida — no modo Por loja; 'comp' = comparativo entre as lojas.
+  const lojaSel = () => porLoja ? q('#ev-loja').value : '';
+  const nomeLojaSel = () => porLoja ? ((q('#ev-loja').selectedOptions[0] || {}).textContent || '') : '';
   let dados = null;
 
   const tabela = (titulo, cabs, linhas, extra, cls, id) => linhas
@@ -357,9 +368,29 @@ async function abaEvento(corpo) {
                  (${moeda(_orig.consignado.sem_repasse.tabela)}) sem repasse — veja a seção de consignados</div>`
             : ''}</div>
       </div>`;
+      // Por loja (v3.33.0): hora de abertura e de fechamento de cada caixa da
+      // loja que esteve aberto no período, e quem abriu/fechou.
+      if (r.loja_id) {
+        _addNav('ev-s-caixas', '🕐 Abertura e fechamento');
+        const cxs = r.caixas || [];
+        topH += `<div class="painel" id="ev-s-caixas" style="margin-bottom:14px">
+          <div class="barra"><b>🕐 Abertura e fechamento — ${esc(r.loja)}</b>
+            <span class="ev-dica">período pedido: ${_dtBr(r.inicio)} até ${_dtBr(r.fim)}</span></div>
+          <table><thead><tr><th>Caixa</th><th>Abertura</th><th>Abriu</th><th>Fechamento</th><th>Fechou</th>
+            <th>Computador</th><th class="num">Troco inicial</th></tr></thead><tbody>${
+          cxs.length ? cxs.map(c => `<tr>
+            <td>#${c.id}</td>
+            <td><b>${_dtBr(c.aberto_em)}</b></td><td>${esc(c.aberto_por || '—')}</td>
+            <td>${c.fechado_em ? `<b>${_dtBr(c.fechado_em)}</b>` : '<span style="color:var(--verde);font-weight:600">ainda aberto</span>'}</td>
+            <td>${esc(c.fechado_por || '—')}</td>
+            <td>${esc(c.terminal || '—')}</td>
+            <td class="num">${moeda(c.valor_abertura || 0)}</td></tr>`).join('')
+          : '<tr><td colspan="7" class="vazio">Nenhum caixa desta loja esteve aberto neste período.</td></tr>'
+          }</tbody></table></div>`;
+      }
       _addNav('ev-s-fechamento', '📋 Fechamento');
       topH += `<div class="painel" id="ev-s-fechamento" style="margin-bottom:14px">
-        <div class="barra"><b>Fechamento do evento</b>
+        <div class="barra"><b>${r.loja ? `Fechamento — ${esc(r.loja)}` : 'Fechamento do evento'}</b>
           <span class="ev-dica">${_dtBr(r.inicio)} até ${_dtBr(r.fim)}</span></div>
         <table class="ev-tot"><tbody>
           <tr><td>Faturamento bruto</td><td class="num">${moeda(t.bruto)}</td></tr>
@@ -688,7 +719,7 @@ async function abaEvento(corpo) {
       _addNav('ev-s-produtos', '📦 Produtos');
       const tp = r.por_produto.reduce((a, x) => ({ qtd: a.qtd + x.qtd, total: a.total + x.total }),
         { qtd: 0, total: 0 });
-      secH += tabela('📦 Produtos vendidos no evento',
+      secH += tabela(r.loja ? `📦 Produtos vendidos — ${r.loja}` : '📦 Produtos vendidos no evento',
         `<th>Produto</th><th>Ref.</th><th>Cor / Tam.</th><th class="num">Qtd vendida</th>
          <th class="num">Preço unit.</th><th class="num">Valor de tabela</th>
          <th class="num">Desconto</th><th class="num">Recebido</th>`,
@@ -753,6 +784,25 @@ async function abaEvento(corpo) {
           )
         || '<tr><td colspan="8" class="vazio">Nenhum produto vendido no período.</td></tr>',
         '', '', 'ev-s-produtos');
+    }
+
+    // Mais vendidos (v3.33.0) — ranking por PRODUTO, logo depois da lista.
+    if (s.maisvendidos && (r.mais_vendidos || []).length) {
+      _addNav('ev-s-maisvendidos', '🏆 Mais vendidos');
+      const mv = r.mais_vendidos;
+      const totPecas = mv.reduce((a, x) => a + x.qtd, 0) || 1;
+      const LIM = 20;
+      secH += tabela('🏆 Mais vendidos',
+        `<th class="num" style="width:40px">#</th><th>Produto</th><th>Ref.</th>
+         <th class="num">Peças</th><th class="num">% das peças</th><th class="num">Recebido</th>`,
+        mv.slice(0, LIM).map((x, i) => `<tr><td class="num"><b>${i + 1}º</b></td>
+          <td>${esc(x.produto)}${x.consignado ? `<br><small style="color:var(--dourado)">🤝 ${esc(x.fornecedor || 'consignado')}</small>` : ''}</td>
+          <td>${esc(x.referencia || '—')}</td>
+          <td class="num"><b>${x.qtd}</b></td>
+          <td class="num">${(Math.round(x.qtd * 1000 / totPecas) / 10).toLocaleString('pt-BR')}%</td>
+          <td class="num">${moeda(x.recebido)}</td></tr>`).join('')
+        + (mv.length > LIM ? `<tr><td></td><td colspan="5" style="color:var(--texto-suave)">… e mais ${mv.length - LIM} produto(s) — todos estão em 📦 Produtos vendidos</td></tr>` : ''),
+        '', '', 'ev-s-maisvendidos');
     }
 
     // Monta o menu suspenso de navegação entre topo e seções
@@ -924,7 +974,18 @@ async function abaEvento(corpo) {
   }
 
   async function gerar() {
+    if (porLoja && lojaSel() === 'comp') {
+      // Comparativo entre as lojas (a tela antiga da aba), no dia da abertura
+      // até o dia do fechamento.
+      res.innerHTML = '';
+      dados = null;
+      await abaPorLoja(res, { de: String(q('#ev-ini').value).slice(0, 10), ate: String(q('#ev-fim').value).slice(0, 10) });
+      q('#ev-print').disabled = false;
+      q('#ev-xlsx').disabled = true;
+      return;
+    }
     const p = params();
+    if (porLoja && !p.loja_id) { toast('Escolha a loja.', true); return; }
     if (!p.inicio || !p.fim) { toast('Informe início e fim do evento.', true); return; }
     if (p.fim <= p.inicio) { toast('O fim precisa ser depois do início.', true); return; }
     res.innerHTML = '<div class="painel"><div class="vazio">Carregando…</div></div>';
@@ -959,7 +1020,10 @@ async function abaEvento(corpo) {
     c.querySelectorAll('.ev-seta').forEach(x => x.remove());
     const p = params();
     toast('Na janela de impressão, escolha "Salvar como PDF" para gerar o arquivo.');
-    imprimirRelatorio(`Relatório do evento — ${_dtBr(p.inicio)} até ${_dtBr(p.fim)}`, c.innerHTML);
+    const _tit = porLoja
+      ? (lojaSel() === 'comp' ? 'Comparativo entre lojas' : `Relatório da loja ${nomeLojaSel()}`)
+      : 'Relatório do evento';
+    imprimirRelatorio(`${_tit} — ${_dtBr(p.inicio)} até ${_dtBr(p.fim)}`, c.innerHTML);
   };
 
   q('#ev-xlsx').onclick = async () => {
@@ -973,13 +1037,25 @@ async function abaEvento(corpo) {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([bytes],
       { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
-    a.download = `evento-${String(p.inicio).slice(0, 10)}.xlsx`;
+    const _slug = (t) => String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    a.download = `${porLoja ? 'loja-' + _slug(nomeLojaSel()) : 'evento'}-${String(p.inicio).slice(0, 10)}.xlsx`;
     document.body.appendChild(a); a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
     toast('Excel baixado.');
   };
 
   corpo.appendChild(bloco);
+  if (porLoja) {
+    // Lojas ativas + o comparativo antigo entre lojas, como última opção.
+    let lista = [];
+    try { const rl = await api('lojas:listar'); if (rl && rl.ok) lista = (rl.lojas || []).filter(l => l.ativo !== 0); } catch { /* */ }
+    const sel = q('#ev-loja');
+    sel.innerHTML = lista.map(l => `<option value="${l.id}">${esc(l.nome)}</option>`).join('')
+      + '<option value="comp">📊 Todas — comparativo entre lojas</option>';
+    sel.onchange = gerar;
+    if (!lista.length) sel.value = 'comp';
+  }
   gerar();
 }
 

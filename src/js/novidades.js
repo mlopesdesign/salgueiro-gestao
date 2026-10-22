@@ -3,6 +3,15 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.33.0',
+    data: '2026-10-22',
+    itens: [
+      '🏬 RELATÓRIO POR LOJA COMPLETO. Em Relatórios → Por loja, escolha a loja e o período com data e hora de abertura e de fechamento: sai o relatório completo daquela loja — vendas, peças, valores, formas de pagamento, produtos vendidos e o líquido a receber. Imprimir/PDF e Excel saem com o nome da loja.',
+      '🕐 ABERTURA E FECHAMENTO DO CAIXA NO RELATÓRIO. O relatório da loja mostra cada caixa aberto no período: a hora em que abriu e fechou, quem abriu, quem fechou e em qual computador.',
+      '🏆 MAIS VENDIDOS NO FIM DO RELATÓRIO. O ranking dos produtos que mais saíram (peças, porcentagem e valor) aparece embaixo da lista de produtos — no relatório da loja e no do Evento. O comparativo antigo entre as lojas continua na opção "Todas — comparativo entre lojas".',
+    ],
+  },
+  {
     versao: '3.32.0',
     data: '2026-10-21',
     itens: [

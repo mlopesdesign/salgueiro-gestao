@@ -1,0 +1,10 @@
+v3.33.0 — Relatório por loja completo: loja, abertura e fechamento, produtos e mais vendidos
+
+- Aba Por loja = relatório do Evento com loja + período (data e hora de abertura e fechamento)
+- relatorioEvento: mais_vendidos (por produto), caixas da loja no período, nome da loja
+- Seções novas: Abertura e fechamento, Mais vendidos; Excel com as duas abas
+- Comparativo antigo entre lojas mantido como opção
+- teste-relatorio-por-loja.mjs (27 asserções)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01UiSBBjrVtHruCRtEum4jQN

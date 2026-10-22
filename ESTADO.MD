@@ -9,12 +9,12 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.32.0 |
-| **Data do último build** | 2026-10-21 |
+| **Versão atual** | 3.33.0 |
+| **Data do último build** | 2026-10-22 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.32.0 em 2026-10-21 ✓ (31 módulos core · 164 rotas · 37 tabelas) |
-| **5 lugares da versão** | os 5 em 3.32.0 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
+| **GRAPHIFY** | atualizado para 3.33.0 em 2026-10-22 ✓ (31 módulos core · 164 rotas · 37 tabelas) |
+| **5 lugares da versão** | os 5 em 3.33.0 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
 
 ---
 
@@ -25,6 +25,40 @@
 pelo Desktop Commander (`start_process`, powershell) → confiro no GitHub → aviso.
 O "dois cliques em PUBLICAR.bat" está REVOGADO. Detalhe: regra 3 do `REGRAS-CRITICAS.md`.
 **v3.30.0 publicada assim** (07/10/2026 00:24 UTC, 6.485.691 bytes conferidos).
+
+## v3.33.0 — RELATÓRIO POR LOJA COMPLETO (2026-10-22)
+
+| Campo | Valor |
+|---|---|
+| Tag | `v3.33.0` |
+| Título | v3.33.0 — Relatório por loja completo: loja, abertura e fechamento, produtos e mais vendidos |
+| Asset | `Portable\resources.neu` — 6.574.226 bytes — sha256 `b45463050764d1bab6efcb6abce7417b46c3ca61beedc5e94a8d20390d4495d3` |
+| Backup | `backups\pre-v3.33.0-2026-10-22\` |
+
+**Pedido:** aba Por loja era só a tabela de receita por loja. Quer escolher a
+loja + período com data e hora de abertura/fechamento e ver o relatório
+completo "igual ao outro relatóriozão" (o do Evento): produtos vendidos, peças,
+valor e, embaixo, os mais vendidos.
+
+**Ponto único:** a aba Por loja agora É o relatório do Evento —
+`abaEvento(corpo, { porLoja: true })` (select `#ev-loja`, rótulos Abertura/
+Fechamento, `loja_id` no pedido). `relatorioEvento` já filtrava tudo por
+`loja_id` (vendas, itens, pagamentos, consignações, devoluções, trocas pelo
+caixa). Opção "📊 Todas — comparativo entre lojas" (value 'comp') chama a
+`abaPorLoja` antiga (receitaPorLoja, só datas) dentro do resultado.
+**Backend novo em relatorioEvento:** `mais_vendidos` (por PRODUTO, soma das
+variações de `por_produto`, ordem peças → valor → nome; fecha com a lista),
+`caixas` (com loja: caixas da loja abertos no período —
+`aberto_em <= fim AND (fechado_em IS NULL OR fechado_em >= inicio)` — com
+quem abriu/fechou, terminal_desc, troco), `loja`, `loja_id`.
+**Tela:** seção "🕐 Abertura e fechamento" no topo (só por loja), seção
+"🏆 Mais vendidos" nova em _SECOES (vale também na aba Evento, top 20).
+Excel: abas "Mais vendidos" e "Abertura e fechamento", linha Loja no Resumo;
+arquivo `loja-<nome>-data.xlsx`. Período geral De/até não recarrega a aba.
+**Teste:** `teste-relatorio-por-loja.mjs` (27, contas à mão: Camarote sáb 20h →
+dom 4h = 3 vendas, 7 peças, R$ 440; venda das 04:30 e da Principal fora;
+1º Boné 4 peças R$ 200, 2º Camisa 3 peças R$ 240; caixa 20:05 Ana → 03:40 Bia).
+Visual conferido no Chromium com o app.css real.
 
 ## v3.32.0 — EXPORTAR SÓ O QUE ESTÁ NA TELA DO ESTOQUE (2026-10-21)
 

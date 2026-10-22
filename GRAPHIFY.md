@@ -3,7 +3,7 @@
 > Mapa técnico gerado automaticamente por `tools/graphify.js`.
 > **Não edite à mão.** Regere com `node tools/graphify.js` a cada alteração estrutural.
 
-**Versão:** 3.32.0 · **Gerado em:** 2026-10-21
+**Versão:** 3.33.0 · **Gerado em:** 2026-10-22
 **Aplicação:** `br.com.mllopes.salgueirogestao` (Neutralino 6 + WebView2)
 **Cliente:** Boutique do Salgueiro · **Autor:** ML Lopes Design
 
@@ -95,7 +95,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `pontos.js` | 110 | 9 | ajustar, calcularGanho, calcularResgate, creditar, debitar, getConfig, historico, saldo, +1 |
 | `produtos.js` | 455 | 7 | excluirCategoria, excluirProduto, listarCategorias, listarProdutos, obterProduto, salvarCategoria, salvarProduto |
 | `rede.js` | 178 | 3 | SOMENTE_LOCAL, imprimir, iniciar, listarImpressoras, parar, preparar, status |
-| `relatorios.js` | 1623 | 22 | TAXAS_PADRAO, comprasAcompanhadas, consignadosMensal, curvaAbc, estoqueDetalhado, eventosVenda, maisVendidos, pecasParadas, +6 |
+| `relatorios.js` | 1657 | 22 | TAXAS_PADRAO, comprasAcompanhadas, consignadosMensal, curvaAbc, estoqueDetalhado, eventosVenda, maisVendidos, pecasParadas, +6 |
 | `trocas.js` | 428 | 3 | DESTINOS, registrar, registrarRapida |
 | `updater.js` | 50 | 1 | verificarAtualizacao |
 | `util.js` | 68 | 4 | auditar, codigoInterno, dvEan13, hashSenha, verificarSenha |
@@ -109,7 +109,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `ambiente.js` | 385 | 7 |
 | `db.js` | 743 | 6 |
 | `servidor-rede-embutido.js` | 844 | 27 |
-| `servidor.js` | 2841 | 16 |
+| `servidor.js` | 2857 | 16 |
 
 ## 6. Telas (`src/js`)
 
@@ -127,10 +127,10 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `impressao.js` | 179 | LIMITES, PADRAO, aplicarEstiloImpressao, cssCupomArquivo, cssCupomTela |
 | `mensagens.js` | 758 | abrirBalao, encerrarTelaMensagens, iniciarMensagens, pararMensagens, viewMensagens |
 | `neutralino.js` | 2 | — |
-| `novidades.js` | 1064 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
+| `novidades.js` | 1073 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
 | `pdv.js` | 2538 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
 | `ranking.js` | 360 | viewRanking |
-| `relatorios.js` | 1823 | viewRelatorios |
+| `relatorios.js` | 1899 | viewRelatorios |
 
 ---
 
