@@ -1,0 +1,7 @@
+{
+  "tag": "v3.33.1",
+  "titulo": "v3.33.1 — Recuperação automática passa a escolher a cópia MAIS NOVA",
+  "asset": "Portable\\resources.neu",
+  "notas": "tools\\publicar\\notas-v3.33.1.md",
+  "sha256": "554e72997672bc136ce473bf58591af0f3cd08e7ca4b102857e9b16d7b0f861c"
+}

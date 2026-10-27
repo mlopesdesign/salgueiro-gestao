@@ -3,6 +3,14 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.33.2',
+    data: '2026-10-27',
+    itens: [
+      '🛡️ PROTEÇÃO CONTRA DESLIGAMENTO ABRUPTO. Em 27/10 o banco da loja amanheceu completamente zerado: o Windows desligou de repente logo depois de uma gravação. Agora a versão anterior do banco fica guardada a cada gravação e é a primeira a ser restaurada se isso acontecer de novo; e o sistema confere cada gravação antes de colocar o banco novo no lugar.',
+      '⏱️ CÓPIA DE SEGURANÇA DE HORA EM HORA. Com o sistema aberto, sempre que houve venda ou alteração, uma cópia por hora (ficam as últimas 48). A cópia diária também passa a ser feita com o sistema aberto — antes só nascia ao abrir o programa, e quem deixava aberto por dias ficava sem cópia.',
+    ],
+  },
+  {
     versao: '3.33.1',
     data: '2026-10-27',
     itens: [

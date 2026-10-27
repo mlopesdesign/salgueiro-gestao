@@ -9,12 +9,12 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.33.1 |
+| **Versão atual** | 3.33.2 |
 | **Data do último build** | 2026-10-27 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.33.1 em 2026-10-27 ✓ (31 módulos core · 164 rotas · 37 tabelas) |
-| **5 lugares da versão** | os 5 em 3.33.1 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
+| **GRAPHIFY** | atualizado para 3.33.2 em 2026-10-27 ✓ (31 módulos core · 164 rotas · 37 tabelas) |
+| **5 lugares da versão** | os 5 em 3.33.2 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
 
 ---
 
@@ -25,6 +25,38 @@
 pelo Desktop Commander (`start_process`, powershell) → confiro no GitHub → aviso.
 O "dois cliques em PUBLICAR.bat" está REVOGADO. Detalhe: regra 3 do `REGRAS-CRITICAS.md`.
 **v3.30.0 publicada assim** (07/10/2026 00:24 UTC, 6.485.691 bytes conferidos).
+
+## v3.33.2 — BANCO DA LOJA AMANHECEU ZERADO (2026-10-27)
+
+| Campo | Valor |
+|---|---|
+| Tag | `v3.33.2` |
+| Título | v3.33.2 — Proteção contra desligamento abrupto: cópia anterior e cópias de hora em hora |
+| Asset | `Portable\\resources.neu` — 6.589.402 bytes — sha256 `acaa2a16ee7fd7b9d05ec265f99d2185f35f70d840f9b31f9ec26e8778b47faa` |
+| Backup | `backups\\pre-v3.33.2-2026-10-27\\` |
+
+**Fato:** `banco-com-problema-2026-10-27T21-14-03.db` (enviado pelo Marcio) =
+2.691.072 bytes, TODOS zero (657 páginas, nenhuma com dado, sem cabeçalho).
+Nada recuperável. Retrato de desligamento abrupto do Windows após gravação
+(NTFS registra o tamanho, conteúdo não chega ao disco). Hora/causa: confirmar
+pelos logs da loja (`APP aberto` sem `fechado` antes = caiu).
+Cópias na loja (tela Backup, 27/10): última boa = pré-atualização 23/10 13:52
+(2.228 vendas · 140 produtos · 570 clientes). Sem diárias de 24–26/10.
+Vendas de 23/10 13:52 a 27/10 PERDIDAS no banco, salvo se houver backup na
+nuvem ou Versões Anteriores do Windows (pedido ao Marcio).
+**Por que não havia cópia:** `salvarBackupDiario` só rodava no BOOT; a loja
+deixa o sistema aberto por dias. E a limpeza antiga apagava diários (3.33.1).
+
+**Correções:** `_escreverAtomico` confere o .tmp (cabeçalho "SQLite format 3"
++ tamanho, `_conferirCabecalho`) antes de publicar, e o banco anterior vira
+`salgueiro.db.anterior` (não é mais apagado). Boot: banco sem tabelas/dados →
+log `BANCO-ZERADO` se todo zero → 1ª opção `.anterior` (`lerBancoAnterior`),
+depois as cópias por data. `salvarBackupHora` (backups/salgueiro-hora-
+AAAA-MM-DDTHH-00-00.db, UTC, só se houve gravação, últimas 48) + diária no
+`setInterval` de 1 h (`_copiaLocal`, nunca de banco vazio). Retenção: 30
+diários, 48 de hora, 20 outros. Tela Backup: rótulo "⏱️ de hora em hora".
+**Teste:** `teste-banco-zerado.mjs` (17): zerado reconhecido, .anterior,
+gravação que sai zerada recusada com o bom no lugar, cópia de hora e limpeza.
 
 ## v3.33.1 — RECUPERAÇÃO RESTAUROU A CÓPIA DE AGOSTO (2026-10-27)
 

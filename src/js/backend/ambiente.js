@@ -152,6 +152,10 @@ async function _escreverAtomico(arquivo, bytes) {
 
   await Neutralino.filesystem.writeBinaryFile(tmp, ab);
 
+  // v3.33.2 — confere o que foi escrito ANTES de publicar: um .tmp que não
+  // começa com o cabeçalho do SQLite nunca vai para o lugar do banco.
+  await _conferirCabecalho(tmp, bytes.byteLength);
+
   // sobra de uma gravação anterior interrompida
   try { await Neutralino.filesystem.remove(old); } catch { /* não existe */ }
 
@@ -170,7 +174,68 @@ async function _escreverAtomico(arquivo, bytes) {
     throw e;
   }
 
-  if (encostou) { try { await Neutralino.filesystem.remove(old); } catch {} }
+  // v3.33.2 — o banco ANTERIOR não é mais apagado: vira salgueiro.db.anterior.
+  // Em 27/10 o salgueiro.db da loja amanheceu 100% ZERADO (2,6 MB de zeros —
+  // o Windows desligou de repente logo depois de uma gravação: o tamanho foi
+  // registrado, o conteúdo não). Com o .anterior guardado, a perda máxima
+  // nesse caso passa a ser a última gravação, não dias.
+  if (encostou) {
+    const ant = arquivo + '.anterior';
+    try { await Neutralino.filesystem.remove(ant); } catch { /* não existe */ }
+    try { await Neutralino.filesystem.move(old, ant); }
+    catch { try { await Neutralino.filesystem.remove(old); } catch {} }
+  }
+}
+
+const _CAB_SQLITE = 'SQLite format 3';
+export function temCabecalhoSqlite(bytes) {
+  if (!bytes || bytes.length < 16) return false;
+  for (let i = 0; i < 15; i++) if (bytes[i] !== _CAB_SQLITE.charCodeAt(i)) return false;
+  return bytes[15] === 0;
+}
+// Arquivo inteiro de zeros = o retrato do desligamento abrupto (v3.33.2).
+export function estaZerado(bytes) {
+  if (!bytes || !bytes.length) return false;
+  for (let i = 0; i < bytes.length; i += 4096) if (bytes[i] !== 0 || bytes[i + 100] !== 0) return false;
+  return bytes.every(x => x === 0);
+}
+async function _conferirCabecalho(caminho, esperado) {
+  let ini;
+  try { ini = new Uint8Array(await Neutralino.filesystem.readBinaryFile(caminho, { pos: 0, size: 16 })); }
+  catch { ini = new Uint8Array(await Neutralino.filesystem.readBinaryFile(caminho)).subarray(0, 16); }
+  let tam = esperado;
+  try { const st = await Neutralino.filesystem.getStats(caminho); tam = st.size; } catch { /* */ }
+  if (!temCabecalhoSqlite(ini) || tam !== esperado) {
+    throw new Error(`gravação conferida e recusada: ${caminho} (${tam} de ${esperado} bytes, cabeçalho ${temCabecalhoSqlite(ini) ? 'ok' : 'inválido'})`);
+  }
+}
+
+// Cópia de antes da última gravação (salgueiro.db.anterior), se existir.
+export async function lerBancoAnterior() {
+  try { return new Uint8Array(await Neutralino.filesystem.readBinaryFile((await arquivoBanco()) + '.anterior')); }
+  catch { return null; }
+}
+
+// Cópia de HORA EM HORA enquanto o sistema está aberto e houve gravação
+// (v3.33.2). Antes só havia a diária, e só na ABERTURA do sistema: com o
+// programa aberto por dias, não nascia cópia nenhuma — entre 23/10 e 27/10 a
+// loja ficou sem cópia de segurança. Mantém as últimas 48 (2 dias).
+export async function salvarBackupHora(bytes) {
+  if (!bytes || !bytes.length) return null;
+  const dir = `${await dirDados()}/backups`;
+  await _garantirDir(dir);
+  const hora = new Date().toISOString().slice(0, 13) + '-00-00';
+  const destino = `${dir}/salgueiro-hora-${hora}.db`;
+  await copiarBancoPara(destino, bytes);
+  await _conferirCabecalho(destino, bytes.length);
+  try {
+    const itens = (await Neutralino.filesystem.readDirectory(dir))
+      .filter(e => e.entry.endsWith('.db')).map(e => e.entry);
+    for (const antigo of backupsParaApagar(itens)) {
+      try { await Neutralino.filesystem.remove(`${dir}/${antigo}`); } catch {}
+    }
+  } catch { /* limpeza fica para a próxima */ }
+  return destino;
 }
 
 // Rede de segurança do boot: se o banco não estiver no lugar, reconstrói a
@@ -239,10 +304,14 @@ export function ordenarBackups(lista) {
 // (antes de atualizar, de restaurar...). Sempre as MAIS ANTIGAS de cada grupo.
 export function backupsParaApagar(nomes) {
   const diario = /^salgueiro-\d{4}-\d{2}-\d{2}\.db$/;
+  const porHora = /^salgueiro-hora-/;
   const velhosPrimeiro = (l) => [...l].sort((a, b) => dataDoBackup(a) - dataDoBackup(b) || a.localeCompare(b));
   const d = velhosPrimeiro(nomes.filter(n => diario.test(n)));
-  const o = velhosPrimeiro(nomes.filter(n => !diario.test(n)));
-  return [...d.slice(0, Math.max(0, d.length - 30)), ...o.slice(0, Math.max(0, o.length - 20))];
+  const h = velhosPrimeiro(nomes.filter(n => porHora.test(n)));
+  const o = velhosPrimeiro(nomes.filter(n => !diario.test(n) && !porHora.test(n)));
+  return [...d.slice(0, Math.max(0, d.length - 30)),
+          ...h.slice(0, Math.max(0, h.length - 48)),
+          ...o.slice(0, Math.max(0, o.length - 20))];
 }
 
 export async function salvarBackupDiario(bytes) {
@@ -433,7 +502,7 @@ export async function lerLogs(dia) {
 
 // ── App ──────────────────────────────────────────────────────────────────────
 export function versaoApp() {
-  try { return NL_APPVERSION; } catch { return '3.33.1'; }
+  try { return NL_APPVERSION; } catch { return '3.33.2'; }
 }
 
 export async function reiniciarApp() {

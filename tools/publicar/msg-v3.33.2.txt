@@ -1,0 +1,10 @@
+v3.33.2 — Proteção contra desligamento abrupto: cópia anterior e cópias de hora em hora
+
+- banco-com-problema da loja: 2.691.072 bytes todos zero (desligamento abrupto)
+- Gravação conferida (cabeçalho + tamanho) antes de publicar; anterior vira salgueiro.db.anterior
+- Boot recupera primeiro do .anterior; log BANCO-ZERADO
+- Cópia de hora em hora (48) e diária com o sistema aberto
+- teste-banco-zerado.mjs (17 asserções)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01UiSBBjrVtHruCRtEum4jQN

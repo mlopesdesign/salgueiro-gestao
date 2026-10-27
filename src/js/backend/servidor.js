@@ -42,6 +42,7 @@ let sessao = { usuario: null };
 let RECUPERACAO_BOOT = null;
 let _tamanhoBom = 0;            // tamanho do último banco gravado (trava de encolhimento, v3.33.1)
 let _permitirEncolher = false;  // zerar de fábrica / VACUUM: encolher é esperado
+let _gravouDesdeHora = false;   // houve gravação desde a última cópia de hora em hora (v3.33.2)
 
 const AVISO_FASE = (recurso) =>
   ({ ok: false, erro: `${recurso} será ativado em uma próxima atualização desta versão.` });
@@ -2563,6 +2564,24 @@ async function _iniciar() {
   const _radAtual = bytesExistentes ? await radiografar(bytesExistentes)
                                     : { tabelasOk: false, temDados: false, totalDados: 0 };
   if (bytesExistentes && (!_radAtual.tabelasOk || !_radAtual.temDados)) {
+    if (ambiente.estaZerado(bytesExistentes)) {
+      try { await ambiente.registrarLog('BANCO-ZERADO', `salgueiro.db com ${bytesExistentes.length} bytes, todos zero (desligamento abrupto depois de gravar)`); } catch { /* */ }
+    }
+    // v3.33.2 — 1ª opção: a cópia de antes da última gravação (salgueiro.db.anterior)
+    try {
+      const ant = await ambiente.lerBancoAnterior();
+      const ra = ant ? await radiografar(ant) : null;
+      if (ra && ra.tabelasOk && ra.temDados) {
+        const hora = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        await ambiente.copiarBancoPara(`${await ambiente.dirDados()}/banco-com-problema-${hora}.db`, bytesExistentes);
+        await ambiente.salvarBanco(ant);
+        bytesExistentes = ant;
+        RECUPERACAO_BOOT = { backup: 'cópia da gravação anterior (salgueiro.db.anterior)', vendas: ra.vendas, produtos: ra.produtos, data: Date.now() };
+        try { await ambiente.registrarLog('RECUPERACAO', `restaurado de salgueiro.db.anterior (${ra.vendas} vendas, ${ra.produtos} produtos)`); } catch { /* */ }
+      }
+    } catch (e) { console.error('[recuperação] .anterior:', e); }
+  }
+  if (bytesExistentes && !RECUPERACAO_BOOT && (!_radAtual.tabelasOk || !_radAtual.temDados)) {
     try {
       const { backups } = await ambiente.listarBackupsLocais(); // mais novo primeiro (pela DATA, v3.33.1)
       for (const b of backups) {
@@ -2614,6 +2633,7 @@ async function _iniciar() {
     await ambiente.salvarBanco(bytes);
     _tamanhoBom = bytes.length;
     _permitirEncolher = false;
+    _gravouDesdeHora = true;
   };
   db = await criarBanco({
     bytes: bytesExistentes,
@@ -2868,6 +2888,20 @@ async function _iniciar() {
     };
     setTimeout(_checkBackup, 5000);
     setInterval(_checkBackup, 3600000);
+    // v3.33.2 — cópias LOCAIS com o sistema aberto: a diária (antes só nascia
+    // na abertura do programa) e uma de hora em hora quando houve gravação.
+    const _copiaLocal = async () => {
+      try {
+        const bytes = db.exportar();
+        if (!(await radiografar(bytes)).temDados) return;   // nunca copia banco vazio
+        await ambiente.salvarBackupDiario(bytes);
+        if (_gravouDesdeHora) {
+          await ambiente.salvarBackupHora(bytes);
+          _gravouDesdeHora = false;
+        }
+      } catch (e) { try { await ambiente.registrarLog('BACKUP-LOCAL', `falhou: ${e && e.message ? e.message : e}`); } catch { /* */ } }
+    };
+    setInterval(_copiaLocal, 3600000);
   } catch (e) { console.error('[nuvem] preparo falhou:', e); }
 
   // Garante que nenhuma escrita pendente se perca ao fechar o sistema
