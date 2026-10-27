@@ -216,16 +216,24 @@ export async function lerBancoAnterior() {
   catch { return null; }
 }
 
-// Cópia de HORA EM HORA enquanto o sistema está aberto e houve gravação
-// (v3.33.2). Antes só havia a diária, e só na ABERTURA do sistema: com o
-// programa aberto por dias, não nascia cópia nenhuma — entre 23/10 e 27/10 a
-// loja ficou sem cópia de segurança. Mantém as últimas 48 (2 dias).
-export async function salvarBackupHora(bytes) {
+// CÓPIAS AUTOMÁTICAS com o sistema aberto (v3.34.0; antes, de hora em hora
+// na v3.33.2). Nascem por GATILHO, sempre que houve alteração desde a última:
+//   30min        — a cada 30 minutos
+//   ocioso       — 5 minutos depois da última gravação (pega o fim do
+//                  movimento: PDV esquecido aberto e computador ligado)
+//   abriu-caixa / fechou-caixa / abertura / ao-fechar
+// Nome: salgueiro-auto-AAAA-MM-DDTHH-MM-SS-<motivo>.db (hora UTC).
+// Ficam as últimas 96 (≈ 2 dias de movimento). Cada uma é conferida depois de
+// gravada (cabeçalho + tamanho) e nunca é regravada: o Windows tem tempo de
+// colocar no disco, o que não acontece com o banco em uso, reescrito a toda hora.
+export const RX_COPIA_AUTO = /^salgueiro-auto-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-(.+)\.db$/;
+export async function salvarCopiaAutomatica(bytes, motivo) {
   if (!bytes || !bytes.length) return null;
   const dir = `${await dirDados()}/backups`;
   await _garantirDir(dir);
-  const hora = new Date().toISOString().slice(0, 13) + '-00-00';
-  const destino = `${dir}/salgueiro-hora-${hora}.db`;
+  const ts = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+  const m = String(motivo || 'auto').replace(/[^a-z0-9-]/gi, '').toLowerCase() || 'auto';
+  const destino = `${dir}/salgueiro-auto-${ts}-${m}.db`;
   await copiarBancoPara(destino, bytes);
   await _conferirCabecalho(destino, bytes.length);
   try {
@@ -237,6 +245,8 @@ export async function salvarBackupHora(bytes) {
   } catch { /* limpeza fica para a próxima */ }
   return destino;
 }
+// compatibilidade (3.33.2)
+export async function salvarBackupHora(bytes) { return salvarCopiaAutomatica(bytes, 'hora'); }
 
 // Rede de segurança do boot: se o banco não estiver no lugar, reconstrói a
 // partir dos restos de uma gravação interrompida. Chamada por lerBanco().
@@ -304,13 +314,13 @@ export function ordenarBackups(lista) {
 // (antes de atualizar, de restaurar...). Sempre as MAIS ANTIGAS de cada grupo.
 export function backupsParaApagar(nomes) {
   const diario = /^salgueiro-\d{4}-\d{2}-\d{2}\.db$/;
-  const porHora = /^salgueiro-hora-/;
+  const porHora = /^salgueiro-(hora|auto)-/;
   const velhosPrimeiro = (l) => [...l].sort((a, b) => dataDoBackup(a) - dataDoBackup(b) || a.localeCompare(b));
   const d = velhosPrimeiro(nomes.filter(n => diario.test(n)));
   const h = velhosPrimeiro(nomes.filter(n => porHora.test(n)));
   const o = velhosPrimeiro(nomes.filter(n => !diario.test(n) && !porHora.test(n)));
   return [...d.slice(0, Math.max(0, d.length - 30)),
-          ...h.slice(0, Math.max(0, h.length - 48)),
+          ...h.slice(0, Math.max(0, h.length - 96)),
           ...o.slice(0, Math.max(0, o.length - 20))];
 }
 
@@ -502,7 +512,7 @@ export async function lerLogs(dia) {
 
 // ── App ──────────────────────────────────────────────────────────────────────
 export function versaoApp() {
-  try { return NL_APPVERSION; } catch { return '3.33.2'; }
+  try { return NL_APPVERSION; } catch { return '3.34.0'; }
 }
 
 export async function reiniciarApp() {

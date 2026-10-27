@@ -9,12 +9,12 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.33.2 |
+| **Versão atual** | 3.34.0 |
 | **Data do último build** | 2026-10-27 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.33.2 em 2026-10-27 ✓ (31 módulos core · 164 rotas · 37 tabelas) |
-| **5 lugares da versão** | os 5 em 3.33.2 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
+| **GRAPHIFY** | atualizado para 3.34.0 em 2026-10-27 ✓ (32 módulos core · 167 rotas · 37 tabelas) |
+| **5 lugares da versão** | os 5 em 3.34.0 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
 
 ---
 
@@ -25,6 +25,38 @@
 pelo Desktop Commander (`start_process`, powershell) → confiro no GitHub → aviso.
 O "dois cliques em PUBLICAR.bat" está REVOGADO. Detalhe: regra 3 do `REGRAS-CRITICAS.md`.
 **v3.30.0 publicada assim** (07/10/2026 00:24 UTC, 6.485.691 bytes conferidos).
+
+## v3.34.0 — RECUPERAR VENDAS PELA CONTAGEM · CÓPIAS POR GATILHO (2026-10-27)
+
+| Campo | Valor |
+|---|---|
+| Tag | `v3.34.0` |
+| Título | v3.34.0 — Recuperar vendas pela contagem do estoque · Cópias automáticas a cada 30 min |
+| Asset | `Portable\\resources.neu` — 6.624.544 bytes — sha256 `da1209dad88f380141f77fb02f0e83e50bdd3599ef4d6a3dd26a3c362b3a61a5` |
+| Backup | `backups\\pre-v3.34.0-2026-10-27\\` |
+
+**Pedido:** recuperar as vendas de 23–25/10 (loja voltou para a cópia de 23/10
+13:52) — separadas em evento de 23/10 e evento de 24/10 20h → 25/10 03h12; e
+"gatilhos de segurança": cópia de 30 em 30 min com o PDV aberto.
+**Recuperação (`core/recuperar-vendas.js`, aba Estoque → 🧯 Recuperar vendas,
+só admin):** `posicao` (saldo do local da loja), `previa` (contagem
+{variacao: contado}; diferença > 0 = saiu; `lancar` opcional divide entre
+eventos; sobras listadas à parte), `confirmar` → caixa próprio
+(terminal `RECUPERACAO-<ts>`) + `pdv.registrarVenda` (estoque, consignação,
+tudo pelo caminho normal) → datas trocadas para a escolhida (vendas,
+consignacoes, movimentos_estoque) e caixa fechado na mesma data; obs
+"VENDA RECUPERADA pela contagem de estoque — <descrição>"; pagamentos têm de
+fechar com o total. Contagem em `localStorage salg_contagem_recup_<loja>`.
+**Cópias:** `ambiente.salvarCopiaAutomatica(bytes, motivo)` →
+`backups/salgueiro-auto-<UTC>-<motivo>.db`, conferida, últimas 96.
+`servidor.copiaSeguranca(motivo, forcar)`: só se mudou (`_mudouDesdeCopia`),
+nunca banco vazio, uma por vez, resumo em `localStorage salg_info_copias`
+(tela de Backup não abre o arquivo). Gatilhos: 30 min, ocioso 5 min após a
+última gravação, abriu/fechou caixa, recuperação, abertura (20 s), ao fechar.
+**Testes:** `teste-recuperar-vendas.mjs` (18, contas à mão: 2 eventos R$ 600 +
+R$ 640, estoque final = contagem, relatório por evento separado),
+`teste-banco-zerado.mjs` (17, atualizado). Visual da aba e do lançamento
+conferido no Chromium.
 
 ## v3.33.2 — BANCO DA LOJA AMANHECEU ZERADO (2026-10-27)
 

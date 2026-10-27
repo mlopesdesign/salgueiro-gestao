@@ -1,0 +1,7 @@
+{
+  "tag": "v3.33.2",
+  "titulo": "v3.33.2 — Proteção contra desligamento abrupto: cópia anterior e cópias de hora em hora",
+  "asset": "Portable\\resources.neu",
+  "notas": "tools\\publicar\\notas-v3.33.2.md",
+  "sha256": "acaa2a16ee7fd7b9d05ec265f99d2185f35f70d840f9b31f9ec26e8778b47faa"
+}

@@ -3,6 +3,14 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.34.0',
+    data: '2026-10-27',
+    itens: [
+      '🧯 RECUPERAR VENDAS PELA CONTAGEM DO ESTOQUE (Estoque → Recuperar vendas). Conte as peças da loja bipando ou digitando: o sistema mostra o que saiu (o que tinha menos o que está na loja), por produto e por fornecedor. Depois lança como venda na data e hora que você escolher, com as formas de pagamento do extrato da maquininha. Para separar por evento, lance uma parte e depois o restante com outra data. Entra no estoque, nos consignados e nos relatórios, marcada como venda recuperada.',
+      '⏱️ CÓPIAS DE SEGURANÇA AUTOMÁTICAS. Com o sistema aberto e havendo movimento: a cada 30 minutos, 5 minutos depois da última venda (pega o fim do movimento mesmo com o PDV esquecido aberto), ao abrir e fechar o caixa e ao abrir e fechar o sistema. Ficam as últimas 96, e a tela de Backup mostra o motivo de cada uma.',
+    ],
+  },
+  {
     versao: '3.33.2',
     data: '2026-10-27',
     itens: [

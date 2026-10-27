@@ -3,7 +3,7 @@
 > Mapa técnico gerado automaticamente por `tools/graphify.js`.
 > **Não edite à mão.** Regere com `node tools/graphify.js` a cada alteração estrutural.
 
-**Versão:** 3.33.2 · **Gerado em:** 2026-10-27
+**Versão:** 3.34.0 · **Gerado em:** 2026-10-27
 **Aplicação:** `br.com.mllopes.salgueirogestao` (Neutralino 6 + WebView2)
 **Cliente:** Boutique do Salgueiro · **Autor:** ML Lopes Design
 
@@ -94,6 +94,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `permissoes.js` | 94 | 3 | CATALOGO, DEFAULTS, TODAS, efetivas, normalizar, pode |
 | `pontos.js` | 110 | 9 | ajustar, calcularGanho, calcularResgate, creditar, debitar, getConfig, historico, saldo, +1 |
 | `produtos.js` | 455 | 7 | excluirCategoria, excluirProduto, listarCategorias, listarProdutos, obterProduto, salvarCategoria, salvarProduto |
+| `recuperar-vendas.js` | 132 | 3 | OBS_RECUPERADA, confirmar, posicao, previa |
 | `rede.js` | 178 | 3 | SOMENTE_LOCAL, imprimir, iniciar, listarImpressoras, parar, preparar, status |
 | `relatorios.js` | 1657 | 22 | TAXAS_PADRAO, comprasAcompanhadas, consignadosMensal, curvaAbc, estoqueDetalhado, eventosVenda, maisVendidos, pecasParadas, +6 |
 | `trocas.js` | 428 | 3 | DESTINOS, registrar, registrarRapida |
@@ -106,10 +107,10 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 
 | Arquivo | Linhas | Funções |
 |---|---|---|
-| `ambiente.js` | 520 | 8 |
+| `ambiente.js` | 530 | 8 |
 | `db.js` | 743 | 6 |
 | `servidor-rede-embutido.js` | 844 | 27 |
-| `servidor.js` | 2934 | 16 |
+| `servidor.js` | 2984 | 17 |
 
 ## 6. Telas (`src/js`)
 
@@ -119,22 +120,22 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `catalogo.js` | 262 | viewCatalogo |
 | `clientes.js` | 538 | viewClientes |
 | `compras.js` | 229 | viewCompras |
-| `configuracoes.js` | 1959 | viewConfiguracoes |
-| `estoque.js` | 991 | abrirEtiquetas, ean13Svg, formMovimento, formMovimentoProduto, viewEstoque |
+| `configuracoes.js` | 1963 | viewConfiguracoes |
+| `estoque.js` | 1192 | abrirEtiquetas, ean13Svg, formMovimento, formMovimentoProduto, viewEstoque |
 | `estoques.js` | 989 | viewEstoques |
 | `etiquetas.js` | 169 | abrirEtiquetasLote, imprimirFolhaEtiquetas |
 | `financeiro.js` | 261 | viewFinanceiro |
 | `impressao.js` | 179 | LIMITES, PADRAO, aplicarEstiloImpressao, cssCupomArquivo, cssCupomTela |
 | `mensagens.js` | 758 | abrirBalao, encerrarTelaMensagens, iniciarMensagens, pararMensagens, viewMensagens |
 | `neutralino.js` | 2 | — |
-| `novidades.js` | 1090 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
+| `novidades.js` | 1098 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
 | `pdv.js` | 2538 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
 | `ranking.js` | 360 | viewRanking |
 | `relatorios.js` | 1899 | viewRelatorios |
 
 ---
 
-## 7. Rotas da API (164)
+## 7. Rotas da API (167)
 
 Toda comunicação tela ↔ backend passa por `api('canal:acao', payload)`.
 A coluna **Permissão** vem de `PERMISSAO_ROTA` em `servidor.js` — sem entrada ali,
@@ -408,6 +409,14 @@ a rota exige apenas sessão válida.
 | `produtos:obter` | `produtos.ver` | `{` |
 | `produtos:salvar` | `produtos.editar` | `{` |
 | `produtos:excluir` | `produtos.excluir` | `produtos.excluirProduto(db, p.id, sessao.usuario)` |
+
+### `recuperacao:*`
+
+| Canal | Permissão | Destino |
+|---|---|---|
+| `recuperacao:posicao` | `estoque.movimentar` | `recuperarVendas.posicao(db, p)` |
+| `recuperacao:previa` | `estoque.movimentar` | `recuperarVendas.previa(db, p)` |
+| `recuperacao:confirmar` | `estoque.movimentar` | `recuperarVendas.confirmar(db, p, sessao.usuario)` |
 
 ### `rede:*`
 

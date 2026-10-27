@@ -24,6 +24,7 @@ import * as pontos from './core/pontos.js';
 import * as consignacao from './core/consignacao.js';
 import * as licenca from './core/licenca.js';
 import * as lojas from './core/lojas.js';
+import * as recuperarVendas from './core/recuperar-vendas.js';
 import * as estoques from './core/estoques.js';
 import * as rede from './core/rede.js';
 import * as nuvem from './core/nuvem.js';
@@ -42,7 +43,47 @@ let sessao = { usuario: null };
 let RECUPERACAO_BOOT = null;
 let _tamanhoBom = 0;            // tamanho do último banco gravado (trava de encolhimento, v3.33.1)
 let _permitirEncolher = false;  // zerar de fábrica / VACUUM: encolher é esperado
-let _gravouDesdeHora = false;   // houve gravação desde a última cópia de hora em hora (v3.33.2)
+let _mudouDesdeCopia = false;   // houve gravação desde a última cópia automática (v3.34.0)
+let _timerOcioso = null;        // 5 min sem gravar → cópia 'ocioso'
+let _copiando = null;
+const OCIOSO_MS = 5 * 60000;
+// Canais que disparam cópia na hora (depois de dar certo)
+const GATILHOS_COPIA = { 'pdv:abrirCaixa': 'abriu-caixa', 'pdv:fecharCaixa': 'fechou-caixa', 'recuperacao:confirmar': 'recuperacao' };
+
+// Cópia de segurança automática (v3.34.0). Só copia se houve alteração desde a
+// última (ou `forcar`), nunca banco vazio, uma de cada vez. Guarda o resumo
+// (vendas/produtos/clientes) para a tela de Backup não precisar abrir o arquivo.
+async function copiaSeguranca(motivo, forcar) {
+  if (!db) return null;
+  if (!forcar && !_mudouDesdeCopia) return null;
+  if (_copiando) return _copiando;
+  _copiando = (async () => {
+    try {
+      const bytes = db.exportar();
+      const rx = await radiografar(bytes);
+      if (!rx.temDados || !rx.tabelasOk) return null;
+      _mudouDesdeCopia = false;
+      const destino = await ambiente.salvarCopiaAutomatica(bytes, motivo);
+      try {
+        const nome = String(destino).split('/').pop();
+        const info = JSON.parse(localStorage.getItem('salg_info_copias') || '{}') || {};
+        info[nome] = { vendas: rx.vendas, produtos: rx.produtos, clientes: rx.clientes,
+                       tabelasOk: rx.tabelasOk, temDados: rx.temDados, totalDados: rx.totalDados };
+        const nomes = Object.keys(info);
+        if (nomes.length > 150) for (const n of nomes.sort().slice(0, nomes.length - 150)) delete info[n];
+        localStorage.setItem('salg_info_copias', JSON.stringify(info));
+      } catch { /* sem resumo: a tela abre o arquivo */ }
+      await ambiente.salvarBackupDiario(bytes);
+      try { await ambiente.registrarLog('COPIA', `${motivo} · ${rx.vendas} vendas · ${Math.round(bytes.length / 1024)} KB`); } catch { /* */ }
+      return destino;
+    } catch (e) {
+      _mudouDesdeCopia = true;
+      try { await ambiente.registrarLog('BACKUP-LOCAL', `${motivo} falhou: ${e && e.message ? e.message : e}`); } catch { /* */ }
+      return null;
+    } finally { _copiando = null; }
+  })();
+  return _copiando;
+}
 
 const AVISO_FASE = (recurso) =>
   ({ ok: false, erro: `${recurso} será ativado em uma próxima atualização desta versão.` });
@@ -305,10 +346,13 @@ const rotas = {
     let memo = {};
     try { memo = JSON.parse(localStorage.getItem(CHAVE) || '{}') || {}; } catch { memo = {}; }
     const novoMemo = {};
+    let infoCopias = {};
+    try { infoCopias = JSON.parse(localStorage.getItem('salg_info_copias') || '{}') || {}; } catch { infoCopias = {}; }
     const backups = [];
     for (const b of r.backups) {
       const assinatura = `${b.tamanho}|${b.quando}`;
       let info = memo[b.nome] && memo[b.nome].a === assinatura ? memo[b.nome].i : null;
+      if (!info && infoCopias[b.nome]) info = infoCopias[b.nome];   // cópia automática: resumo já guardado (v3.34.0)
       if (!info) {
         try {
           const rx = await radiografar(await ambiente.lerBackupLocal(b.nome));
@@ -867,6 +911,10 @@ const rotas = {
   'estoques:variacoesNoLocal': (p) => estoques.variacoesNoLocal(db, p || {}),
   'estoques:porVariacao': (p) => ({ ok: true, locais: estoques.porVariacao(db, p.variacao_id) }),
   'estoques:mapaLocais': () => ({ ok: true, ...estoques.mapaLocais(db) }),
+  // Recuperar vendas perdidas pela contagem do estoque (v3.34.0)
+  'recuperacao:posicao': (p) => recuperarVendas.posicao(db, p),
+  'recuperacao:previa': (p) => recuperarVendas.previa(db, p),
+  'recuperacao:confirmar': (p) => recuperarVendas.confirmar(db, p, sessao.usuario),
   'estoques:transferir': (p) => estoques.transferir(db, p || {}, sessao.usuario),
   'estoques:transferirTudo': (p) => estoques.transferirTudo(db, p || {}, sessao.usuario),
   // Zera o SALDO de um estoque ou de todos. Produtos continuam cadastrados.
@@ -2293,6 +2341,7 @@ function _consumirTokenDesconto(token) {
 // (pdv.registrarVenda → estoques.aplicar), não por estas rotas. Incluí-las aqui
 // travaria o caixa.
 const ROTAS_SO_ADMIN = new Set([
+  'recuperacao:posicao', 'recuperacao:previa', 'recuperacao:confirmar',   // v3.34.0
   'estoque:movimentar',      // entrada, saída manual e ajuste de inventário
   'estoques:salvar',         // criar/editar local de estoque
   'estoques:desativar',      // desativar local
@@ -2396,7 +2445,14 @@ async function processar(canal, payload, sess) {
     // As rotas SQL são síncronas → não há race condition neste override temporário.
     const _salvoUsuario = sessao.usuario;
     if (sess !== sessao) sessao.usuario = sess.usuario;
-    try { return await rota(payload || {}); }
+    try {
+      const _res = await rota(payload || {});
+      // gatilho de cópia: abrir e fechar caixa (v3.34.0)
+      if (GATILHOS_COPIA[canal] && _res && _res.ok !== false) {
+        setTimeout(() => { copiaSeguranca(GATILHOS_COPIA[canal], true); }, 1000);
+      }
+      return _res;
+    }
     finally { if (sess !== sessao) sessao.usuario = _salvoUsuario; }
   } catch (e) {
     console.error(`[api] ${canal}:`, e);
@@ -2468,6 +2524,7 @@ const PERM_ROTA = {
   'estoques:listar': 'estoque.ver', 'estoques:conteudo': 'estoque.ver',
   'estoques:porVariacao': 'estoque.ver',
   'estoques:mapaLocais': 'estoque.ver',
+  'recuperacao:posicao': 'estoque.movimentar', 'recuperacao:previa': 'estoque.movimentar', 'recuperacao:confirmar': 'estoque.movimentar',
   'estoques:variacoesNoLocal': 'estoque.ver', 'estoques:transferencias': 'estoque.ver',
   'estoques:romaneio': 'estoque.ver', 'estoques:conteudoXlsx': 'estoque.ver',
   'estoques:romaneio-pdf': 'estoque.ver', 'estoques:relatorio-transferencias-pdf': 'estoque.ver',
@@ -2633,7 +2690,10 @@ async function _iniciar() {
     await ambiente.salvarBanco(bytes);
     _tamanhoBom = bytes.length;
     _permitirEncolher = false;
-    _gravouDesdeHora = true;
+    _mudouDesdeCopia = true;
+    // gatilho "ocioso": 5 min depois da última gravação, copia (v3.34.0)
+    if (_timerOcioso) clearTimeout(_timerOcioso);
+    _timerOcioso = setTimeout(() => { copiaSeguranca('ocioso'); }, OCIOSO_MS);
   };
   db = await criarBanco({
     bytes: bytesExistentes,
@@ -2888,20 +2948,9 @@ async function _iniciar() {
     };
     setTimeout(_checkBackup, 5000);
     setInterval(_checkBackup, 3600000);
-    // v3.33.2 — cópias LOCAIS com o sistema aberto: a diária (antes só nascia
-    // na abertura do programa) e uma de hora em hora quando houve gravação.
-    const _copiaLocal = async () => {
-      try {
-        const bytes = db.exportar();
-        if (!(await radiografar(bytes)).temDados) return;   // nunca copia banco vazio
-        await ambiente.salvarBackupDiario(bytes);
-        if (_gravouDesdeHora) {
-          await ambiente.salvarBackupHora(bytes);
-          _gravouDesdeHora = false;
-        }
-      } catch (e) { try { await ambiente.registrarLog('BACKUP-LOCAL', `falhou: ${e && e.message ? e.message : e}`); } catch { /* */ } }
-    };
-    setInterval(_copiaLocal, 3600000);
+    // v3.34.0 — cópias automáticas por GATILHO (ver ambiente.salvarCopiaAutomatica)
+    setInterval(() => { copiaSeguranca('30min'); }, 30 * 60000);
+    setTimeout(() => { copiaSeguranca('abertura', true); }, 20000);
   } catch (e) { console.error('[nuvem] preparo falhou:', e); }
 
   // Garante que nenhuma escrita pendente se perca ao fechar o sistema
@@ -2909,6 +2958,7 @@ async function _iniciar() {
   window.__fecharComSalvamento = async () => {
     try { await ambiente.registrarLog('APP', 'fechado pelo usuário (X / Alt+F4)'); } catch (_) {}
     try { await db.salvarAgora(); } catch (_) {}
+    try { await copiaSeguranca('ao-fechar'); } catch (_) {}   // v3.34.0
     await ambiente.sairApp();
   };
 }

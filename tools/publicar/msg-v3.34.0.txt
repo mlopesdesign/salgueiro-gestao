@@ -1,0 +1,8 @@
+v3.34.0 — Recuperar vendas pela contagem do estoque · Cópias automáticas a cada 30 min
+
+- core/recuperar-vendas.js + aba Estoque → Recuperar vendas (contagem, prévia, lançamento datado por evento)
+- Cópias automáticas por gatilho: 30 min, 5 min após a última venda, abrir/fechar caixa, abrir/fechar sistema
+- teste-recuperar-vendas.mjs (18), teste-banco-zerado.mjs atualizado
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01UiSBBjrVtHruCRtEum4jQN

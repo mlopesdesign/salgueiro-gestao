@@ -1105,6 +1105,10 @@ async function renderListaBackups(painel) {
   const rotulo = (n) =>
     /^banco-com-problema/.test(n) ? '<span style="color:var(--vermelho)">🧯 guardado na recuperação</span>'
     : /^salgueiro-hora-/.test(n) ? '<span style="color:var(--texto-suave)">⏱️ de hora em hora</span>'
+    : /^salgueiro-auto-/.test(n) ? `<span style="color:var(--texto-suave)">⏱️ automática · ${({
+        '30min': 'a cada 30 min', 'ocioso': 'depois da última venda', 'abriu-caixa': 'ao abrir o caixa',
+        'fechou-caixa': 'ao fechar o caixa', 'ao-fechar': 'ao fechar o sistema', 'abertura': 'ao abrir o sistema'
+      })[(n.match(/T\d{2}-\d{2}-\d{2}-(.+)\.db$/) || [])[1]] || 'automática'}</span>`
     : /^pre-restauracao/.test(n) ? '<span style="color:var(--texto-suave)">↩️ antes de restaurar</span>'
     : /^backup-antes-reset/.test(n) ? '<span style="color:var(--texto-suave)">🧹 antes de zerar</span>'
     : /pre-atualizacao/.test(n) ? '<span style="color:var(--dourado)">🛡️ antes de atualizar</span>'

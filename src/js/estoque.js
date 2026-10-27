@@ -220,11 +220,12 @@ export async function viewEstoque(alvo) {
         <button data-aba="mov" class="ativa">Movimentar</button>
         <button data-aba="kardex">Histórico (Kardex)</button>
         <button data-aba="repo">Reposição</button>
+        ${ehAdmin() ? '<button data-aba="recup">🧯 Recuperar vendas</button>' : ''}
       </div>
       <div id="aba-conteudo"></div>
     </div>`);
   const corpo = tela.querySelector('#aba-conteudo');
-  const abas = { mov: abaMovimentar, kardex: abaKardex, repo: abaReposicao };
+  const abas = { mov: abaMovimentar, kardex: abaKardex, repo: abaReposicao, recup: abaRecuperar };
   tela.querySelectorAll('.abas button').forEach(b => {
     b.onclick = () => {
       tela.querySelectorAll('.abas button').forEach(x => x.classList.toggle('ativa', x === b));
@@ -987,4 +988,204 @@ function imprimirEtiquetas(produto, variacoes, qtds, mostrar = { preco: false, r
   api('config:imprimir', { tipo: 'etiqueta' }).then(r => {
     if (!r.ok) imprimirFolhaEtiquetas(folha);
   }).catch(() => imprimirFolhaEtiquetas(folha));
+}
+
+// ---------- Aba: Recuperar vendas pela contagem (v3.34.0) ----------
+// Depois da perda de 23–25/10: a loja conta o estoque, o sistema mostra o que
+// saiu e lança como venda datada (um lançamento por evento). A contagem fica
+// guardada neste computador até ser concluída — dá para contar aos poucos.
+// Regras no backend: core/recuperar-vendas.js.
+async function abaRecuperar(corpo) {
+  const CH = (lojaId) => `salg_contagem_recup_${lojaId}`;
+  const ler = (lojaId) => { try { return JSON.parse(localStorage.getItem(CH(lojaId)) || '{}') || {}; } catch { return {}; } };
+  const gravar = (lojaId, c) => { try { localStorage.setItem(CH(lojaId), JSON.stringify(c)); } catch { /* */ } };
+  const painel = el(`
+    <div class="painel">
+      <div style="padding:12px 14px 4px;font-size:13px;color:var(--texto-suave)">
+        <b style="color:var(--texto)">🧯 Recuperar vendas pela contagem do estoque.</b>
+        Conte as peças da loja (bipe o código ou digite a quantidade). A diferença entre o que o sistema
+        tem e o que você contou é o que saiu — e vira venda na data que você escolher. Só entra o que for contado.
+        A contagem fica guardada neste computador até você lançar.
+      </div>
+      <div class="barra" style="flex-wrap:wrap;gap:8px">
+        <select id="rc-loja"></select>
+        <input id="rc-bipe" type="text" placeholder="Bipe o código ou digite nome/referência…" style="flex:1;min-width:240px">
+        <select id="rc-tipo">
+          <option value="todos">Consignados e próprios</option>
+          <option value="cons">🤝 Somente consignados</option>
+          <option value="proprios">🏪 Somente da loja</option>
+        </select>
+        <select id="rc-forn" style="display:none"><option value="">Todos os fornecedores</option></select>
+      </div>
+      <div class="barra" style="gap:8px;flex-wrap:wrap">
+        <span id="rc-info" style="font-size:13px"></span>
+        <button class="btn btn-suave" id="rc-zerar" style="margin-left:auto">Não contados da lista = 0</button>
+        <button class="btn btn-suave" id="rc-limpar">Limpar contagem</button>
+        <button class="btn btn-primario" id="rc-lancar">Ver lançamento →</button>
+      </div>
+      <div class="tab-scroll"><table>
+        <thead><tr><th>Produto / variação</th><th>Código</th><th class="num" style="width:90px">No sistema</th>
+          <th class="num" style="width:110px">Contado</th><th class="num" style="width:80px">Saiu</th></tr></thead>
+        <tbody id="rc-corpo"><tr><td colspan="5" class="vazio">Carregando…</td></tr></tbody>
+      </table></div>
+    </div>`);
+  corpo.appendChild(painel);
+  const q = (s) => painel.querySelector(s);
+  const selLoja = q('#rc-loja'), bipe = q('#rc-bipe'), fTipo = q('#rc-tipo'), fForn = q('#rc-forn');
+  let pos = null, cont = {};
+
+  const rl = await api('lojas:listar');
+  const lojas = (rl && rl.ok ? rl.lojas : []).filter(l => l.ativo !== 0);
+  selLoja.innerHTML = lojas.map(l => `<option value="${l.id}">${esc(l.nome)}</option>`).join('');
+
+  const filtro = () => ({ tipo: fTipo.value, fornecedor_id: fTipo.value === 'cons' ? Number(fForn.value) || 0 : 0, termo: bipe.value.trim() });
+  const visiveis = () => filtrarEstoque(pos ? pos.itens : [], filtro());
+
+  function resumo() {
+    let pecas = 0, valor = 0, n = 0;
+    for (const v of pos.itens) {
+      if (!(String(v.variacao_id) in cont)) continue;
+      n++;
+      const d = v.sistema - (Number(cont[v.variacao_id]) || 0);
+      if (d > 0) { pecas += d; valor += d * v.preco_venda; }
+    }
+    q('#rc-info').innerHTML = `Contados: <b>${n}</b> de ${pos.itens.length} · saíram até agora: <b>${pecas}</b> peça(s) · <b>${moeda(valor)}</b>`;
+  }
+  function desenhar() {
+    const lista = visiveis();
+    const tb = q('#rc-corpo');
+    if (!lista.length) { tb.innerHTML = '<tr><td colspan="5" class="vazio">Nada nesta lista.</td></tr>'; resumo(); return; }
+    tb.innerHTML = lista.slice(0, 400).map(v => {
+      const tem = String(v.variacao_id) in cont;
+      const c = tem ? Number(cont[v.variacao_id]) : '';
+      const d = tem ? v.sistema - c : null;
+      const forn = v.consignado ? ` <small style="color:var(--dourado)">🤝 ${esc(v.fornecedor || 'consignado')}</small>` : '';
+      return `<tr data-v="${v.variacao_id}"${tem ? ' style="background:var(--fundo-suave,#f7f7f8)"' : ''}>
+        <td><b>${esc(v.produto)}</b>${forn}<br><small style="color:var(--texto-suave)">${esc([v.cor, v.tamanho].filter(x => x && x !== 'Única' && x !== 'U').join(' · ') || '—')}</small></td>
+        <td style="font-family:Consolas,monospace;font-size:11.5px">${esc(v.codigo_barras || '')}</td>
+        <td class="num">${v.sistema}</td>
+        <td class="num"><input type="number" min="0" step="1" class="rc-q" value="${c}" style="width:80px;text-align:right"></td>
+        <td class="num">${d == null ? '' : d > 0 ? `<b style="color:var(--vermelho)">${d}</b>` : d < 0 ? `<span style="color:var(--verde)" title="contou mais do que o sistema">+${-d}</span>` : '0'}</td>
+      </tr>`;
+    }).join('') + (lista.length > 400 ? `<tr><td colspan="5" class="vazio">Mostrando 400 de ${lista.length} — use a busca ou os filtros.</td></tr>` : '');
+    tb.querySelectorAll('.rc-q').forEach(inp => {
+      inp.addEventListener('wheel', e => e.preventDefault(), { passive: false });
+      inp.onchange = () => {
+        const vid = inp.closest('tr').dataset.v;
+        if (inp.value === '') delete cont[vid]; else cont[vid] = Math.max(0, Math.floor(Number(inp.value) || 0));
+        gravar(selLoja.value, cont); desenhar();
+      };
+    });
+    resumo();
+  }
+  function renderForn() {
+    const m = new Map();
+    for (const v of pos.itens) if (v.consignado && v.fornecedor_id) m.set(v.fornecedor_id, v.fornecedor || 'Sem nome');
+    fForn.innerHTML = '<option value="">Todos os fornecedores</option>' +
+      [...m.entries()].sort((a, b) => a[1].localeCompare(b[1])).map(([id, n]) => `<option value="${id}">${esc(n)}</option>`).join('');
+  }
+  async function carregar() {
+    const r = await api('recuperacao:posicao', { loja_id: Number(selLoja.value) });
+    if (!r.ok) { toast(r.erro, true); return; }
+    pos = r; cont = ler(selLoja.value); renderForn(); desenhar();
+  }
+
+  selLoja.onchange = carregar;
+  fTipo.onchange = () => { fForn.style.display = fTipo.value === 'cons' ? '' : 'none'; desenhar(); };
+  fForn.onchange = desenhar;
+  let deb;
+  bipe.addEventListener('input', () => { clearTimeout(deb); deb = setTimeout(desenhar, 250); });
+  bipe.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    const cod = bipe.value.trim();
+    const v = pos && pos.itens.find(x => x.codigo_barras && x.codigo_barras === cod);
+    if (v) {   // leitor de código: soma 1 na contagem da peça
+      cont[v.variacao_id] = (Number(cont[v.variacao_id]) || 0) + 1;
+      gravar(selLoja.value, cont);
+      toast(`+1 ${v.produto} ${[v.cor, v.tamanho].filter(Boolean).join(' ')} → ${cont[v.variacao_id]}`);
+      bipe.value = '';
+    }
+    desenhar();
+  });
+  q('#rc-zerar').onclick = () => {
+    let n = 0;
+    for (const v of visiveis()) if (!(String(v.variacao_id) in cont)) { cont[v.variacao_id] = 0; n++; }
+    gravar(selLoja.value, cont); desenhar(); toast(`${n} peça(s) da lista marcadas como 0 (não encontradas na loja).`);
+  };
+  q('#rc-limpar').onclick = () => {
+    if (!confirm('Apagar toda a contagem desta loja neste computador?')) return;
+    cont = {}; gravar(selLoja.value, cont); desenhar();
+  };
+  q('#rc-lancar').onclick = () => abrirLancamento();
+
+  async function abrirLancamento() {
+    if (!Object.keys(cont).length) { toast('Conte as peças antes de lançar.', true); return; }
+    const lojaId = Number(selLoja.value);
+    let lancar = null;
+    const pv0 = await api('recuperacao:previa', { loja_id: lojaId, contagem: cont });
+    if (!pv0.ok) { toast(pv0.erro, true); return; }
+    if (!pv0.itens.length) { toast('Nenhuma peça contada saiu do estoque — nada a lançar.', true); return; }
+    const linhas = pv0.itens.map(i => `<tr data-v="${i.variacao_id}">
+        <td>${esc(i.produto)}${i.consignado ? ` <small style="color:var(--dourado)">🤝 ${esc(i.fornecedor)}</small>` : ''}
+          <br><small style="color:var(--texto-suave)">${esc([i.cor, i.tamanho].filter(x => x && x !== 'Única' && x !== 'U').join(' · ') || '—')}</small></td>
+        <td class="num">${i.saiu}</td>
+        <td class="num"><input type="number" class="rl-q" min="0" max="${i.saiu}" value="${i.saiu}" style="width:70px;text-align:right"></td>
+        <td class="num">${moeda(i.preco_venda)}</td></tr>`).join('');
+    const formas = [['dinheiro', '💵 Dinheiro'], ['pix', 'Pix'], ['debito', 'Débito'], ['credito', 'Crédito']];
+    const m = modal('Lançar vendas recuperadas', `
+      <div style="width:min(860px,90vw)">
+        <p style="margin:0 0 10px;font-size:13px;color:var(--texto-suave)">Loja <b>${esc(pv0.loja.nome)}</b>.
+          Para separar por evento, lance primeiro só as peças do 1º evento (mude a coluna <b>Lançar</b>);
+          o que sobrar fica para o próximo lançamento, com a mesma contagem.</p>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+          <label style="display:flex;flex-direction:column;gap:4px;font-weight:600;font-size:13px">Data e hora das vendas
+            <input id="rl-data" type="datetime-local" required></label>
+          <label style="display:flex;flex-direction:column;gap:4px;font-weight:600;font-size:13px;flex:1">Descrição (aparece no relatório)
+            <input id="rl-desc" type="text" placeholder="ex.: evento de 23/10"></label>
+        </div>
+        <div style="max-height:38vh;overflow:auto;border:1px solid var(--borda);border-radius:8px">
+          <table><thead><tr><th>Peça</th><th class="num">Saiu</th><th class="num">Lançar</th><th class="num">Preço</th></tr></thead>
+          <tbody>${linhas}</tbody></table></div>
+        <div id="rl-tot" style="margin:10px 0;font-size:14px"></div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+          <b style="width:100%;font-size:13px">Como foi pago (do extrato da maquininha e do caixa):</b>
+          ${formas.map(([f, r]) => `<label style="display:flex;flex-direction:column;gap:4px;font-size:13px">${r}
+            <input type="number" class="rl-pg" data-f="${f}" min="0" step="0.01" style="width:120px;text-align:right"></label>`).join('')}
+          <span id="rl-falta" style="font-size:13px;font-weight:600"></span>
+        </div>
+      </div>`, async (mm, fechar) => {
+        const data = mm.querySelector('#rl-data').value;
+        if (!data) { toast('Informe a data e a hora das vendas.', true); return; }
+        const pagamentos = [...mm.querySelectorAll('.rl-pg')].map(i => ({ forma: i.dataset.f, valor: Number(i.value) || 0 })).filter(g => g.valor > 0);
+        const r = await api('recuperacao:confirmar', { loja_id: lojaId, contagem: cont, lancar, data_venda: data,
+          descricao: mm.querySelector('#rl-desc').value.trim(), pagamentos });
+        if (!r.ok) { toast(r.erro, true); return; }
+        fechar();
+        toast(`Lançado: venda #${r.venda_id} · ${r.total.pecas} peça(s) · ${moeda(r.total.valor)}.`);
+        await carregar();
+      }, 'Lançar vendas');
+    async function atualizar() {
+      lancar = {};
+      m.querySelectorAll('tr[data-v]').forEach(tr => { lancar[tr.dataset.v] = Number(tr.querySelector('.rl-q').value) || 0; });
+      const pv = await api('recuperacao:previa', { loja_id: lojaId, contagem: cont, lancar });
+      if (!pv.ok) return;
+      const fs = pv.por_fornecedor.map(f => `${esc(f.fornecedor)}: ${f.pecas} peça(s) · ${moeda(f.valor)}`).join(' · ');
+      m.querySelector('#rl-tot').innerHTML = `Este lançamento: <b>${pv.total.pecas}</b> peça(s) · <b>${moeda(pv.total.valor)}</b>
+        <br><small>Salgueiro ${pv.total.proprio.pecas} peça(s) · ${moeda(pv.total.proprio.valor)} — Consignados ${pv.total.consignado.pecas} peça(s) · ${moeda(pv.total.consignado.valor)}${fs ? ' (' + fs + ')' : ''}</small>`;
+      m.dataset.total = pv.total.valor;
+      falta();
+    }
+    function falta() {
+      const soma = [...m.querySelectorAll('.rl-pg')].reduce((a, i) => a + (Number(i.value) || 0), 0);
+      const d = Math.round((Number(m.dataset.total || 0) - soma) * 100) / 100;
+      m.querySelector('#rl-falta').innerHTML = Math.abs(d) < 0.01 ? '<span style="color:var(--verde)">✔ fechado</span>'
+        : d > 0 ? `Falta ${moeda(d)}` : `<span style="color:var(--vermelho)">Passou ${moeda(-d)}</span>`;
+    }
+    m.querySelectorAll('.rl-q').forEach(i => { i.addEventListener('wheel', e => e.preventDefault(), { passive: false }); i.onchange = atualizar; });
+    m.querySelectorAll('.rl-pg').forEach(i => { i.addEventListener('wheel', e => e.preventDefault(), { passive: false }); i.oninput = falta; });
+    await atualizar();
+  }
+
+  await carregar();
+  bipe.focus();
 }
