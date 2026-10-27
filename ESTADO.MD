@@ -44,6 +44,20 @@ Cópias na loja (tela Backup, 27/10): última boa = pré-atualização 23/10 13:
 (2.228 vendas · 140 produtos · 570 clientes). Sem diárias de 24–26/10.
 Vendas de 23/10 13:52 a 27/10 PERDIDAS no banco, salvo se houver backup na
 nuvem ou Versões Anteriores do Windows (pedido ao Marcio).
+**CAUSA PROVADA (diagnóstico da loja, 27/10 20:01, `tools/diagnostico-falha.ps1`):**
+Windows (Kernel-Power 41 + EventLog 6008): "o desligamento do sistema que ocorreu
+às 14:40:33 do dia 25/10/2026 não era esperado" — QUEDA DE ENERGIA/desligamento
+forçado. O PC só voltou a ligar 27/10 15:00. O log `app-2026-10-25.log` também
+terminou com 63 bytes zerados (a linha que estava sendo gravada na queda) — mesmo
+efeito do banco. Sistema aberto desde 24/10 18:42 (v3.33.0), último registro
+25/10 03:19. Mais 4 quedas no mesmo período: 06/10 22:18, 08/10 21:33,
+09/10 19:26, 18/10 04:00. **Recomendação: nobreak no computador principal.**
+Por que tudo zerado: a gravação troca o arquivo inteiro por um NOVO; na queda o
+NTFS já tinha registrado o arquivo novo, mas o conteúdo não chegou ao disco, e
+o .old (anterior) era apagado logo depois — agora vira `.anterior` (3.33.2).
+Pasta `backups` da loja: NENHUM diário entre 14/10 e 26/10 (limpeza antiga
+apagava os diários — 3.33.1), só pré-atualizações.
+Pendente: `backup:restaurar` levou 101–312 s na loja (log 27/10) — investigar.
 **Por que não havia cópia:** `salvarBackupDiario` só rodava no BOOT; a loja
 deixa o sistema aberto por dias. E a limpeza antiga apagava diários (3.33.1).
 
