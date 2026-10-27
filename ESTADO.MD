@@ -9,12 +9,12 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.34.0 |
+| **Versão atual** | 3.34.1 |
 | **Data do último build** | 2026-10-27 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.34.0 em 2026-10-27 ✓ (32 módulos core · 167 rotas · 37 tabelas) |
-| **5 lugares da versão** | os 5 em 3.34.0 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
+| **GRAPHIFY** | atualizado para 3.34.1 em 2026-10-27 ✓ (32 módulos core · 167 rotas · 37 tabelas) |
+| **5 lugares da versão** | os 5 em 3.34.1 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
 
 ---
 
@@ -25,6 +25,23 @@
 pelo Desktop Commander (`start_process`, powershell) → confiro no GitHub → aviso.
 O "dois cliques em PUBLICAR.bat" está REVOGADO. Detalhe: regra 3 do `REGRAS-CRITICAS.md`.
 **v3.30.0 publicada assim** (07/10/2026 00:24 UTC, 6.485.691 bytes conferidos).
+
+## v3.34.1 — RECUPERAÇÃO COM DESCONTO E TAXAS REAIS (2026-10-27)
+
+| Campo | Valor |
+|---|---|
+| Tag | `v3.34.1` |
+| Título | v3.34.1 — Vendas recuperadas com desconto e taxas reais |
+| Asset | `Portable\\resources.neu` — 6.626.823 bytes — sha256 `44dfe30bc9906fc7231e86242917b9c81d11d26272af720a6f24e3e2f01fb16b` |
+
+**Pedido:** "não sabemos se teve desconto, se teve taxa — vai ficar esquisito".
+`recuperar-vendas.confirmar`: recebido (soma das formas, do extrato) ≤ valor
+de tabela; diferença → `desconto` da venda (autorizado "<admin> (recuperação)"),
+recebido > tabela recusado, loja sem_desconto exige igual. Formas na tela:
+dinheiro, pix, débito, crédito à vista, crédito parcelado (parcelas 2 → taxa
+de parcelado). Taxas e repasse de consignado pelo caminho normal do
+registrarVenda/relatórios. Teste +6 (recebido 360 de 400: desconto 40,
+consignação 360, taxa > 0) → 24.
 
 ## v3.34.0 — RECUPERAR VENDAS PELA CONTAGEM · CÓPIAS POR GATILHO (2026-10-27)
 

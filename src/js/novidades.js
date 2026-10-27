@@ -3,6 +3,13 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.34.1',
+    data: '2026-10-27',
+    itens: [
+      '💳 VENDAS RECUPERADAS COM DESCONTO E TAXAS REAIS. No lançamento da recuperação, informe quanto foi recebido em cada forma (dinheiro, Pix, débito, crédito à vista ou parcelado) pelo extrato da maquininha. Se for menos que o valor das peças, a diferença entra como desconto; as taxas da maquininha e o repasse dos consignados saem certos, como numa venda normal.',
+    ],
+  },
+  {
     versao: '3.34.0',
     data: '2026-10-27',
     itens: [

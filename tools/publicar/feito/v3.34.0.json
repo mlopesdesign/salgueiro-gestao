@@ -1,0 +1,7 @@
+{
+  "tag": "v3.34.0",
+  "titulo": "v3.34.0 — Recuperar vendas pela contagem do estoque · Cópias automáticas a cada 30 min",
+  "asset": "Portable\\resources.neu",
+  "notas": "tools\\publicar\\notas-v3.34.0.md",
+  "sha256": "da1209dad88f380141f77fb02f0e83e50bdd3599ef4d6a3dd26a3c362b3a61a5"
+}

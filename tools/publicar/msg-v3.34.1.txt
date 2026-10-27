@@ -1,0 +1,8 @@
+v3.34.1 — Vendas recuperadas com desconto e taxas reais
+
+- Recuperação: recebido (extrato) menor que o valor das peças vira desconto da venda
+- Formas: dinheiro, Pix, débito, crédito à vista e parcelado (taxas certas)
+- Repasse de consignado sobre o valor com desconto; teste 24 asserções
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01UiSBBjrVtHruCRtEum4jQN

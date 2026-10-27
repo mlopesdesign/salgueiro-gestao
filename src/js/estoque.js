@@ -1131,7 +1131,7 @@ async function abaRecuperar(corpo) {
         <td class="num">${i.saiu}</td>
         <td class="num"><input type="number" class="rl-q" min="0" max="${i.saiu}" value="${i.saiu}" style="width:70px;text-align:right"></td>
         <td class="num">${moeda(i.preco_venda)}</td></tr>`).join('');
-    const formas = [['dinheiro', '💵 Dinheiro'], ['pix', 'Pix'], ['debito', 'Débito'], ['credito', 'Crédito']];
+    const formas = [['dinheiro', '💵 Dinheiro', 1], ['pix', 'Pix', 1], ['debito', 'Débito', 1], ['credito', 'Crédito à vista', 1], ['credito', 'Crédito parcelado', 2]];
     const m = modal('Lançar vendas recuperadas', `
       <div style="width:min(860px,90vw)">
         <p style="margin:0 0 10px;font-size:13px;color:var(--texto-suave)">Loja <b>${esc(pv0.loja.nome)}</b>.
@@ -1148,20 +1148,21 @@ async function abaRecuperar(corpo) {
           <tbody>${linhas}</tbody></table></div>
         <div id="rl-tot" style="margin:10px 0;font-size:14px"></div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
-          <b style="width:100%;font-size:13px">Como foi pago (do extrato da maquininha e do caixa):</b>
-          ${formas.map(([f, r]) => `<label style="display:flex;flex-direction:column;gap:4px;font-size:13px">${r}
-            <input type="number" class="rl-pg" data-f="${f}" min="0" step="0.01" style="width:120px;text-align:right"></label>`).join('')}
+          <b style="width:100%;font-size:13px">Quanto foi RECEBIDO em cada forma (extrato da maquininha e caixa).
+            <span style="font-weight:400;color:var(--texto-suave)">Se for menos que o valor das peças, a diferença entra como desconto; as taxas saem das formas, como numa venda normal.</span></b>
+          ${formas.map(([f, r, pa]) => `<label style="display:flex;flex-direction:column;gap:4px;font-size:13px">${r}
+            <input type="number" class="rl-pg" data-f="${f}" data-p="${pa}" min="0" step="0.01" style="width:120px;text-align:right"></label>`).join('')}
           <span id="rl-falta" style="font-size:13px;font-weight:600"></span>
         </div>
       </div>`, async (mm, fechar) => {
         const data = mm.querySelector('#rl-data').value;
         if (!data) { toast('Informe a data e a hora das vendas.', true); return; }
-        const pagamentos = [...mm.querySelectorAll('.rl-pg')].map(i => ({ forma: i.dataset.f, valor: Number(i.value) || 0 })).filter(g => g.valor > 0);
+        const pagamentos = [...mm.querySelectorAll('.rl-pg')].map(i => ({ forma: i.dataset.f, parcelas: Number(i.dataset.p) || 1, valor: Number(i.value) || 0 })).filter(g => g.valor > 0);
         const r = await api('recuperacao:confirmar', { loja_id: lojaId, contagem: cont, lancar, data_venda: data,
           descricao: mm.querySelector('#rl-desc').value.trim(), pagamentos });
         if (!r.ok) { toast(r.erro, true); return; }
         fechar();
-        toast(`Lançado: venda #${r.venda_id} · ${r.total.pecas} peça(s) · ${moeda(r.total.valor)}.`);
+        toast(`Lançado: venda #${r.venda_id} · ${r.total.pecas} peça(s) · recebido ${moeda(r.recebido)}${r.desconto > 0.009 ? ` · desconto ${moeda(r.desconto)}` : ''}.`);
         await carregar();
       }, 'Lançar vendas');
     async function atualizar() {
@@ -1178,8 +1179,10 @@ async function abaRecuperar(corpo) {
     function falta() {
       const soma = [...m.querySelectorAll('.rl-pg')].reduce((a, i) => a + (Number(i.value) || 0), 0);
       const d = Math.round((Number(m.dataset.total || 0) - soma) * 100) / 100;
-      m.querySelector('#rl-falta').innerHTML = Math.abs(d) < 0.01 ? '<span style="color:var(--verde)">✔ fechado</span>'
-        : d > 0 ? `Falta ${moeda(d)}` : `<span style="color:var(--vermelho)">Passou ${moeda(-d)}</span>`;
+      m.querySelector('#rl-falta').innerHTML = soma <= 0 ? `Valor das peças: ${moeda(Number(m.dataset.total || 0))}`
+        : Math.abs(d) < 0.01 ? '<span style="color:var(--verde)">✔ recebido = valor das peças (sem desconto)</span>'
+        : d > 0 ? `Recebido ${moeda(soma)} · <span style="color:var(--dourado)">desconto ${moeda(d)}</span>`
+        : `<span style="color:var(--vermelho)">Recebido passou o valor das peças em ${moeda(-d)}</span>`;
     }
     m.querySelectorAll('.rl-q').forEach(i => { i.addEventListener('wheel', e => e.preventDefault(), { passive: false }); i.onchange = atualizar; });
     m.querySelectorAll('.rl-pg').forEach(i => { i.addEventListener('wheel', e => e.preventDefault(), { passive: false }); i.oninput = falta; });
