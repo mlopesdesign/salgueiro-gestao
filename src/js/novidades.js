@@ -3,6 +3,15 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.33.1',
+    data: '2026-10-27',
+    itens: [
+      '🛑 RECUPERAÇÃO AUTOMÁTICA ESCOLHE A CÓPIA MAIS NOVA. As cópias de segurança eram ordenadas pelo nome do arquivo, e a de 13/08 (antes da 3.9.0) aparecia como a "mais nova": foi ela que o sistema restaurou sozinho. Agora a ordem é pela data, e a limpeza das cópias apaga sempre as mais velhas, não as diárias recentes.',
+      '📅 O AVISO DE RECUPERAÇÃO DIZ DE QUANDO É A CÓPIA. Se ela tiver 2 dias ou mais, o aviso manda parar de vender e chamar o suporte. Em Configurações → Backup aparecem também o banco guardado pela recuperação e as cópias de antes de cada restauração, com o que tem dentro de cada uma.',
+      '🛡️ O BANCO NUNCA MAIS É SOBRESCRITO POR UM VAZIO. Se o arquivo estiver preso por outro programa ao abrir, o sistema tenta de novo e, se não conseguir, fecha sem mexer em nada. E nenhuma gravação comum pode reduzir o banco à metade de uma vez: ela é recusada e fica registrada no Diagnóstico.',
+    ],
+  },
+  {
     versao: '3.33.0',
     data: '2026-10-22',
     itens: [

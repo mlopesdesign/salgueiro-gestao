@@ -65,7 +65,7 @@ window.__pedirFechar = () => {
 const $app = document.getElementById('app');
 let usuario = null;
 let categoriasCache = [];
-let APP_VERSION = '3.33.0'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
+let APP_VERSION = '3.33.1'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
 
 // API dupla: no aplicativo usa IPC (preload); num terminal em rede (navegador),
 // conversa com o servidor do computador principal via HTTP com token de sessão.
@@ -655,11 +655,19 @@ function telaPrincipal() {
         const det = (r.vendas != null)
           ? `\n\nForam recuperadas ${r.vendas} venda(s) e ${r.produtos} produto(s) da cópia "${r.backup}".`
           : `\n\nOrigem: ${r.backup}.`;
+        // v3.33.1 — diz DE QUANDO é a cópia; se for antiga, manda parar.
+        const dias = r.data ? Math.floor((Date.now() - r.data) / 86400000) : null;
+        const quando = r.data ? new Date(r.data).toLocaleString('pt-BR') : '';
+        const antiga = dias != null && dias >= 2;
         alert('⚠️ RECUPERAÇÃO AUTOMÁTICA\n\n'
           + 'O sistema detectou que o banco de dados estava incompleto ao abrir '
           + 'e restaurou sozinho a última cópia íntegra.' + det
-          + '\n\nConfira o movimento do último dia antes de continuar vendendo. '
-          + 'O arquivo com problema foi guardado na pasta de dados para análise.');
+          + (quando ? `\nA cópia é de ${quando}${dias != null ? ` (${dias} dia(s) atrás)` : ''}.` : '')
+          + (antiga
+            ? '\n\n🛑 ESSA CÓPIA É ANTIGA. NÃO VENDA AGORA: chame o suporte para '
+              + 'restaurar a cópia mais recente em Configurações → Backup.'
+            : '\n\nConfira o movimento do último dia antes de continuar vendendo.')
+          + '\nO arquivo com problema foi guardado na pasta de dados para análise.');
       }
     } catch {}
   }, 2500);

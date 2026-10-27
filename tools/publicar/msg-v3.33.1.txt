@@ -1,0 +1,11 @@
+v3.33.1 — Recuperação automática passa a escolher a cópia MAIS NOVA
+
+- Backups ordenados pela data do nome (antes pelo nome: pre-atualizacao-v3.9.0 de agosto vinha primeiro)
+- Limpeza: 30 diários + 20 outros, sempre os mais velhos (antes apagava os diários recentes)
+- lerBanco: arquivo preso não vira banco vazio (BANCO_ILEGIVEL, fecha sem gravar)
+- Trava de encolhimento nas gravações; recuperação registrada e aviso com a data da cópia
+- Tela Backup lista banco-com-problema e pre-restauracao
+- teste-backups-ordem.mjs (28 asserções)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01UiSBBjrVtHruCRtEum4jQN

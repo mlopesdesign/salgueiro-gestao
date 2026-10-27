@@ -100,13 +100,30 @@ export async function lerFotoArquivo(valor) {
 // ── Banco de dados (bytes) ───────────────────────────────────────────────────
 export let RECUPERADO_DE = null; // preenchido por lerBanco() quando houve resgate
 
+// v3.33.1 — "não existe" e "não consegui ler" são coisas DIFERENTES.
+// Antes, qualquer falha de leitura devolvia null = "primeira execução": o
+// sistema criava um banco VAZIO e gravava por cima do arquivo bom. Agora, se o
+// arquivo existe e tem tamanho mas a leitura falhou (arquivo preso por outro
+// processo, antivírus, sincronização), tenta de novo e, se não der, PARA —
+// nunca abre vazio por cima de dados.
 export async function lerBanco() {
   const arq = await arquivoBanco();
   try { RECUPERADO_DE = await _recuperarSeFaltando(arq); } catch { RECUPERADO_DE = null; }
-  try {
-    const buf = await Neutralino.filesystem.readBinaryFile(arq);
-    return new Uint8Array(buf);
-  } catch { return null; } // primeira execução
+  let tamanho = 0;
+  try { const st = await Neutralino.filesystem.getStats(arq); tamanho = (st && st.size) || 0; }
+  catch { return null; }                       // não existe: primeira execução de verdade
+  let ultimoErro = null;
+  for (let tentativa = 1; tentativa <= 6; tentativa++) {
+    try {
+      const buf = new Uint8Array(await Neutralino.filesystem.readBinaryFile(arq));
+      if (buf.length || !tamanho) return buf;
+      ultimoErro = new Error('leitura voltou vazia');
+    } catch (e) { ultimoErro = e; }
+    await new Promise(r => setTimeout(r, 500 * tentativa));
+  }
+  const err = new Error(`BANCO_ILEGIVEL: ${tamanho} bytes no disco e a leitura falhou (${ultimoErro && (ultimoErro.message || ultimoErro.code) || ultimoErro})`);
+  err.code = 'BANCO_ILEGIVEL';
+  throw err;
 }
 
 export async function salvarBanco(bytes) {
@@ -195,6 +212,39 @@ export async function escreverTextoDados(nome, texto) {
 }
 
 // ── Backups locais ───────────────────────────────────────────────────────────
+// v3.33.1 — DATA de um backup, tirada do nome (é o que o sistema escreveu):
+//   salgueiro-2026-10-27.db                                  (diário)
+//   salgueiro-pre-atualizacao-v3.33.0-2026-10-22T14-05-10.db (carimbado)
+// Antes a lista era ordenada pelo NOME, e "salgueiro-pre-atualizacao-v3.9.0"
+// vinha antes de tudo: letra > número e "9" > "33". A recuperação automática
+// escolhia a cópia de AGOSTO como "a mais nova", e a limpeza das 30 cópias
+// apagava justamente os diários e as cópias recentes. Agora é pela data.
+export function dataDoBackup(nome, quando) {
+  const m = String(nome || '').match(/(\d{4})-(\d{2})-(\d{2})(?:T(\d{2})-(\d{2})-(\d{2}))?/);
+  if (m) {
+    // carimbado = hora UTC (toISOString); diário = só o dia (conta como meio-dia)
+    const ms = m[4] != null
+      ? Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6])
+      : Date.UTC(+m[1], +m[2] - 1, +m[3], 12, 0, 0);
+    if (Number.isFinite(ms)) return ms;
+  }
+  const q = Number(quando) || 0;
+  return q > 1e12 ? q : q * 1000;   // getStats pode vir em s ou ms
+}
+export function ordenarBackups(lista) {
+  return [...lista].sort((a, b) => (dataDoBackup(b.nome, b.quando) - dataDoBackup(a.nome, a.quando))
+    || String(b.nome).localeCompare(String(a.nome)));
+}
+// Quais apagar para manter as últimas 30 diárias e as últimas 20 das outras
+// (antes de atualizar, de restaurar...). Sempre as MAIS ANTIGAS de cada grupo.
+export function backupsParaApagar(nomes) {
+  const diario = /^salgueiro-\d{4}-\d{2}-\d{2}\.db$/;
+  const velhosPrimeiro = (l) => [...l].sort((a, b) => dataDoBackup(a) - dataDoBackup(b) || a.localeCompare(b));
+  const d = velhosPrimeiro(nomes.filter(n => diario.test(n)));
+  const o = velhosPrimeiro(nomes.filter(n => !diario.test(n)));
+  return [...d.slice(0, Math.max(0, d.length - 30)), ...o.slice(0, Math.max(0, o.length - 20))];
+}
+
 export async function salvarBackupDiario(bytes) {
   try {
     const dir = `${await dirDados()}/backups`;
@@ -203,11 +253,10 @@ export async function salvarBackupDiario(bytes) {
     const destino = `${dir}/salgueiro-${hoje}.db`;
     try { await Neutralino.filesystem.getStats(destino); return; } catch { /* não existe ainda */ }
     if (bytes) await copiarBancoPara(destino, bytes);
-    // mantém as últimas 30 cópias
+    // mantém as últimas 30 diárias e as últimas 20 das outras — pela DATA (v3.33.1)
     const itens = (await Neutralino.filesystem.readDirectory(dir))
-      .filter(e => e.entry.endsWith('.db')).map(e => e.entry).sort();
-    while (itens.length > 30) {
-      const antigo = itens.shift();
+      .filter(e => e.entry.endsWith('.db')).map(e => e.entry);
+    for (const antigo of backupsParaApagar(itens)) {
       try { await Neutralino.filesystem.remove(`${dir}/${antigo}`); } catch {}
     }
   } catch (e) { console.error('[backup diário]', e); }
@@ -225,9 +274,16 @@ export async function salvarBackupCarimbado(bytes, rotulo) {
   return destino;
 }
 
+// Cópias de segurança que ficam na RAIZ da pasta de dados (não em backups/):
+// o banco guardado pela recuperação automática, o estado antes de cada
+// restauração e o de antes de zerar. Aparecem na lista de Backup (v3.33.1)
+// para que o banco "com problema" possa ser examinado e, se tiver os dados,
+// restaurado pela tela.
+export const RX_COPIA_RAIZ = /^(banco-com-problema|pre-restauracao|backup-antes-reset)-.+\.db$/;
+
 export async function lerBackupLocal(nome) {
   if (!nome || /[\\/]/.test(nome)) throw new Error('Nome de backup inválido.');
-  const dir = `${await dirDados()}/backups`;
+  const dir = RX_COPIA_RAIZ.test(nome) ? await dirDados() : `${await dirDados()}/backups`;
   return lerArquivoBinario(`${dir}/${nome}`);
 }
 
@@ -244,9 +300,19 @@ export async function listarBackupsLocais() {
         tamanho = st.size;
         quando = st.modifiedAt || st.createdAt || null;
       } catch {}
-      out.push({ nome: e.entry, tamanho, quando });
+      out.push({ nome: e.entry, tamanho, quando, data: dataDoBackup(e.entry, quando) });
     }
-    return { backups: out.sort((a, b) => b.nome.localeCompare(a.nome)), pasta: dir.replace(/\//g, '\\') };
+    try {
+      const raiz = await dirDados();
+      for (const e of await Neutralino.filesystem.readDirectory(raiz)) {
+        if (!RX_COPIA_RAIZ.test(e.entry)) continue;
+        let tamanho = 0, quando = null;
+        try { const st = await Neutralino.filesystem.getStats(`${raiz}/${e.entry}`); tamanho = st.size; quando = st.modifiedAt || st.createdAt || null; } catch {}
+        out.push({ nome: e.entry, tamanho, quando, data: dataDoBackup(e.entry, quando), raiz: true });
+      }
+    } catch { /* sem cópias na raiz */ }
+    // mais NOVO primeiro, pela data (v3.33.1 — antes era pelo nome)
+    return { backups: ordenarBackups(out), pasta: dir.replace(/\//g, '\\') };
   } catch { return { backups: [], pasta: dir.replace(/\//g, '\\') }; }
 }
 
@@ -367,7 +433,7 @@ export async function lerLogs(dia) {
 
 // ── App ──────────────────────────────────────────────────────────────────────
 export function versaoApp() {
-  try { return NL_APPVERSION; } catch { return '3.33.0'; }
+  try { return NL_APPVERSION; } catch { return '3.33.1'; }
 }
 
 export async function reiniciarApp() {

@@ -1093,12 +1093,20 @@ async function renderListaBackups(painel) {
   }
 
   const dataBonita = (b) => {
+    // v3.33.1: a data vem pronta do servidor (hora local; o nome guarda UTC)
+    if (b.data && /T\d{2}-\d{2}/.test(b.nome)) {
+      const d = new Date(b.data);
+      return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    }
     const m = b.nome.match(/(\d{4})-(\d{2})-(\d{2})(?:T(\d{2})-(\d{2}))?/);
     if (!m) return b.quando ? String(b.quando).slice(0, 16).replace('T', ' ') : '—';
     return `${m[3]}/${m[2]}/${m[1]}` + (m[4] ? ` ${m[4]}:${m[5]}` : '');
   };
   const rotulo = (n) =>
-    /pre-atualizacao/.test(n) ? '<span style="color:var(--dourado)">🛡️ antes de atualizar</span>'
+    /^banco-com-problema/.test(n) ? '<span style="color:var(--vermelho)">🧯 guardado na recuperação</span>'
+    : /^pre-restauracao/.test(n) ? '<span style="color:var(--texto-suave)">↩️ antes de restaurar</span>'
+    : /^backup-antes-reset/.test(n) ? '<span style="color:var(--texto-suave)">🧹 antes de zerar</span>'
+    : /pre-atualizacao/.test(n) ? '<span style="color:var(--dourado)">🛡️ antes de atualizar</span>'
     : /manual/.test(n)        ? '<span style="color:var(--texto-suave)">✋ manual</span>'
     : '<span style="color:var(--texto-suave)">🗓️ automático</span>';
 

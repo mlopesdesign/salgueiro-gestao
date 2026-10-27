@@ -9,12 +9,12 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.33.0 |
-| **Data do último build** | 2026-10-22 |
+| **Versão atual** | 3.33.1 |
+| **Data do último build** | 2026-10-27 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.33.0 em 2026-10-22 ✓ (31 módulos core · 164 rotas · 37 tabelas) |
-| **5 lugares da versão** | os 5 em 3.33.0 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
+| **GRAPHIFY** | atualizado para 3.33.1 em 2026-10-27 ✓ (31 módulos core · 164 rotas · 37 tabelas) |
+| **5 lugares da versão** | os 5 em 3.33.1 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
 
 ---
 
@@ -25,6 +25,44 @@
 pelo Desktop Commander (`start_process`, powershell) → confiro no GitHub → aviso.
 O "dois cliques em PUBLICAR.bat" está REVOGADO. Detalhe: regra 3 do `REGRAS-CRITICAS.md`.
 **v3.30.0 publicada assim** (07/10/2026 00:24 UTC, 6.485.691 bytes conferidos).
+
+## v3.33.1 — RECUPERAÇÃO RESTAUROU A CÓPIA DE AGOSTO (2026-10-27)
+
+| Campo | Valor |
+|---|---|
+| Tag | `v3.33.1` |
+| Título | v3.33.1 — Recuperação automática passa a escolher a cópia MAIS NOVA |
+| Asset | `Portable\\resources.neu` — 6.583.021 bytes — sha256 `554e72997672bc136ce473bf58591af0f3cd08e7ca4b102857e9b16d7b0f861c` |
+| Backup | `backups\\pre-v3.33.1-2026-10-27\\` |
+
+**Print (27/10 18:16, PC da loja via TeamViewer, v3.33.0):** "RECUPERAÇÃO
+AUTOMÁTICA — banco incompleto… recuperadas 241 vendas e 66 produtos da cópia
+salgueiro-pre-atualizacao-v3.9.0-2026-08-13T16-31-46.db". Painel com 0 vendas.
+
+**CAUSA DA CÓPIA ERRADA (provada em teste):** `listarBackupsLocais` ordenava
+por NOME desc: "salgueiro-pre-…" > "salgueiro-2026-…" (letra > dígito) e
+"v3.9.0" > "v3.33.0" ('9' > '3') → a de agosto era sempre a "mais nova".
+A limpeza de 30 cópias (`salvarBackupDiario`) ordenava por nome asc e apagava
+os DIÁRIOS e as pré-atualização v3.1x–v3.3x primeiro. **Possível que as cópias
+recentes da loja já tenham sido apagadas** — conferir no PC da loja.
+**CAUSA DO "BANCO INCOMPLETO": AINDA NÃO PROVADA** — precisa do arquivo
+`banco-com-problema-*.db` e dos logs `%APPDATA%\\SalgueiroGestao\\logs` da loja.
+Caminho perigoso achado no código (corrigido, não provado que ocorreu):
+`lerBanco` devolvia null em QUALQUER falha de leitura → boot criava banco vazio
+e gravava por cima do arquivo bom.
+
+**Correções:** `ambiente.dataDoBackup/ordenarBackups/backupsParaApagar` (data do
+nome; diário = meio-dia; carimbado = UTC; fallback mtime); retenção 30 diários +
+20 outros, mais velhos primeiro. `lerBanco`: arquivo existe e leitura falha →
+6 tentativas e erro `BANCO_ILEGIVEL` → `_iniciar` registra, avisa e FECHA.
+Trava de encolhimento no `salvarBytes` (`_salvarComTrava`): gravação < 50% do
+último tamanho bom é recusada (`GRAVACAO-RECUSADA` no log), liberada só em
+zerar de fábrica e VACUUM. Recuperação registra `RECUPERACAO` no log, pula
+`banco-com-problema-*`, e o aviso mostra a data da cópia (≥ 2 dias: "NÃO VENDA").
+Tela Backup lista também `banco-com-problema-*`, `pre-restauracao-*`,
+`backup-antes-reset-*` da raiz (`RX_COPIA_RAIZ`), restauráveis; data em hora local.
+**Teste:** `teste-backups-ordem.mjs` (28): reproduz a ordem antiga (pegava agosto)
+e a limpeza antiga (apagava 26 diários), prova a nova, lerBanco com arquivo preso.
 
 ## v3.33.0 — RELATÓRIO POR LOJA COMPLETO (2026-10-22)
 

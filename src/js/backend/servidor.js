@@ -40,6 +40,8 @@ let sessao = { usuario: null };
 // 'app:recuperacao' e avisa o usuário — recuperação silenciosa esconde
 // problema, e problema escondido volta maior.
 let RECUPERACAO_BOOT = null;
+let _tamanhoBom = 0;            // tamanho do último banco gravado (trava de encolhimento, v3.33.1)
+let _permitirEncolher = false;  // zerar de fábrica / VACUUM: encolher é esperado
 
 const AVISO_FASE = (recurso) =>
   ({ ok: false, erro: `${recurso} será ativado em uma próxima atualização desta versão.` });
@@ -1204,6 +1206,7 @@ const rotas = {
       await db.salvarAgora();
       await ambiente.copiarBancoPara(`${await ambiente.dirDados()}/backup-antes-reset-${carimbo}.db`, db.exportar());
     } catch (e) { console.error('backup pré-reset falhou:', e); }
+    _permitirEncolher = true;   // zerar de propósito encolhe o banco
     await resetarDados(db);
     sessao.usuario = null;
     return { ok: true };
@@ -2508,7 +2511,22 @@ async function _iniciar() {
   // = o sistema caiu (ou o Windows o derrubou). (v3.31.0)
   ambiente.registrarLog('APP', `aberto v${ambiente.versaoApp()}`);
   await licenca.iniciar();
-  let bytesExistentes = await ambiente.lerBanco();
+  let bytesExistentes;
+  try { bytesExistentes = await ambiente.lerBanco(); }
+  catch (e) {
+    // v3.33.1 — o arquivo existe mas não deu para ler: NUNCA abrir vazio por
+    // cima dele. Registra, avisa e fecha; reabrir resolve quando o arquivo soltar.
+    try { await ambiente.registrarLog('BANCO-ILEGIVEL', String(e && e.message || e)); } catch { /* */ }
+    try {
+      alert('⚠️ O BANCO DE DADOS NÃO PÔDE SER LIDO AGORA\n\n'
+        + 'O arquivo está no computador, mas outro programa está segurando ele '
+        + '(antivírus, sincronização de nuvem ou o próprio sistema ainda fechando).\n\n'
+        + 'Para proteger os dados, o sistema vai fechar sem mexer em nada. '
+        + 'Aguarde alguns segundos e abra de novo.');
+    } catch { /* */ }
+    try { await ambiente.sairApp(); } catch { /* */ }
+    throw e;
+  }
   // Adota o banco inicial APENAS na verdadeira primeira execução:
   // se instalacao.json já existe na pasta de dados, esta máquina já foi
   // inicializada (mesmo que o banco esteja vazio por reset de fábrica ou
@@ -2546,8 +2564,9 @@ async function _iniciar() {
                                     : { tabelasOk: false, temDados: false, totalDados: 0 };
   if (bytesExistentes && (!_radAtual.tabelasOk || !_radAtual.temDados)) {
     try {
-      const { backups } = await ambiente.listarBackupsLocais(); // mais novo primeiro
+      const { backups } = await ambiente.listarBackupsLocais(); // mais novo primeiro (pela DATA, v3.33.1)
       for (const b of backups) {
+        if (/^banco-com-problema-/.test(b.nome)) continue;   // é o banco ruim de outra vez
         let cand;
         try { cand = await ambiente.lerBackupLocal(b.nome); } catch { continue; }
         const r = await radiografar(cand);
@@ -2557,7 +2576,13 @@ async function _iniciar() {
           `${await ambiente.dirDados()}/banco-com-problema-${hora}.db`, bytesExistentes);
         await ambiente.salvarBanco(cand);
         bytesExistentes = cand;
-        RECUPERACAO_BOOT = { backup: b.nome, vendas: r.vendas, produtos: r.produtos };
+        RECUPERACAO_BOOT = { backup: b.nome, vendas: r.vendas, produtos: r.produtos,
+                             data: b.data || ambiente.dataDoBackup(b.nome, b.quando) };
+        try {
+          await ambiente.registrarLog('RECUPERACAO', `banco ${_radAtual.tabelasOk ? 'sem dados' : 'sem tabelas'} `
+            + `(${bytesExistentes.length} bytes, vendas ${_radAtual.vendas}, produtos ${_radAtual.produtos}) `
+            + `→ restaurado de ${b.nome} (${r.vendas} vendas, ${r.produtos} produtos)`);
+        } catch { /* */ }
         console.warn(`[recuperação] banco quebrado — restaurado de ${b.nome}`);
         break;
       }
@@ -2573,10 +2598,27 @@ async function _iniciar() {
     await ambiente.salvarBackupDiario(bytesExistentes); // 1 cópia/dia, mantém 30
   }
 
+  // v3.33.1 — trava de encolhimento: uma gravação comum nunca reduz o banco
+  // à metade de uma vez. Se isso acontecer (banco em memória vazio ou
+  // quebrado), a gravação é recusada e fica no Diagnóstico; o arquivo bom do
+  // disco continua lá. Zerar de fábrica e VACUUM liberam a trava de propósito.
+  _tamanhoBom = bytesExistentes ? bytesExistentes.length : 0;
+  const _salvarComTrava = async (bytes) => {
+    if (_tamanhoBom && bytes.length < _tamanhoBom * 0.5 && !_permitirEncolher) {
+      try {
+        await ambiente.registrarLog('GRAVACAO-RECUSADA',
+          `banco em memória com ${bytes.length} bytes contra ${_tamanhoBom} no disco — arquivo do disco preservado`);
+      } catch { /* */ }
+      return;
+    }
+    await ambiente.salvarBanco(bytes);
+    _tamanhoBom = bytes.length;
+    _permitirEncolher = false;
+  };
   db = await criarBanco({
     bytes: bytesExistentes,
     schema: await ambiente.carregarSchema(),
-    salvarBytes: ambiente.salvarBanco
+    salvarBytes: _salvarComTrava
   });
   // Logo padrão do cupom: aplica se ainda não configurada (logo_cupom ≠ logo do sistema)
   try {
@@ -2633,6 +2675,7 @@ async function _iniciar() {
       //    reconstrói o banco compacto — só aqui o .db realmente encolhe e o
       //    export() de cada gravação para de estourar. É barato: os dados vivos
       //    já são pequenos (as fotos saíram).
+      _permitirEncolher = true;   // VACUUM encolhe de propósito
       try { db.exec('VACUUM'); } catch (e) { console.warn('[migr-fotos] vacuum:', e && e.message); }
       // VACUUM compacta em memória; persiste agora para que o próximo boot já ache o banco menor
       try { await db.salvarAgora(); } catch (e) { console.warn('[migr-fotos] salvarAgora:', e && e.message); }
