@@ -3,6 +3,14 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.34.2',
+    data: '2026-10-28',
+    itens: [
+      '🔒 A RESTAURAÇÃO DE BACKUP PASSA A VALER SEMPRE. A restauração gravava o banco certo, mas às vezes o sistema não reiniciava: o programa continuava aberto com os dados antigos e gravava por cima — por isso o backup "não pegava". Agora, restaurou, o programa antigo não grava mais nada e é fechado à força se não sair sozinho.',
+      '🧷 DOIS PROGRAMAS ABERTOS NUNCA ESCREVEM UM POR CIMA DO OUTRO. Cada abertura recebe um código; um programa antigo esquecido aberto percebe que não é mais o atual, não grava e se fecha. O sistema só usa backup ao abrir quando o banco está quebrado — nunca por conta própria.',
+    ],
+  },
+  {
     versao: '3.34.1',
     data: '2026-10-27',
     itens: [

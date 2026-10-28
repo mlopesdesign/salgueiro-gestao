@@ -43,6 +43,9 @@ let sessao = { usuario: null };
 let RECUPERACAO_BOOT = null;
 let _tamanhoBom = 0;            // tamanho do último banco gravado (trava de encolhimento, v3.33.1)
 let _permitirEncolher = false;  // zerar de fábrica / VACUUM: encolher é esperado
+let _minhaGeracao = null;        // código desta abertura (ambiente.gravarGeracao, v3.34.2)
+let _bancoSubstituido = false;   // banco restaurado / processo antigo: este processo não grava mais
+const _dbTimerLimpar = () => { if (db && db._salvarTimer) { clearTimeout(db._salvarTimer); db._salvarTimer = null; } };
 let _mudouDesdeCopia = false;   // houve gravação desde a última cópia automática (v3.34.0)
 let _timerOcioso = null;        // 5 min sem gravar → cópia 'ocioso'
 let _copiando = null;
@@ -54,7 +57,7 @@ const GATILHOS_COPIA = { 'pdv:abrirCaixa': 'abriu-caixa', 'pdv:fecharCaixa': 'fe
 // última (ou `forcar`), nunca banco vazio, uma de cada vez. Guarda o resumo
 // (vendas/produtos/clientes) para a tela de Backup não precisar abrir o arquivo.
 async function copiaSeguranca(motivo, forcar) {
-  if (!db) return null;
+  if (!db || _bancoSubstituido) return null;
   if (!forcar && !_mudouDesdeCopia) return null;
   if (_copiando) return _copiando;
   _copiando = (async () => {
@@ -136,6 +139,7 @@ const rotas = {
       try { localStorage.setItem(chave, '1'); } catch { /* */ }
       ambiente.registrarLog('APP', 'reabrindo para carregar o servidor de rede novo');
       try { await db.salvarAgora(); } catch { /* */ }
+      _bancoSubstituido = true;   // já gravou: o processo que vai sair não grava mais (v3.34.2)
       setTimeout(() => ambiente.reiniciarApp(), 400);
       return { ok: true, mudou: true, reabrindo: true };
     }
@@ -2293,7 +2297,14 @@ async function _restaurarBytes(bytes, opcoes) {
   const hora = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   await db.salvarAgora();
   await ambiente.copiarBancoPara(`${await ambiente.dirDados()}/pre-restauracao-${hora}.db`, db.exportar());
+  // v3.34.2 — daqui em diante ESTE processo não grava mais o banco (tem os
+  // dados antigos na memória). E a geração muda, para nenhum processo antigo
+  // escrever por cima do banco restaurado.
+  _bancoSubstituido = true;
+  try { if (_dbTimerLimpar) _dbTimerLimpar(); } catch { /* */ }
   await ambiente.salvarBanco(bytes);
+  try { await ambiente.gravarGeracao(`restaurado-${Date.now()}`); } catch { /* */ }
+  try { await ambiente.registrarLog('RESTAURACAO', `banco restaurado (${novo.vendas} vendas, ${novo.produtos} produtos) — reiniciando`); } catch { /* */ }
   await ambiente.reiniciarApp(); // restauração só vale depois do boot
   return { ok: true, novo };
 }
@@ -2477,6 +2488,7 @@ function _vigiarBanco(e, canal) {
   try { ambiente.registrarLog('BANCO-QUEBRADO', `${canal}: ${m.slice(0, 120)} (aberto há ${min} min)`); } catch { /* */ }
   if (Date.now() - _ABERTO_EM < 5 * 60000) return;
   try { ambiente.registrarLog('APP', 'reabrindo sozinho para recuperar o banco'); } catch { /* */ }
+  _bancoSubstituido = true;   // banco da memória quebrado: nunca grava (v3.34.2)
   setTimeout(() => { ambiente.reiniciarApp().catch(() => {}); }, 1500);
 }
 
@@ -2679,7 +2691,22 @@ async function _iniciar() {
   // quebrado), a gravação é recusada e fica no Diagnóstico; o arquivo bom do
   // disco continua lá. Zerar de fábrica e VACUUM liberam a trava de propósito.
   _tamanhoBom = bytesExistentes ? bytesExistentes.length : 0;
+  _minhaGeracao = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  try { await ambiente.gravarGeracao(_minhaGeracao); }
+  catch (e) { _minhaGeracao = null; console.warn('[geração] não gravou:', e); }
   const _salvarComTrava = async (bytes) => {
+    // v3.34.2 — processo antigo ou banco restaurado: NUNCA grava por cima
+    if (_bancoSubstituido) {
+      try { await ambiente.registrarLog('GRAVACAO-BLOQUEADA', 'banco já foi substituído (restauração/reinício) — este processo não grava mais'); } catch { /* */ }
+      return;
+    }
+    const g = await ambiente.lerGeracao();
+    if (g && _minhaGeracao && g !== _minhaGeracao) {
+      _bancoSubstituido = true;
+      try { await ambiente.registrarLog('PROCESSO-ANTIGO', `outro processo abriu o sistema depois deste (${g} ≠ ${_minhaGeracao}) — não grava e fecha`); } catch { /* */ }
+      setTimeout(() => { ambiente.sairApp().catch(() => {}); }, 500);
+      return;
+    }
     if (_tamanhoBom && bytes.length < _tamanhoBom * 0.5 && !_permitirEncolher) {
       try {
         await ambiente.registrarLog('GRAVACAO-RECUSADA',

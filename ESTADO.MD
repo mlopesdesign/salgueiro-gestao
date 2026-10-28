@@ -9,12 +9,12 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.34.1 |
-| **Data do último build** | 2026-10-27 |
+| **Versão atual** | 3.34.2 |
+| **Data do último build** | 2026-10-28 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.34.1 em 2026-10-27 ✓ (32 módulos core · 167 rotas · 37 tabelas) |
-| **5 lugares da versão** | os 5 em 3.34.1 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
+| **GRAPHIFY** | atualizado para 3.34.2 em 2026-10-28 ✓ (32 módulos core · 167 rotas · 37 tabelas) |
+| **5 lugares da versão** | os 5 em 3.34.2 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
 
 ---
 
@@ -25,6 +25,34 @@
 pelo Desktop Commander (`start_process`, powershell) → confiro no GitHub → aviso.
 O "dois cliques em PUBLICAR.bat" está REVOGADO. Detalhe: regra 3 do `REGRAS-CRITICAS.md`.
 **v3.30.0 publicada assim** (07/10/2026 00:24 UTC, 6.485.691 bytes conferidos).
+
+## v3.34.2 — RESTAURAÇÃO "NÃO PEGAVA" (2026-10-28)
+
+| Campo | Valor |
+|---|---|
+| Tag | `v3.34.2` |
+| Título | v3.34.2 — A restauração de backup passa a valer sempre |
+| Asset | `Portable\\resources.neu` — 6.631.328 bytes — sha256 `94d401fc759a7829d7fd5a12ee455a2e05beab179e5a0133337b0b44ad093309` |
+| Backup | `backups\\pre-v3.34.2-2026-10-28\\` |
+
+**Relato:** "restaurei o backup de 23/10, atualizei e voltou tudo zerado, tive
+que restaurar de novo; o PDV não tem que puxar backup ao abrir".
+**Prova (app-2026-10-27.log da loja):** `backup:restaurar` terminou 19:11:37 e
+o MESMO processo seguiu (`backup:listarLocais` 19:11:43, outra restauração
+19:15:14) — `reiniciarApp` não encerrou o processo; ele ficou com os dados
+antigos na memória e a gravação seguinte escreveu por cima do restaurado.
+pre-restauracao 19:23 e 19:29 = 1.220.608 bytes (dados de agosto) confirmam
+que as restaurações anteriores não tinham ficado. Nenhum `RECUPERACAO` no log
+depois de 18:14 → o boot NÃO puxou backup sozinho (só puxa com banco quebrado).
+**Correções:** `_restaurarBytes`: `_bancoSubstituido = true` + limpa timer
+de gravação ANTES de gravar o backup; muda a geração (`restaurado-<ts>`);
+log RESTAURACAO. `_salvarComTrava` recusa se `_bancoSubstituido`
+(GRAVACAO-BLOQUEADA) e confere `dados/geracao.txt` contra `_minhaGeracao`
+(gravada no boot antes do criarBanco): diferente → PROCESSO-ANTIGO, não grava
+e sai. `copiaSeguranca` não roda em processo substituído. `_vigiarBanco` e
+reabertura da extensão também travam. `ambiente.reiniciarApp`: se o
+restartProcess falhar → avisa e sai; se o processo seguir vivo 4 s → exit e
+depois killProcess. **Teste:** `teste-restauracao-gruda.mjs` (13).
 
 ## v3.34.1 — RECUPERAÇÃO COM DESCONTO E TAXAS REAIS (2026-10-27)
 

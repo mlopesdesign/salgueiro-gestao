@@ -1,0 +1,9 @@
+v3.34.2 — A restauração de backup passa a valer sempre
+
+- Prova no log da loja: após restaurar, o processo antigo seguiu aberto e gravou os dados velhos por cima
+- Restauração bloqueia gravações do processo antigo antes de gravar o backup
+- reiniciarApp encerra à força se o processo não sair; geração por abertura (geracao.txt) impede processo antigo de gravar
+- teste-restauracao-gruda.mjs (13 asserções)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01UiSBBjrVtHruCRtEum4jQN

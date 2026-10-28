@@ -512,11 +512,40 @@ export async function lerLogs(dia) {
 
 // ── App ──────────────────────────────────────────────────────────────────────
 export function versaoApp() {
-  try { return NL_APPVERSION; } catch { return '3.34.1'; }
+  try { return NL_APPVERSION; } catch { return '3.34.2'; }
 }
 
+// v3.34.2 — o reinício TEM de encerrar este processo. Na loja (27/10) a
+// restauração gravou o banco certo, mas o reinício não aconteceu: o processo
+// velho continuou aberto com os dados antigos na memória e, na gravação
+// seguinte, escreveu por cima do banco restaurado ("restaurei e voltou").
+// Agora: tenta reabrir; se em 4 s este processo ainda estiver vivo, encerra à
+// força. Se nem a reabertura funcionou, avisa para abrir de novo.
 export async function reiniciarApp() {
-  await Neutralino.app.restartProcess();
+  let falhou = null;
+  try { await Neutralino.app.restartProcess(); } catch (e) { falhou = e; }
+  if (falhou) {
+    try { await registrarLog('APP', `reabertura automática falhou: ${falhou && (falhou.message || falhou.code) || falhou}`); } catch { /* */ }
+    try { alert('O sistema vai fechar agora. Abra o Salgueiro Gestão de novo pelo atalho.'); } catch { /* */ }
+  }
+  setTimeout(async () => {
+    try { await registrarLog('APP', 'processo ainda aberto depois do reinício — encerrando à força'); } catch { /* */ }
+    try { await Neutralino.app.exit(0); } catch { /* */ }
+    setTimeout(() => { try { Neutralino.app.killProcess(); } catch { /* */ } }, 1500);
+  }, falhou ? 300 : 4000);
+}
+
+// GERAÇÃO DO PROCESSO (v3.34.2). Cada abertura do sistema grava um código novo
+// em dados/geracao.txt. Antes de gravar o banco, o processo confere se o código
+// ainda é o dele: se não for, existe um processo MAIS NOVO (ou o banco foi
+// restaurado) e este é um processo antigo esquecido aberto — ele não grava e
+// se fecha. Impede que dois programas abertos escrevam um por cima do outro.
+export async function gravarGeracao(codigo) {
+  await Neutralino.filesystem.writeFile(`${await dirDados()}/geracao.txt`, String(codigo));
+}
+export async function lerGeracao() {
+  try { return String(await Neutralino.filesystem.readFile(`${await dirDados()}/geracao.txt`)).trim(); }
+  catch { return null; }
 }
 
 export async function sairApp() {
