@@ -1,0 +1,9 @@
+v3.35.0 — Caixa esquecido aberto: aviso vermelho ao fechar e botão de emergência
+
+- Fechar o sistema com caixa aberto: pop-up vermelho; principal leva ao fechamento do caixa
+- Emergência só com senha de administrador + motivo (auditoria e Diagnóstico)
+- Caixa aberto há 14 h ou mais: faixa vermelha no PDV e 1º alerta do painel
+- teste-caixa-esquecido.mjs (13 asserções)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01UiSBBjrVtHruCRtEum4jQN

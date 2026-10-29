@@ -1,0 +1,7 @@
+{
+  "tag": "v3.34.2",
+  "titulo": "v3.34.2 — A restauração de backup passa a valer sempre",
+  "asset": "Portable\\resources.neu",
+  "notas": "tools\\publicar\\notas-v3.34.2.md",
+  "sha256": "94d401fc759a7829d7fd5a12ee455a2e05beab179e5a0133337b0b44ad093309"
+}

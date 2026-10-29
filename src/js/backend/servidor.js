@@ -25,6 +25,7 @@ import * as consignacao from './core/consignacao.js';
 import * as licenca from './core/licenca.js';
 import * as lojas from './core/lojas.js';
 import * as recuperarVendas from './core/recuperar-vendas.js';
+import { auditar } from './core/util.js';
 import * as estoques from './core/estoques.js';
 import * as rede from './core/rede.js';
 import * as nuvem from './core/nuvem.js';
@@ -187,6 +188,22 @@ const rotas = {
   // Devolve um token de USO ÚNICO, com validade curta, que a venda tem de
   // apresentar. Sem isso a trava seria só da tela: bastaria um terminal em
   // rede montar o payload à mão para gravar desconto sem autorização nenhuma.
+  // Fechar o sistema com o caixa ABERTO só em emergência (v3.35.0): senha de
+  // administrador + motivo. Fica na auditoria e no Diagnóstico.
+  'app:fecharEmergencia': async (p) => {
+    const motivo = String((p && p.motivo) || '').trim();
+    if (motivo.length < 5) return { ok: false, erro: 'Escreva o motivo da emergência.' };
+    const r = await auth.autorizarDescontoAdmin(db, sessao.usuario, p || {});
+    if (!r.ok) return r;
+    let cx = null;
+    try { cx = pdv.caixaAtual(db, p || {}).caixa; } catch { /* */ }
+    const det = `${cx ? `caixa #${cx.id} (${cx.loja || 'loja'}) aberto desde ${cx.aberto_em}` : 'sem caixa'} · `
+      + `pedido por ${(sessao.usuario && sessao.usuario.nome) || '—'} · autorizado por ${r.autorizado_por} · motivo: ${motivo.slice(0, 200)}`;
+    try { auditar(db, sessao.usuario, 'app.fechar_emergencia', det); } catch { /* */ }
+    try { await ambiente.registrarLog('FECHAMENTO-EMERGENCIA', det); } catch { /* */ }
+    return { ok: true, autorizado_por: r.autorizado_por };
+  },
+
   'auth:autorizarDesconto': async (p) => {
     const r = await auth.autorizarDescontoAdmin(db, sessao.usuario, p || {});
     if (!r.ok) return r;

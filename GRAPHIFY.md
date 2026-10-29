@@ -3,7 +3,7 @@
 > Mapa técnico gerado automaticamente por `tools/graphify.js`.
 > **Não edite à mão.** Regere com `node tools/graphify.js` a cada alteração estrutural.
 
-**Versão:** 3.34.2 · **Gerado em:** 2026-10-28
+**Versão:** 3.35.0 · **Gerado em:** 2026-10-29
 **Aplicação:** `br.com.mllopes.salgueirogestao` (Neutralino 6 + WebView2)
 **Cliente:** Boutique do Salgueiro · **Autor:** ML Lopes Design
 
@@ -71,13 +71,13 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | Arquivo | Linhas | Funções | Exporta |
 |---|---|---|---|
 | `auth.js` | 185 | 8 | autorizarDescontoAdmin, descontoLivre, listarUsuarios, login, salvarUsuario, trocarSenha, verificarAdmin, verificarOperador |
-| `caixa-terminal.js` | 62 | 0 | caixaDoTerminal, caixasDeOutros, descricaoTerminal, terminalDe |
+| `caixa-terminal.js` | 80 | 0 | CAIXA_HORAS_ALERTA, caixaDoTerminal, caixasDeOutros, descricaoTerminal, horasAberto, terminalDe, textoCaixaAberto |
 | `clientes.js` | 223 | 7 | excluirCategoria, exportar, importar, listar, listarCategorias, salvar, salvarCategoria |
 | `compras.js` | 157 | 8 | cancelarCompra, criarCompra, excluirFornecedor, listarCompras, listarFornecedores, obterCompra, receberCompra, salvarFornecedor |
 | `config.js` | 85 | 2 | obter, salvar |
 | `consignacao.js` | 95 | 3 | acertar, listar, resumo |
 | `crediario.js` | 109 | 5 | aniversariantes, excluirCliente, obterCliente, parcelasAbertas, receberParcela |
-| `dashboard.js` | 270 | 2 | resumo |
+| `dashboard.js` | 275 | 2 | resumo |
 | `devolucoes.js` | 128 | 3 | itensVenda, listar, registrar |
 | `estoque.js` | 183 | 5 | buscarVariacoes, kardex, listarCompleto, movimentar, reposicao |
 | `estoques.js` | 474 | 20 | aplicar, aplicarEstrito, arred, conferirSaldo, conteudo, daLoja, desativar, garantirDaLoja, +13 |
@@ -110,13 +110,13 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `ambiente.js` | 559 | 8 |
 | `db.js` | 743 | 6 |
 | `servidor-rede-embutido.js` | 844 | 27 |
-| `servidor.js` | 3011 | 17 |
+| `servidor.js` | 3028 | 17 |
 
 ## 6. Telas (`src/js`)
 
 | Arquivo | Linhas | Exporta |
 |---|---|---|
-| `app.js` | 2110 | EM_REDE, ajustarLarguraModal, api, aplicarTema, campoTroco |
+| `app.js` | 2177 | EM_REDE, ajustarLarguraModal, api, aplicarTema, campoTroco |
 | `catalogo.js` | 262 | viewCatalogo |
 | `clientes.js` | 538 | viewClientes |
 | `compras.js` | 229 | viewCompras |
@@ -128,14 +128,14 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `impressao.js` | 179 | LIMITES, PADRAO, aplicarEstiloImpressao, cssCupomArquivo, cssCupomTela |
 | `mensagens.js` | 758 | abrirBalao, encerrarTelaMensagens, iniciarMensagens, pararMensagens, viewMensagens |
 | `neutralino.js` | 2 | — |
-| `novidades.js` | 1113 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
-| `pdv.js` | 2538 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
+| `novidades.js` | 1121 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
+| `pdv.js` | 2550 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
 | `ranking.js` | 360 | viewRanking |
 | `relatorios.js` | 1899 | viewRelatorios |
 
 ---
 
-## 7. Rotas da API (167)
+## 7. Rotas da API (168)
 
 Toda comunicação tela ↔ backend passa por `api('canal:acao', payload)`.
 A coluna **Permissão** vem de `PERMISSAO_ROTA` em `servidor.js` — sem entrada ali,
@@ -149,6 +149,7 @@ a rota exige apenas sessão válida.
 | `app:versao` | — | `({ ok: true, version: ambiente.versaoApp() })` |
 | `app:recuperacao` | — | `({ ok: true, recuperacao: RECUPERACAO_BOOT })` |
 | `app:garantirExtensao` | — | `{` |
+| `app:fecharEmergencia` | — | `{` |
 
 ### `auth:*`
 

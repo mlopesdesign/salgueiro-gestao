@@ -59,3 +59,21 @@ export function descricaoTerminal(p) {
   if (p && p._rede) return `navegador ${p._ip || ''}`.trim();
   return 'computador principal (programa instalado)';
 }
+
+// CAIXA ESQUECIDO ABERTO (v3.35.0). Regra única usada pelo painel, pelo PDV e
+// pelo aviso ao fechar o sistema. Em out/2026 um caixa ficou aberto de sexta a
+// segunda. Um expediente (mesmo de evento, 20h → 4h) não passa de 14 horas.
+export const CAIXA_HORAS_ALERTA = 14;
+export function horasAberto(caixa, agora) {
+  if (!caixa || !caixa.aberto_em) return 0;
+  const ini = new Date(String(caixa.aberto_em).replace(' ', 'T')).getTime();
+  if (!Number.isFinite(ini)) return 0;
+  return Math.max(0, ((agora || Date.now()) - ini) / 3600000);
+}
+export function textoCaixaAberto(caixa, agora) {
+  const h = horasAberto(caixa, agora);
+  const d = String(caixa.aberto_em || '');
+  const quando = d ? `${d.slice(8, 10)}/${d.slice(5, 7)} às ${d.slice(11, 16)}` : '—';
+  const tempo = h >= 48 ? `${Math.floor(h / 24)} dias` : h >= 1 ? `${Math.floor(h)} h` : `${Math.max(1, Math.round(h * 60))} min`;
+  return { horas: h, quando, tempo, esquecido: h >= CAIXA_HORAS_ALERTA };
+}

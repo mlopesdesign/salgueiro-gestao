@@ -9,12 +9,12 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.34.2 |
-| **Data do último build** | 2026-10-28 |
+| **Versão atual** | 3.35.0 |
+| **Data do último build** | 2026-10-29 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.34.2 em 2026-10-28 ✓ (32 módulos core · 167 rotas · 37 tabelas) |
-| **5 lugares da versão** | os 5 em 3.34.2 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
+| **GRAPHIFY** | atualizado para 3.35.0 em 2026-10-29 ✓ (32 módulos core · 168 rotas · 37 tabelas) |
+| **5 lugares da versão** | os 5 em 3.35.0 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
 
 ---
 
@@ -25,6 +25,31 @@
 pelo Desktop Commander (`start_process`, powershell) → confiro no GitHub → aviso.
 O "dois cliques em PUBLICAR.bat" está REVOGADO. Detalhe: regra 3 do `REGRAS-CRITICAS.md`.
 **v3.30.0 publicada assim** (07/10/2026 00:24 UTC, 6.485.691 bytes conferidos).
+
+## v3.35.0 — CAIXA ESQUECIDO ABERTO (2026-10-29)
+
+| Campo | Valor |
+|---|---|
+| Tag | `v3.35.0` |
+| Título | v3.35.0 — Caixa esquecido aberto: aviso vermelho ao fechar e botão de emergência |
+| Asset | `Portable\\resources.neu` — 6.639.645 bytes — sha256 `7aab2d846ce5412172c41b3c647a1803a090535b5e0e37f00f691234e3a3d561` |
+| Backup | `backups\\pre-v3.35.0-2026-10-29\\` |
+
+**Fato (Marcio, câmera da loja):** o desligamento de 25/10 14:40 foi a
+funcionária apertando o botão do computador. O caixa foi aberto na sexta e
+ficou aberto até segunda.
+**Regra única:** `core/caixa-terminal.js` → `CAIXA_HORAS_ALERTA = 14`,
+`horasAberto`, `textoCaixaAberto` (usada pelo painel, PDV e aviso de fechar).
+**Fechar com caixa aberto:** `app.js __pedirFechar` consulta `pdv:caixaAtual`
+→ `_avisoCaixaAberto` (modal vermelho; botão principal "Fechar o caixa agora"
+navega ao PDV com `window.__abrirFechamentoCaixa` → abre o fechamento; não
+fecha o sistema). Emergência: rota `app:fecharEmergencia` (motivo ≥ 5,
+`auth.autorizarDescontoAdmin`, auditoria `app.fechar_emergencia` + log
+FECHAMENTO-EMERGENCIA). Sem caixa aberto: pergunta antiga (`_perguntaFechar`).
+**Caixa ≥ 14 h:** faixa vermelha no PDV (`#pdv-caixa-velho`, botão fechar) e
+1º alerta "perigo" do painel. **Teste:** `teste-caixa-esquecido.mjs` (13).
+Visual do pop-up conferido no Chromium. Botão físico de desligar: só
+orientação/hardware (segurar 4 s desliga sem o Windows avisar ninguém).
 
 ## v3.34.2 — RESTAURAÇÃO "NÃO PEGAVA" (2026-10-28)
 

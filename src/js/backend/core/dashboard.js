@@ -1,6 +1,6 @@
 // Dashboard — agregação única para o painel executivo
 const arred = (n) => Math.round((Number(n) || 0) * 100) / 100;
-import { caixaDoTerminal } from './caixa-terminal.js';
+import { textoCaixaAberto, caixaDoTerminal } from './caixa-terminal.js';
 import { pode } from './permissoes.js';
 // Troca não é venda — regra única do sistema. Ver core/vendas-sql.js.
 import { NAO_TROCA, RECEBIDO_BRUTO, trocasDoPeriodo } from './vendas-sql.js';
@@ -230,6 +230,11 @@ function resumo(db, usuario, terminal) {
   const vp = bucket(finVencidos).pagar; if (vp.qtd > 0) alertas.push({ nivel: 'perigo', tela: 'financeiro', texto: `${vp.qtd} conta(s) a pagar vencida(s) — ${arred(vp.total)}` });
   if (credAtraso.clientes > 0) alertas.push({ nivel: 'perigo', tela: 'clientes', texto: `${credAtraso.clientes} cliente(s) em atraso no crediário — ${arred(credAtraso.total)}` });
   if (!caixa) alertas.push({ nivel: 'info', tela: 'pdv', texto: 'Nenhum caixa aberto — abra o caixa para vender' });
+  if (caixa) {   // caixa esquecido aberto (v3.35.0)
+    const tx = textoCaixaAberto(caixa);
+    if (tx.esquecido) alertas.unshift({ nivel: 'perigo', tela: 'pdv',
+      texto: `Caixa aberto há ${tx.tempo} (desde ${tx.quando}) — feche o caixa ao fim de cada expediente` });
+  }
   if (aniv.n > 0) alertas.push({ nivel: 'info', tela: 'clientes', texto: `${aniv.n} aniversariante(s) este mês` });
 
   // Gating financeiro: vendedor não vê lucro, custo, margem, valor estoque nem receita

@@ -1,6 +1,7 @@
 // PDV — frente de caixa
 import { api, el, esc, moeda, toast, modal, getConfig, pode, ehAdmin, podeVerTela, setorAtivo, EM_REDE, campoTroco, trocoDinheiro } from './app.js';
 import { FRETE_TIPOS, rotuloFrete } from './backend/core/frete.js';
+import { textoCaixaAberto } from './backend/core/caixa-terminal.js';
 
 // Formas de pagamento disponíveis (respeita setores desligados pelo Dev).
 // 'troca' NÃO entra: é lançada pelo sistema quando o crédito de uma troca abate
@@ -195,6 +196,14 @@ function telaVenda(alvo, caixa, manterVenda = false) {
           ${pode('caixa.abrir_fechar') ? '<button class="btn btn-perigo" id="b-fechar">Fechar caixa</button>' : ''}
         </div>
       </div>
+      ${(() => {   // caixa esquecido aberto (v3.35.0)
+        const tx = caixa ? textoCaixaAberto(caixa) : null;
+        return tx && tx.esquecido ? `<div id="pdv-caixa-velho" style="display:flex;align-items:center;gap:12px;margin:0 0 12px;padding:12px 16px;border-radius:10px;background:#C62828;color:#fff;font-weight:600">
+          <span style="font-size:20px">⚠️</span>
+          <span style="flex:1">Este caixa está aberto há <b>${tx.tempo}</b> (desde ${tx.quando}). Feche o caixa ao fim de cada expediente e abra um novo no próximo.</span>
+          ${pode('caixa.abrir_fechar') ? '<button class="btn" id="pdv-fechar-velho" style="background:#fff;color:#C62828;font-weight:700">Fechar caixa agora</button>' : ''}
+        </div>` : '';
+      })()}
       <div class="pdv-grid">
         <div class="painel">
           <div class="barra">
@@ -540,6 +549,9 @@ function telaVenda(alvo, caixa, manterVenda = false) {
   tela.querySelector('#b-sangria')?.addEventListener('click', () => modalMovCaixa('sangria'));
   tela.querySelector('#b-supr')?.addEventListener('click', () => modalMovCaixa('suprimento'));
   tela.querySelector('#b-fechar')?.addEventListener('click', () => modalFechamento(caixa, () => { alvo.innerHTML = ''; viewPdv(alvo); }));
+  tela.querySelector('#pdv-fechar-velho')?.addEventListener('click', () => modalFechamento(caixa, () => { alvo.innerHTML = ''; viewPdv(alvo); }));
+  // pedido vindo do aviso de "caixa aberto" ao fechar o sistema (v3.35.0)
+  if (window.__abrirFechamentoCaixa) { window.__abrirFechamentoCaixa = false; setTimeout(() => tela.querySelector('#b-fechar')?.click(), 200); }
   // Trocar de loja com a venda montada na tela (v3.25.39). Antes só dava para
   // mudar fechando e reabrindo o caixa — e o carrinho ia junto. Agora o caixa
   // continua o mesmo: o que já foi vendido fica na loja anterior, e daqui em

@@ -2,6 +2,7 @@
 import { viewEstoque, abrirEtiquetas } from './estoque.js';
 import { abrirEtiquetasLote } from './etiquetas.js';
 import { viewPdv, imprimirVale } from './pdv.js';
+import { textoCaixaAberto } from './backend/core/caixa-terminal.js';
 import { viewClientes } from './clientes.js';
 import { viewFinanceiro } from './financeiro.js';
 import { viewCompras } from './compras.js';
@@ -35,7 +36,21 @@ let _pedidoFechar = null;
 window.__pedirFechar = () => {
   if (!usuario) return Promise.resolve(true);
   if (_pedidoFechar) return _pedidoFechar;
-  const p = new Promise((resolve) => {
+  const p = (async () => {
+    // v3.35.0 — CAIXA ABERTO: pop-up VERMELHO. Fechar o sistema com o caixa
+    // aberto só em emergência, com senha de administrador e motivo.
+    let caixa = null;
+    try { const rc = await api('pdv:caixaAtual'); caixa = rc && rc.ok ? rc.caixa : null; } catch { caixa = null; }
+    if (caixa) return await _avisoCaixaAberto(caixa);
+    return await _perguntaFechar();
+  })();
+  _pedidoFechar = p;
+  p.finally(() => { _pedidoFechar = null; });
+  return p;
+};
+
+function _perguntaFechar() {
+  return new Promise((resolve) => {
     let pecas = 0;
     try { pecas = typeof window.__vendaEmAndamento === 'function' ? window.__vendaEmAndamento() : 0; } catch {}
     let respondeu = false;
@@ -57,15 +72,67 @@ window.__pedirFechar = () => {
     });
     obs.observe(document.body, { childList: true });
   });
-  _pedidoFechar = p;
-  p.finally(() => { _pedidoFechar = null; });
-  return p;
-};
+}
+
+function _avisoCaixaAberto(caixa) {
+  return new Promise((resolve) => {
+    const tx = textoCaixaAberto(caixa);
+    let respondeu = false;
+    const m = modal('🔴 O CAIXA ESTÁ ABERTO', `
+      <div>
+        <div style="padding:14px 16px;border-radius:10px;background:#C62828;color:#fff">
+          <div style="font-size:16px;font-weight:700;margin-bottom:4px">Feche o caixa antes de fechar o sistema.</div>
+          <div style="font-size:13.5px">${esc(caixa.loja || 'Loja')} · aberto por ${esc(caixa.aberto_por || '—')} em ${esc(tx.quando)}
+            · <b>há ${esc(tx.tempo)}</b></div>
+        </div>
+        <p style="margin:12px 0 0;font-size:13px">Fechar o caixa confere o dinheiro do dia e guarda uma cópia de segurança do movimento.
+          Depois de fechar o caixa, feche o sistema e desligue o computador pelo <b>menu Iniciar → Desligar</b> — nunca no botão.</p>
+        <details id="emerg" style="margin-top:14px;border:1px solid #E8B8B8;border-radius:8px;padding:8px 12px;background:#FDF0F0">
+          <summary style="cursor:pointer;font-weight:600;color:#C62828">🆘 Emergência: fechar o sistema SEM fechar o caixa</summary>
+          <p style="margin:8px 0;font-size:12.5px">Só com a senha de um administrador. Fica registrado quem pediu, quem autorizou e o motivo.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <input id="em-usuario" placeholder="Usuário do administrador" style="flex:1;min-width:150px;padding:8px 10px;border:1px solid var(--borda);border-radius:8px;font:inherit">
+            <input id="em-senha" type="password" placeholder="Senha" style="flex:1;min-width:120px;padding:8px 10px;border:1px solid var(--borda);border-radius:8px;font:inherit">
+          </div>
+          <input id="em-motivo" placeholder="Motivo (ex.: computador travou, falta de luz)" style="width:100%;margin-top:8px;box-sizing:border-box;padding:8px 10px;border:1px solid var(--borda);border-radius:8px;font:inherit">
+          <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
+            <button class="btn btn-perigo" id="em-fechar" type="button">Fechar em emergência</button>
+            <span id="em-erro" style="color:#C62828;font-size:12.5px"></span>
+          </div>
+        </details>
+      </div>`,
+      (mm, fechar) => {   // botão principal: ir fechar o caixa
+        respondeu = true; fechar(); resolve(false);
+        window.__abrirFechamentoCaixa = true;
+        try { navegar('pdv'); } catch { /* */ }
+      }, 'Fechar o caixa agora');
+    const bFica = m.querySelector('.btn-cancelar');
+    bFica.textContent = 'Continuar trabalhando';
+    const cab = m.querySelector('.modal header');
+    if (cab) { cab.style.background = '#C62828'; cab.querySelectorAll('h2, .fechar').forEach(x => { x.style.color = '#fff'; }); }
+    setTimeout(() => { try { bFica.focus(); } catch {} }, 30);
+    m.querySelector('#em-fechar').onclick = async () => {
+      const erro = m.querySelector('#em-erro');
+      erro.textContent = '';
+      const r = await api('app:fecharEmergencia', {
+        usuario: m.querySelector('#em-usuario').value.trim(),
+        senha: m.querySelector('#em-senha').value,
+        motivo: m.querySelector('#em-motivo').value.trim()
+      });
+      if (!r || !r.ok) { erro.textContent = (r && r.erro) || 'Não autorizado.'; return; }
+      respondeu = true; m.remove(); resolve(true);
+    };
+    const obs = new MutationObserver(() => {
+      if (!document.contains(m)) { obs.disconnect(); if (!respondeu) resolve(false); }
+    });
+    obs.observe(document.body, { childList: true });
+  });
+}
 
 const $app = document.getElementById('app');
 let usuario = null;
 let categoriasCache = [];
-let APP_VERSION = '3.34.2'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
+let APP_VERSION = '3.35.0'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
 
 // API dupla: no aplicativo usa IPC (preload); num terminal em rede (navegador),
 // conversa com o servidor do computador principal via HTTP com token de sessão.

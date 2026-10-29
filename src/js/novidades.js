@@ -3,6 +3,14 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.35.0',
+    data: '2026-10-29',
+    itens: [
+      '🔴 AVISO VERMELHO AO FECHAR COM O CAIXA ABERTO. Ao fechar o sistema com o caixa aberto, aparece o aviso com a loja, quem abriu e há quanto tempo. O botão principal leva ao fechamento do caixa. Fechar o sistema sem fechar o caixa só em emergência, com usuário e senha de administrador e o motivo — fica registrado.',
+      '⚠️ CAIXA ESQUECIDO ABERTO. Caixa aberto há 14 horas ou mais ganha uma faixa vermelha no PDV, com o botão "Fechar caixa agora", e vira o primeiro alerta do Painel.',
+    ],
+  },
+  {
     versao: '3.34.2',
     data: '2026-10-28',
     itens: [
