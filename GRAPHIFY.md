@@ -3,7 +3,7 @@
 > Mapa técnico gerado automaticamente por `tools/graphify.js`.
 > **Não edite à mão.** Regere com `node tools/graphify.js` a cada alteração estrutural.
 
-**Versão:** 3.35.0 · **Gerado em:** 2026-10-29
+**Versão:** 3.35.1 · **Gerado em:** 2026-11-02
 **Aplicação:** `br.com.mllopes.salgueirogestao` (Neutralino 6 + WebView2)
 **Cliente:** Boutique do Salgueiro · **Autor:** ML Lopes Design
 
@@ -91,7 +91,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `mensagens.js` | 406 | 21 | JANELA_POPUP_H, ONLINE_TTL_S, confirmarAviso, contatos, encerrarAviso, enviar, enviarAviso, historico, +4 |
 | `nuvem.js` | 353 | 14 | desconectar, fazerBackup, fazerBackupTodos, iniciarOAuth, obterStatus, precisaBackupDiario, registrarOAuthListener, salvarClientId |
 | `pdv.js` | 686 | 15 | abrirCaixa, assumirCaixa, caixaAtual, caixasAbertosDeOutros, cancelarVenda, fecharCaixa, listarVendas, listarVendasGeral, +5 |
-| `permissoes.js` | 94 | 3 | CATALOGO, DEFAULTS, TODAS, efetivas, normalizar, pode |
+| `permissoes.js` | 103 | 4 | CATALOGO, DEFAULTS, TODAS, efetivas, normalizar, pode, veValoresCaixa |
 | `pontos.js` | 110 | 9 | ajustar, calcularGanho, calcularResgate, creditar, debitar, getConfig, historico, saldo, +1 |
 | `produtos.js` | 455 | 7 | excluirCategoria, excluirProduto, listarCategorias, listarProdutos, obterProduto, salvarCategoria, salvarProduto |
 | `recuperar-vendas.js` | 148 | 3 | OBS_RECUPERADA, confirmar, posicao, previa |
@@ -110,7 +110,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `ambiente.js` | 559 | 8 |
 | `db.js` | 743 | 6 |
 | `servidor-rede-embutido.js` | 844 | 27 |
-| `servidor.js` | 3028 | 17 |
+| `servidor.js` | 3040 | 17 |
 
 ## 6. Telas (`src/js`)
 
@@ -128,8 +128,8 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `impressao.js` | 179 | LIMITES, PADRAO, aplicarEstiloImpressao, cssCupomArquivo, cssCupomTela |
 | `mensagens.js` | 758 | abrirBalao, encerrarTelaMensagens, iniciarMensagens, pararMensagens, viewMensagens |
 | `neutralino.js` | 2 | — |
-| `novidades.js` | 1121 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
-| `pdv.js` | 2550 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
+| `novidades.js` | 1128 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
+| `pdv.js` | 2580 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
 | `ranking.js` | 360 | viewRanking |
 | `relatorios.js` | 1899 | viewRelatorios |
 
@@ -378,7 +378,7 @@ a rota exige apenas sessão válida.
 | `pdv:assumirCaixa` | `caixa.abrir_fechar` | `pdv.assumirCaixa(db, p \|\| {}, sessao.usuario)` |
 | `pdv:abrirCaixa` | `caixa.abrir_fechar` | `pdv.abrirCaixa(db, p, sessao.usuario)` |
 | `pdv:movimentoCaixa` | `caixa.sangria` | `pdv.movimentoCaixa(db, p, sessao.usuario)` |
-| `pdv:resumoCaixa` | `pdv.ver` | `pdv.resumoCaixa(db, p.caixa_id)` |
+| `pdv:resumoCaixa` | `pdv.ver` | `{` |
 | `pdv:fecharCaixa` | `caixa.abrir_fechar` | `{` |
 | `pdv:venda` | `pdv.vender` | `pdv.registrarVenda(db, p, sessao.usuario)` |
 | `pdv:obterVenda` | `pdv.ver` | `pdv.obterVenda(db, p.id)` |

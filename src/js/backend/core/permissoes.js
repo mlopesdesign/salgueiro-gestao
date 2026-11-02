@@ -91,4 +91,13 @@ function normalizar(perfil, lista) {
   return lista.filter(k => CHAVES.has(k));
 }
 
-export { CATALOGO, TODAS, DEFAULTS, efetivas, pode, normalizar };
+// VALORES DO CAIXA (v3.35.1). Regra do Marcio, desde o início: só o
+// ADMINISTRADOR vê valores do caixa (totais por forma, esperado na gaveta,
+// diferença, consignados). Vendedor/caixa fecha o caixa "às cegas": conta o
+// dinheiro e informa — não vê quanto deveria dar. Regra única, aplicada no
+// SERVIDOR (o terminal em rede não consegue pedir os valores por fora).
+function veValoresCaixa(usuario) {
+  return !!(usuario && usuario.perfil === 'admin');
+}
+
+export { CATALOGO, TODAS, DEFAULTS, efetivas, pode, normalizar, veValoresCaixa };

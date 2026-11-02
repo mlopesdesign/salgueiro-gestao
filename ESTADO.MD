@@ -9,12 +9,12 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.35.0 |
-| **Data do último build** | 2026-10-29 |
+| **Versão atual** | 3.35.1 |
+| **Data do último build** | 2026-11-02 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.35.0 em 2026-10-29 ✓ (32 módulos core · 168 rotas · 37 tabelas) |
-| **5 lugares da versão** | os 5 em 3.35.0 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
+| **GRAPHIFY** | atualizado para 3.35.1 em 2026-11-02 ✓ (32 módulos core · 168 rotas · 37 tabelas) |
+| **5 lugares da versão** | os 5 em 3.35.1 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
 
 ---
 
@@ -25,6 +25,25 @@
 pelo Desktop Commander (`start_process`, powershell) → confiro no GitHub → aviso.
 O "dois cliques em PUBLICAR.bat" está REVOGADO. Detalhe: regra 3 do `REGRAS-CRITICAS.md`.
 **v3.30.0 publicada assim** (07/10/2026 00:24 UTC, 6.485.691 bytes conferidos).
+
+## v3.35.1 — FECHAMENTO DE CAIXA CEGO (2026-11-02)
+
+| Campo | Valor |
+|---|---|
+| Tag | `v3.35.1` |
+| Título | v3.35.1 — Fechamento de caixa cego: só o administrador vê valores |
+| Asset | `Portable\\resources.neu` — 6.642.880 bytes — sha256 `82dcd28479417c4e926d5f95b2552c8271b6baecea731abb13144702994ede8e` |
+| Backup | `backups\\pre-v3.35.1-2026-11-02\\` |
+
+**Relato (print da loja):** o vendedor via o fechamento completo (R$ 19.521,50,
+formas, consignados, esperado). "Só administradores veem valores — nunca autorizei."
+O `modalFechamento` nunca teve trava por perfil.
+**REGRA:** `permissoes.veValoresCaixa(usuario)` = perfil 'admin'. Aplicada no
+SERVIDOR: `pdv:resumoCaixa` devolve `{ cego, caixa:{id,aberto_em,loja_id,loja} }`
+para não-admin; `pdv:fecharCaixa` devolve `{ ok, cego }` (sem esperado/diferença).
+Tela: `modalFechamentoCego` (só dinheiro contado + obs). A diferença continua
+gravada no caixa. Listas de vendas (valor de cada venda) seguem visíveis —
+são operacionais. **Teste:** `teste-fechamento-cego.mjs` (10). Visual conferido.
 
 ## v3.35.0 — CAIXA ESQUECIDO ABERTO (2026-10-29)
 

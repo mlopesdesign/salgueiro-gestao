@@ -1422,6 +1422,7 @@ async function modalTrocarLoja(caixa, tela) {
 async function modalFechamento(caixa, aoConcluir) {
   const r = await api('pdv:resumoCaixa', { caixa_id: caixa.id });
   if (!r.ok) { toast(r.erro, true); return; }
+  if (r.cego) { modalFechamentoCego(caixa, aoConcluir); return; }
   const formasHtml = r.por_forma.map(f =>
     `<div class="tot-linha"><span>${nomeForma(f.forma)}</span><b>${moeda(f.total)}</b></div>`).join('');
   const lojasHtml = (r.por_loja || []).length > 1
@@ -1474,6 +1475,35 @@ async function modalFechamento(caixa, aoConcluir) {
     const dif = r2.diferenca;
     toast(dif === 0 ? 'Caixa fechado sem diferenças. 🎉'
       : `Caixa fechado com ${dif > 0 ? 'sobra' : 'falta'} de ${moeda(Math.abs(dif))}.`, dif !== 0);
+    fechar(); aoConcluir();
+  }, 'Fechar caixa');
+}
+
+// Fechamento CEGO (v3.35.1) — usuário que não é administrador não vê valor
+// nenhum: conta o dinheiro da gaveta e informa. O administrador confere a
+// diferença depois (relatórios / histórico de caixas).
+function modalFechamentoCego(caixa, aoConcluir) {
+  const d = String(caixa.aberto_em || '');
+  const quando = d ? `${d.slice(8, 10)}/${d.slice(5, 7)} às ${d.slice(11, 16)}` : '—';
+  modal('Fechar caixa', `
+    <div>
+      <p style="margin:0 0 12px;font-size:13.5px">${esc(caixa.loja || 'Loja')} · caixa aberto em ${esc(quando)}${caixa.aberto_por ? ` por ${esc(caixa.aberto_por)}` : ''}.</p>
+      <p style="margin:0 0 14px;padding:10px 12px;border-radius:8px;background:var(--fundo-suave,#f7f7f8);font-size:13px">
+        🔒 Conte o dinheiro da gaveta e informe abaixo. A conferência dos valores é feita pelo administrador.</p>
+      <div class="campo"><label>Dinheiro contado na gaveta (R$)</label>
+        <input id="fc-valor" type="number" min="0" step="0.01"></div>
+      <div class="campo"><label>Observações</label><input id="fc-obs"></div>
+      <div class="erro" id="fc-erro"></div>
+    </div>
+  `, async (m, fechar) => {
+    const campo = m.querySelector('#fc-valor');
+    if (campo.value === '') { m.querySelector('#fc-erro').textContent = 'Informe o dinheiro contado na gaveta.'; return; }
+    const r2 = await api('pdv:fecharCaixa', {
+      valor_informado: Number(campo.value),
+      obs: m.querySelector('#fc-obs').value.trim() || null
+    });
+    if (!r2.ok) { m.querySelector('#fc-erro').textContent = r2.erro; return; }
+    toast('Caixa fechado. O administrador confere os valores.');
     fechar(); aoConcluir();
   }, 'Fechar caixa');
 }

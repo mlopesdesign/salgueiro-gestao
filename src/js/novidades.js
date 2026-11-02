@@ -3,6 +3,13 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.35.1',
+    data: '2026-11-02',
+    itens: [
+      '🔒 FECHAMENTO DE CAIXA CEGO: SÓ O ADMINISTRADOR VÊ VALORES. Quem não é administrador fecha o caixa sem ver nenhum valor: conta o dinheiro da gaveta e informa. Totais, formas de pagamento, consignados, esperado e diferença ficam só para o administrador — o servidor nem envia esses números para os outros usuários.',
+    ],
+  },
+  {
     versao: '3.35.0',
     data: '2026-10-29',
     itens: [

@@ -1,0 +1,9 @@
+v3.35.1 — Fechamento de caixa cego: só o administrador vê valores
+
+- permissoes.veValoresCaixa: só perfil admin
+- pdv:resumoCaixa e pdv:fecharCaixa não enviam valores para quem não é admin
+- Tela de fechamento cego (dinheiro contado + observações)
+- teste-fechamento-cego.mjs (10 asserções)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01UiSBBjrVtHruCRtEum4jQN

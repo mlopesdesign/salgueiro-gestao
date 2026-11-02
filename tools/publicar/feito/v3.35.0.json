@@ -1,0 +1,7 @@
+{
+  "tag": "v3.35.0",
+  "titulo": "v3.35.0 — Caixa esquecido aberto: aviso vermelho ao fechar e botão de emergência",
+  "asset": "Portable\\resources.neu",
+  "notas": "tools\\publicar\\notas-v3.35.0.md",
+  "sha256": "7aab2d846ce5412172c41b3c647a1803a090535b5e0e37f00f691234e3a3d561"
+}

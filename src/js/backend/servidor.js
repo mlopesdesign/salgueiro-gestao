@@ -1208,10 +1208,22 @@ const rotas = {
   'pdv:assumirCaixa': (p) => pdv.assumirCaixa(db, p || {}, sessao.usuario),
   'pdv:abrirCaixa': (p) => pdv.abrirCaixa(db, p, sessao.usuario),
   'pdv:movimentoCaixa': (p) => pdv.movimentoCaixa(db, p, sessao.usuario),
-  'pdv:resumoCaixa': (p) => pdv.resumoCaixa(db, p.caixa_id),
+  // v3.35.1 — só o administrador recebe os VALORES do caixa. Para os demais,
+  // o fechamento é cego: o servidor nem manda os números.
+  'pdv:resumoCaixa': (p) => {
+    const r = pdv.resumoCaixa(db, p.caixa_id);
+    if (!r || !r.ok || permissoes.veValoresCaixa(sessao.usuario)) return r;
+    const c = r.caixa || {};
+    return { ok: true, cego: true,
+             caixa: { id: c.id, aberto_em: c.aberto_em, loja_id: c.loja_id, loja: c.loja || null } };
+  },
   'pdv:fecharCaixa': async (p) => {
     const r = await pdv.fecharCaixa(db, p, sessao.usuario);
     if (r.ok) nuvem.fazerBackupTodos(db).catch(() => {}); // fire-and-forget
+    if (r.ok && !permissoes.veValoresCaixa(sessao.usuario)) {
+      // fechamento cego: o resultado (esperado/diferença) fica só para o administrador
+      return { ok: true, cego: true };
+    }
     return r;
   },
   'pdv:venda': (p) => pdv.registrarVenda(db, p, sessao.usuario),
