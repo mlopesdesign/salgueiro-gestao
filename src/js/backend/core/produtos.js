@@ -1,5 +1,6 @@
 // Produtos, categorias e grade (cor × tamanho)
-import { codigoInterno, auditar } from './util.js';
+import { auditar } from './util.js';
+import { proximoCodigo } from './codigos.js';
 import * as estoques from './estoques.js';
 
 // ---- Categorias ------------------------------------------------------------
@@ -297,8 +298,14 @@ function salvarProduto(db, p, quem) {
           ).run(produtoId, cor, tamanho, minVar, vfoto || null);
           varId = Number(r.lastInsertRowid);
         }
-        // código de barras: informado ou gerado internamente (EAN-13 iniciado em 2)
-        const codigo = String(v.codigo_barras || '').trim() || codigoInterno(varId);
+        // código de barras: informado, o que a variação já tinha, ou um novo do
+        // contador próprio (EAN-13 iniciado em 2). Não usa mais o número da
+        // variação: depois de restaurar um banco antigo o número se repetia e a
+        // etiqueta nova batia com a de outra peça (v3.35.2, core/codigos.js).
+        const jaTinha = db.prepare('SELECT codigo_barras FROM variacoes WHERE id=?').get(varId);
+        const codigo = String(v.codigo_barras || '').trim()
+          || String((jaTinha && jaTinha.codigo_barras) || '').trim()
+          || proximoCodigo(db);
         db.prepare('UPDATE variacoes SET codigo_barras=? WHERE id=?').run(codigo, varId);
         idsEnviados.push(varId);
         v._varId = varId;

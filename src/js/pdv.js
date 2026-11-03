@@ -409,6 +409,16 @@ function telaVenda(alvo, caixa, manterVenda = false) {
     const r = await api('estoque:buscar', { termo });
     const lista = r.ok ? r.variacoes : [];
     if (lista.length === 1 && lista[0].codigo_barras === termo) { addItem(lista[0]); return; }
+    if (!lista.length && r.etiqueta_antiga) {
+      // v3.35.2 — etiqueta com código aposentado: NÃO vende, pede a troca
+      $sug.appendChild(el(`<div class="sug vazio-sug" style="background:#FDECEC;color:#B71C1C;cursor:default;line-height:1.45">
+        <b>⚠️ Etiqueta antiga — não vale mais.</b><br>
+        O código ${esc(termo)} foi trocado. Procure a peça pelo nome e troque a etiqueta
+        (Estoque › Etiquetas a trocar).</div>`));
+      toast('Etiqueta antiga: procure a peça pelo nome e troque a etiqueta.', true);
+      $busca.select();
+      return;
+    }
     if (!lista.length) { $sug.appendChild(el(`<div class="sug vazio-sug">Nada encontrado.</div>`)); return; }
     // SEM corte (v3.25.41). Antes mostrava só 8 e, como a ordem é alfabética,
     // produto recém-cadastrado quase nunca entrava nesses 8 — o cliente achava

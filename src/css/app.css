@@ -707,3 +707,34 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
 .frete-box { display:grid; grid-template-columns:1.4fr 1fr; gap:14px; align-items:end;
   background:#EEF5FB; border:1px solid #C9DDEE; border-radius:8px; padding:10px 12px; margin:0 0 12px; }
 .frete-box input:disabled { background:#F4F1F1; cursor:not-allowed; }
+
+/* ---------- Etiquetas a trocar (v3.35.2) ---------- */
+.etq-badge { display: inline-block; min-width: 20px; padding: 1px 7px; margin-left: 4px; border-radius: 10px; background: var(--vinho); color: #fff; font-size: 11px; font-weight: 700; line-height: 17px; text-align: center; }
+.etq-troca-topo { display: grid; grid-template-columns: 1fr auto; gap: 14px 28px; align-items: center; background: var(--branco); border: 1px solid var(--borda); border-left: 4px solid var(--vinho); border-radius: 12px; padding: 18px 20px; margin-bottom: 14px; }
+.etq-troca-tit { font-size: 16px; font-weight: 700; color: var(--vinho-escuro); margin-bottom: 4px; }
+.etq-troca-txt span b { color: var(--texto); }
+.etq-troca-txt span { font-size: 13px; color: var(--texto-suave); line-height: 1.5; }
+.etq-troca-num { display: flex; gap: 26px; }
+.etq-troca-num div { display: flex; flex-direction: column; align-items: flex-end; }
+.etq-troca-num strong { font-size: 26px; line-height: 1; color: var(--texto); font-variant-numeric: tabular-nums; }
+.etq-troca-num div:first-child strong { color: var(--vinho); }
+.etq-troca-num small { font-size: 11px; color: var(--texto-suave); text-transform: uppercase; letter-spacing: .06em; margin-top: 4px; }
+.etq-barra { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: var(--creme); overflow: hidden; }
+.etq-barra i { display: block; height: 100%; width: 0; background: var(--verde); transition: width .3s; }
+.etq-barra-fina { height: 3px; border-radius: 0; }
+.etq-local { margin-bottom: 14px; }
+.etq-local-cab { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 16px; }
+.etq-local-cab h3 { font-size: 15px; color: var(--texto); }
+.etq-local-info { font-size: 12.5px; color: var(--texto-suave); }
+.etq-local-acoes { display: flex; gap: 8px; flex-wrap: wrap; }
+.etq-cod { font-family: Consolas, monospace; font-size: 12px; white-space: nowrap; }
+.etq-cod-velho { color: var(--texto-suave); text-decoration: line-through; }
+.etq-local tr.etq-ok td { background: #F1F8F4; }
+.etq-local tr.etq-ok td:not(:last-child) { color: var(--texto-suave); }
+@media (max-width: 900px) { .etq-troca-topo { grid-template-columns: 1fr; } .etq-troca-num { justify-content: flex-start; } }
+.etq-local table { table-layout: fixed; width: 100%; }
+.etq-local th:nth-child(2), .etq-local th:nth-child(3) { width: 165px; }
+.etq-local th:nth-child(4) { width: 100px !important; }
+.etq-local th:nth-child(5) { width: 130px !important; }
+.etq-local td:first-child { overflow: hidden; text-overflow: ellipsis; }
+.etq-local input[type="checkbox"] { accent-color: var(--verde); width: 16px; height: 16px; }

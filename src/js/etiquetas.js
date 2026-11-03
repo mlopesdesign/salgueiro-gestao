@@ -44,7 +44,7 @@ export function abrirEtiquetasLote(itens, opts = {}) {
     s + it.variacoes.reduce((a, v) => a + Math.max(0, Math.round(v.estoque)), 0), 0);
 
   const corpo = `
-    <p style="margin-bottom:14px">${opts.entrada
+    <p style="margin-bottom:14px">${opts.texto ? opts.texto : opts.entrada
       ? `Entraram <b>${totalEstoque} peça(s)</b> em ${totalVar} variação(ões). As etiquetas abaixo são só dessas peças.`
       : `Etiquetas para <b>${itens.length} produto(s)</b> · ${totalVar} variação(ões).`}</p>
     <div class="linha-2">
@@ -55,7 +55,7 @@ export function abrirEtiquetasLote(itens, opts = {}) {
         </select></div>
       <div class="campo"><label>Quantidade de etiquetas</label>
         <select id="et-qtd">
-          <option value="estoque">${opts.entrada
+          <option value="estoque">${opts.rotuloQtd ? `${opts.rotuloQtd} (${totalEstoque})` : opts.entrada
             ? `1 por peça que entrou (${totalEstoque})`
             : `1 por peça em estoque (${totalEstoque})`}</option>
           <option value="variacao">1 por variação (${totalVar})</option>
@@ -77,7 +77,7 @@ export function abrirEtiquetasLote(itens, opts = {}) {
       ⚠️ O QR Code só é lido por leitores 2D (de imagem). Leitores de laser comuns leem apenas código de barras.</p>
     <div class="erro" id="et-erro"></div>`;
 
-  const m = modal(opts.entrada ? 'Imprimir etiquetas das peças que entraram' : 'Imprimir etiquetas em lote', corpo, (mm, fechar) => {
+  const m = modal(opts.titulo || (opts.entrada ? 'Imprimir etiquetas das peças que entraram' : 'Imprimir etiquetas em lote'), corpo, (mm, fechar) => {
     const tipo = mm.querySelector('#et-tipo').value;
     const modo = mm.querySelector('#et-qtd').value;
     const fixa = Math.max(1, Number(mm.querySelector('#et-fixa').value) || 1);

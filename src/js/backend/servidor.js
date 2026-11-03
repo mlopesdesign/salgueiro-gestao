@@ -25,6 +25,7 @@ import * as consignacao from './core/consignacao.js';
 import * as licenca from './core/licenca.js';
 import * as lojas from './core/lojas.js';
 import * as recuperarVendas from './core/recuperar-vendas.js';
+import * as codigos from './core/codigos.js';
 import { auditar } from './core/util.js';
 import * as estoques from './core/estoques.js';
 import * as rede from './core/rede.js';
@@ -87,6 +88,15 @@ async function copiaSeguranca(motivo, forcar) {
     } finally { _copiando = null; }
   })();
   return _copiando;
+}
+
+// v3.35.2 — grava fora do banco o maior código interno já usado
+async function _gravarMarcaCodigos() {
+  try {
+    const n = codigos.seqAtual(db);
+    const atual = Number(String(await ambiente.lerTextoDados('codigos-maior.txt') || '').trim()) || 0;
+    if (n > atual) await ambiente.escreverTextoDados('codigos-maior.txt', String(n));
+  } catch (e) { try { ambiente.registrarLog('CODIGOS', `marca externa não gravou: ${e && e.message ? e.message : e}`); } catch { /* */ } }
 }
 
 const AVISO_FASE = (recurso) =>
@@ -444,7 +454,9 @@ const rotas = {
         if (v && v.foto) { const n = await ambiente.salvarFotoArquivo(v.foto); if (n) v.foto = n; }
       }
     }
-    return produtos.salvarProduto(db, p, sessao.usuario);
+    const r = produtos.salvarProduto(db, p, sessao.usuario);
+    if (r && r.ok) await _gravarMarcaCodigos();
+    return r;
   },
   'produtos:excluir': (p) => produtos.excluirProduto(db, p.id, sessao.usuario),
 
@@ -476,6 +488,8 @@ const rotas = {
   'estoque:buscar': async (p) => {
     const FOTOS_BUSCA = 40;
     const r = estoque.buscarVariacoes(db, p.termo);
+    // etiqueta antiga (código aposentado na v3.35.2): avisa em vez de "nada encontrado"
+    if (r.ok && !r.variacoes.length) r.etiqueta_antiga = codigos.codigoAposentado(db, p.termo);
     if (r.ok) {
       await _resolverFotosLista(r.variacoes.slice(0, FOTOS_BUSCA), 'foto');
       for (const v of r.variacoes.slice(FOTOS_BUSCA)) v.foto = null;
@@ -484,6 +498,9 @@ const rotas = {
   },
   'pdv:trocarLoja': (p) => pdv.trocarLoja(db, p || {}, sessao.usuario),
   'estoque:movimentar': (p) => estoque.movimentar(db, p, sessao.usuario),
+  // v3.35.2 — etiquetas para trocar (variações que ganharam código novo)
+  'codigos:etiquetasTrocar': () => codigos.etiquetasATrocar(db),
+  'codigos:marcarTrocada': (p) => codigos.marcarEtiquetaTrocada(db, p || {}),
   'estoque:kardex': (p) => estoque.kardex(db, p || {}),
   'estoque:reposicao': () => estoque.reposicao(db),
   // Lista completa devolve o NOME do arquivo em `foto` (miniatura sob demanda no front)
@@ -2528,6 +2545,7 @@ const PERM_ROTA = {
   'produtos:salvar': 'produtos.editar', 'produtos:excluir': 'produtos.excluir',
   'categorias:listar': 'produtos.ver', 'categorias:salvar': 'produtos.editar', 'categorias:excluir': 'produtos.editar',
   'estoque:buscar': 'estoque.ver', 'estoque:kardex': 'estoque.ver', 'estoque:reposicao': 'estoque.ver',
+  'codigos:etiquetasTrocar': 'estoque.ver', 'codigos:marcarTrocada': 'estoque.ver',
   'estoque:listarCompleto': 'estoque.ver', 'estoque:exportarXlsx': 'estoque.ver',
   'estoque:exportarXlsxFiltrado': 'produtos.ver',
   'config:definirIcone': 'config.gerenciar', 'config:removerIcone': 'config.gerenciar',
@@ -2894,6 +2912,31 @@ async function _iniciar() {
       }
     }
   } catch (e) { console.error('[reparo-fotos] falhou (banco intacto):', e && e.message); }
+
+  // v3.35.2 — códigos de barras: contador próprio que sobrevive a restauração
+  // (core/codigos.js). O maior número já usado fica também em
+  // dados/codigos-maior.txt; a troca única das variações nascidas depois da
+  // restauração fica em dados/codigos-trocados.json, para ser refeita IGUAL se
+  // um banco antigo for restaurado (as etiquetas reimpressas continuam valendo).
+  try {
+    codigos.definirMarcaExterna(Number(String(await ambiente.lerTextoDados('codigos-maior.txt') || '').trim()) || 0);
+    if (!db.prepare('SELECT valor FROM config WHERE chave=?').get(codigos.MIGR_CHAVE) && !_bancoSubstituido) {
+      let mapa = null;
+      try { mapa = JSON.parse(await ambiente.lerTextoDados('codigos-trocados.json') || 'null'); } catch { mapa = null; }
+      try { await ambiente.salvarCopiaAutomatica(db.exportar(), 'antes-codigos'); } catch { /* segue: o .anterior também protege */ }
+      const r = codigos.migrarPosRestauracao(db, null, mapa);
+      if (r.ok && !r.ja) {
+        if (r.trocados.length && !(Array.isArray(mapa) && mapa.length)) {
+          await ambiente.escreverTextoDados('codigos-trocados.json', JSON.stringify(r.trocados));
+        }
+        ambiente.registrarLog('CODIGOS', `${r.trocados.length} variação(ões) com código novo${mapa ? ' (troca refeita após restauração)' : ''}`);
+        try { await db.salvarAgora(); } catch { /* */ }
+      } else if (!r.ok) {
+        ambiente.registrarLog('CODIGOS', `troca de códigos falhou, banco intacto: ${r.erro}`);
+      }
+    }
+    await _gravarMarcaCodigos();
+  } catch (e) { console.error('[codigos] falhou (banco intacto):', e && e.message); }
 
   // Migração v3.27.0: marcar como 'troca' as vendas de troca já gravadas.
   // Até aqui a troca entrava em `vendas` como venda normal e o fechamento de

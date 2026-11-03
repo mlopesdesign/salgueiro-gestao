@@ -9,12 +9,12 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.35.1 |
-| **Data do último build** | 2026-11-02 |
+| **Versão atual** | 3.35.2 |
+| **Data do último build** | 2026-11-03 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.35.1 em 2026-11-02 ✓ (32 módulos core · 168 rotas · 37 tabelas) |
-| **5 lugares da versão** | os 5 em 3.35.1 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
+| **GRAPHIFY** | atualizado para 3.35.2 em 2026-11-03 ✓ (33 módulos core · 170 rotas · 37 tabelas) |
+| **5 lugares da versão** | os 5 em 3.35.2 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
 
 ---
 
@@ -25,6 +25,40 @@
 pelo Desktop Commander (`start_process`, powershell) → confiro no GitHub → aviso.
 O "dois cliques em PUBLICAR.bat" está REVOGADO. Detalhe: regra 3 do `REGRAS-CRITICAS.md`.
 **v3.30.0 publicada assim** (07/10/2026 00:24 UTC, 6.485.691 bytes conferidos).
+
+## v3.35.2 — CÓDIGO DE BARRAS SEM REPETIÇÃO + PORTA DA REDE (2026-11-03)
+
+| Campo | Valor |
+|---|---|
+| Tag | `v3.35.2` |
+| Título | v3.35.2 — Código de barras sem repetição e porta da rede que não fica presa |
+| Asset | `Portable\\resources.neu` — 6.673.698 bytes — sha256 `5986dfe884b19d3685837e1d12799cc1876726d5baf0ac79738bd74f1a52db72` |
+| Backup | `backups\\pre-v3.35.2-2026-11-03\\` |
+
+**Causa provada (códigos):** código interno = `codigoInterno(id da variação)`. Backup
+restaurado (23/10 13:52) ia até a variação 600; as 601–661 (cadastradas desde 30/10)
+receberam os códigos 2000000006017–2000000006611, já impressos em etiquetas de
+roupas cadastradas entre 23 e 25/10. O banco em si é coerente (códigos únicos).
+**REGRA NOVA (única):** `core/codigos.js` → `proximoCodigo(db)` = maior entre
+config `codigo_seq`, maior código interno no banco, marca externa
+`dados/codigos-maior.txt` e 10000, +1. `produtos.js` usa só isso (mantém o código
+que a variação já tinha). **Correção única** `migrarPosRestauracao` (flag
+`migr_codigos_v3352`): variações id > 600 com código automático → código novo;
+lista em config `codigos_trocados` e em `dados/codigos-trocados.json` (se um banco
+antigo for restaurado, a MESMA troca é refeita). Cópia `antes-codigos` antes.
+Tela: Estoque › aba "Etiquetas a trocar" (só aparece se houver), qtd = saldo do
+local, imprimir todas / só as que faltam / lista A4, marcar trocada (config
+`etiquetas_trocadas`). PDV: código aposentado → "Etiqueta antiga — não vale mais".
+Números no banco de 01/11: 61 trocadas, 739 etiquetas (Principal 372 · Camarote
+266 · Almoxarifado 101), 60 variações com saldo.
+**Porta:** sobra de `servidor-rede.ps1` de abertura anterior segurava a porta.
+Agora o ps1 sai quando o processo pai some (checa a cada 5 s) e, ao ligar, mata
+sobra antiga dele mesmo na porta (log PORTA-LIBERADA); se for outro programa, a
+mensagem diz qual. Provado no Windows: sobra encerrada e 8799 religada.
+**Testes:** `teste-codigos-restauracao.mjs` (33, banco real). Suíte: falhas
+pré-existentes iguais (consignado-rel 6, origem-vendas 4). estoque-grade 32 OK.
+**Pendente:** PC servidor na tesouraria + nobreak; cupons dos PDVs web; lentidão
+da restauração. Recomendar IP fixo (reserva DHCP) para o PC servidor.
 
 ## v3.35.1 — FECHAMENTO DE CAIXA CEGO (2026-11-02)
 

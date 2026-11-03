@@ -1,0 +1,7 @@
+{
+  "tag": "v3.35.1",
+  "titulo": "v3.35.1 — Fechamento de caixa cego: só o administrador vê valores",
+  "asset": "Portable\\resources.neu",
+  "notas": "tools\\publicar\\notas-v3.35.1.md",
+  "sha256": "82dcd28479417c4e926d5f95b2552c8271b6baecea731abb13144702994ede8e"
+}

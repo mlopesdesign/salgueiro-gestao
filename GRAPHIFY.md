@@ -3,7 +3,7 @@
 > Mapa técnico gerado automaticamente por `tools/graphify.js`.
 > **Não edite à mão.** Regere com `node tools/graphify.js` a cada alteração estrutural.
 
-**Versão:** 3.35.1 · **Gerado em:** 2026-11-02
+**Versão:** 3.35.2 · **Gerado em:** 2026-11-03
 **Aplicação:** `br.com.mllopes.salgueirogestao` (Neutralino 6 + WebView2)
 **Cliente:** Boutique do Salgueiro · **Autor:** ML Lopes Design
 
@@ -73,6 +73,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `auth.js` | 185 | 8 | autorizarDescontoAdmin, descontoLivre, listarUsuarios, login, salvarUsuario, trocarSenha, verificarAdmin, verificarOperador |
 | `caixa-terminal.js` | 80 | 0 | CAIXA_HORAS_ALERTA, caixaDoTerminal, caixasDeOutros, descricaoTerminal, horasAberto, terminalDe, textoCaixaAberto |
 | `clientes.js` | 223 | 7 | excluirCategoria, exportar, importar, listar, listarCategorias, salvar, salvarCategoria |
+| `codigos.js` | 196 | 3 | LIMITE_RESTAURACAO, MIGR_CHAVE, SEQ_INICIAL, _zerarMarcaTeste, codigoAposentado, definirMarcaExterna, etiquetasATrocar, listaTrocados, +6 |
 | `compras.js` | 157 | 8 | cancelarCompra, criarCompra, excluirFornecedor, listarCompras, listarFornecedores, obterCompra, receberCompra, salvarFornecedor |
 | `config.js` | 85 | 2 | obter, salvar |
 | `consignacao.js` | 95 | 3 | acertar, listar, resumo |
@@ -93,7 +94,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `pdv.js` | 686 | 15 | abrirCaixa, assumirCaixa, caixaAtual, caixasAbertosDeOutros, cancelarVenda, fecharCaixa, listarVendas, listarVendasGeral, +5 |
 | `permissoes.js` | 103 | 4 | CATALOGO, DEFAULTS, TODAS, efetivas, normalizar, pode, veValoresCaixa |
 | `pontos.js` | 110 | 9 | ajustar, calcularGanho, calcularResgate, creditar, debitar, getConfig, historico, saldo, +1 |
-| `produtos.js` | 455 | 7 | excluirCategoria, excluirProduto, listarCategorias, listarProdutos, obterProduto, salvarCategoria, salvarProduto |
+| `produtos.js` | 462 | 7 | excluirCategoria, excluirProduto, listarCategorias, listarProdutos, obterProduto, salvarCategoria, salvarProduto |
 | `recuperar-vendas.js` | 148 | 3 | OBS_RECUPERADA, confirmar, posicao, previa |
 | `rede.js` | 178 | 3 | SOMENTE_LOCAL, imprimir, iniciar, listarImpressoras, parar, preparar, status |
 | `relatorios.js` | 1657 | 22 | TAXAS_PADRAO, comprasAcompanhadas, consignadosMensal, curvaAbc, estoqueDetalhado, eventosVenda, maisVendidos, pecasParadas, +6 |
@@ -109,8 +110,8 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 |---|---|---|
 | `ambiente.js` | 559 | 8 |
 | `db.js` | 743 | 6 |
-| `servidor-rede-embutido.js` | 844 | 27 |
-| `servidor.js` | 3040 | 17 |
+| `servidor-rede-embutido.js` | 906 | 29 |
+| `servidor.js` | 3083 | 18 |
 
 ## 6. Telas (`src/js`)
 
@@ -121,21 +122,21 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `clientes.js` | 538 | viewClientes |
 | `compras.js` | 229 | viewCompras |
 | `configuracoes.js` | 1963 | viewConfiguracoes |
-| `estoque.js` | 1195 | abrirEtiquetas, ean13Svg, formMovimento, formMovimentoProduto, viewEstoque |
+| `estoque.js` | 1353 | abrirEtiquetas, ean13Svg, formMovimento, formMovimentoProduto, viewEstoque |
 | `estoques.js` | 989 | viewEstoques |
 | `etiquetas.js` | 169 | abrirEtiquetasLote, imprimirFolhaEtiquetas |
 | `financeiro.js` | 261 | viewFinanceiro |
 | `impressao.js` | 179 | LIMITES, PADRAO, aplicarEstiloImpressao, cssCupomArquivo, cssCupomTela |
 | `mensagens.js` | 758 | abrirBalao, encerrarTelaMensagens, iniciarMensagens, pararMensagens, viewMensagens |
 | `neutralino.js` | 2 | — |
-| `novidades.js` | 1128 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
-| `pdv.js` | 2580 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
+| `novidades.js` | 1138 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
+| `pdv.js` | 2590 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
 | `ranking.js` | 360 | viewRanking |
 | `relatorios.js` | 1899 | viewRelatorios |
 
 ---
 
-## 7. Rotas da API (168)
+## 7. Rotas da API (170)
 
 Toda comunicação tela ↔ backend passa por `api('canal:acao', payload)`.
 A coluna **Permissão** vem de `PERMISSAO_ROTA` em `servidor.js` — sem entrada ali,
@@ -213,6 +214,13 @@ a rota exige apenas sessão válida.
 | `clientes:exportar` | `clientes.ver` | `{` |
 | `clientes:importar` | `clientes.gerenciar` | `{` |
 | `clientes:aniversariantes` | `clientes.ver` | `crediario.aniversariantes(db)` |
+
+### `codigos:*`
+
+| Canal | Permissão | Destino |
+|---|---|---|
+| `codigos:etiquetasTrocar` | `estoque.ver` | `codigos.etiquetasATrocar(db)` |
+| `codigos:marcarTrocada` | `estoque.ver` | `codigos.marcarEtiquetaTrocada(db, p \|\| {})` |
 
 ### `compras:*`
 

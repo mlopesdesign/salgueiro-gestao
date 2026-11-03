@@ -1,5 +1,5 @@
 // AUTO-GERADO por tools/gerar-rede-embutida.js — não editar manualmente.
-// Fonte: extensions/rede/servidor-rede.ps1. Gerado em: 2026-10-14
+// Fonte: extensions/rede/servidor-rede.ps1. Gerado em: 2026-11-03
 export const SERVIDOR_REDE_PS1 = `# Salgueiro Gestão V2 — extensão de acesso em rede (multiterminal) — v3.31.0
 # Servidor HTTP em PowerShell puro (nativo do Windows). Encaminha /api para o
 # aplicativo principal via WebSocket do Neutralino; serve as telas aos terminais.
@@ -397,18 +397,69 @@ $LIMITE_RESPOSTA_S = 30
 $LIMITE_LEITURA_S  = 20
 $LIMITE_CORPO      = 16777216   # 16 MB (foto em base64 cabe com folga)
 
+# PORTA FIXA (v3.35.2). A porta "ocupada sem ninguem usando" era um servidor de
+# rede ANTIGO do proprio Salgueiro que ficou rodando escondido (programa que nao
+# fechou direito, reinicio, dois abertos). O sistema novo nao conseguia abrir a
+# porta e a loja trocava o numero na mao em todos os terminais.
+# Agora: se a porta estiver presa por um servidor-rede.ps1 que nao e este, ele
+# e encerrado e a MESMA porta e aberta de novo. A porta nunca muda sozinha.
+function Dono-DaPorta([int]$porta) {
+  # netstat funciona em qualquer Windows e sem administrador (o
+  # Get-NetTCPConnection volta vazio em algumas maquinas)
+  $pids = New-Object System.Collections.Generic.HashSet[int]
+  try {
+    foreach ($linha in (netstat -ano -p TCP)) {
+      if ($linha -match '^\\s*TCP\\s+\\S+:(\\d+)\\s+(0\\.0\\.0\\.0:0|\\[::\\]:0|\\*:\\*)\\s+\\S+\\s+(\\d+)\\s*$') {
+        if ([int]$matches[1] -eq $porta) { [void]$pids.Add([int]$matches[3]) }
+      }
+    }
+  } catch {}
+  $donos = @()
+  foreach ($procId in $pids) {
+    if ($procId -le 0 -or $procId -eq $PID) { continue }
+    $cmd = ''; $nome = ''
+    try { $wp = Get-CimInstance Win32_Process -Filter "ProcessId = $procId" -ErrorAction Stop; $cmd = [string]$wp.CommandLine; $nome = [string]$wp.Name } catch {}
+    $donos += [pscustomobject]@{ pid = $procId; nome = $nome; cmd = $cmd }
+  }
+  return ,$donos
+}
+function Abrir-Listener([int]$porta) {
+  $l = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Any, $porta)
+  $l.Start()
+  return $l
+}
 function Iniciar-Http([int]$porta) {
   Parar-Http
-  try {
-    $script:http = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Any, $porta)
-    $script:http.Start()
-    Log-Rede 'SERVIDOR' "ligado na porta $porta"
-    Enviar-Evento 'rede.status' @{ ativa = $true; porta = $porta; ips = @(Listar-IPs) }
-  } catch {
-    $script:http = $null
-    Log-Rede 'SERVIDOR' ("NAO ligou na porta $porta : " + $_.Exception.Message)
-    Enviar-Evento 'rede.status' @{ ativa = $false; erro = "Nao foi possivel abrir a porta $porta (ja esta em uso?)." }
+  $ultimoErro = ''
+  for ($tent = 1; $tent -le 6; $tent++) {
+    try {
+      $script:http = Abrir-Listener $porta
+      Log-Rede 'SERVIDOR' "ligado na porta $porta"
+      Enviar-Evento 'rede.status' @{ ativa = $true; porta = $porta; ips = @(Listar-IPs) }
+      return
+    } catch {
+      $script:http = $null
+      $ultimoErro = [string]$_.Exception.Message
+    }
+    # quem esta segurando a porta?
+    $donos = Dono-DaPorta $porta
+    foreach ($d in $donos) {
+      if ($d.cmd -match 'servidor-rede\\.ps1') {
+        try {
+          Stop-Process -Id $d.pid -Force -ErrorAction Stop
+          Log-Rede 'PORTA-LIBERADA' ("porta $porta estava presa por um servidor de rede antigo do Salgueiro (pid " + $d.pid + ") - encerrado")
+        } catch { Log-Rede 'PORTA' ("nao consegui encerrar o pid " + $d.pid + ": " + $_.Exception.Message) }
+      } elseif ($tent -eq 1) {
+        Log-Rede 'PORTA' ("porta $porta usada por outro programa: " + $d.nome + " (pid " + $d.pid + ")")
+      }
+    }
+    Start-Sleep -Milliseconds (400 * $tent)
   }
+  $donos = Dono-DaPorta $porta
+  $quem = ''
+  if ($donos.Count -gt 0) { $quem = ' Programa usando a porta: ' + (($donos | ForEach-Object { $_.nome + ' (pid ' + $_.pid + ')' }) -join ', ') + '.' }
+  Log-Rede 'SERVIDOR' ("NAO ligou na porta $porta : " + $ultimoErro + $quem)
+  Enviar-Evento 'rede.status' @{ ativa = $false; erro = ("Nao foi possivel abrir a porta $porta." + $quem) }
 }
 function Parar-Http {
   if ($script:http) {
@@ -815,6 +866,7 @@ try {
 Log-Rede 'EXTENSAO' ("iniciada pid=$PID app=$ppid")
 Enviar-Evento 'rede.extensao.pronta' @{ ok = $true; v = 2 }
 
+$script:ultimoPai = [DateTime]::UtcNow
 # laco principal
 $logErro = Join-Path $PSScriptRoot 'erro.log'
 while ($ws.State -eq 'Open') {
@@ -835,9 +887,19 @@ while ($ws.State -eq 'Open') {
       Tratar-OAuthCallback $oauthCli
     }
     Batimento
+    # v3.35.2 - o sistema (processo pai) fechou? Entao este servidor sai e
+    # SOLTA a porta. Antes ele podia ficar rodando escondido segurando a porta.
+    if ($ppid -gt 0 -and ([DateTime]::UtcNow - $script:ultimoPai).TotalSeconds -ge 5) {
+      $script:ultimoPai = [DateTime]::UtcNow
+      if (-not (Get-Process -Id $ppid -ErrorAction SilentlyContinue)) {
+        Log-Rede 'EXTENSAO' ("o sistema (pid $ppid) fechou - servidor de rede encerrando e soltando a porta")
+        break
+      }
+    }
   } catch {
     Log-Rede 'ERRO-LACO' ([string]$_.Exception.Message)
   }
 }
+try { Parar-Http } catch {}
 Log-Rede 'EXTENSAO' ("encerrada: conexao com o sistema " + $ws.State)
 `;

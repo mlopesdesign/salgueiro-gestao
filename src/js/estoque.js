@@ -221,11 +221,12 @@ export async function viewEstoque(alvo) {
         <button data-aba="kardex">Histórico (Kardex)</button>
         <button data-aba="repo">Reposição</button>
         ${ehAdmin() ? '<button data-aba="recup">🧯 Recuperar vendas</button>' : ''}
+        <button data-aba="etq" id="aba-etq" style="display:none">🏷️ Etiquetas a trocar</button>
       </div>
       <div id="aba-conteudo"></div>
     </div>`);
   const corpo = tela.querySelector('#aba-conteudo');
-  const abas = { mov: abaMovimentar, kardex: abaKardex, repo: abaReposicao, recup: abaRecuperar };
+  const abas = { mov: abaMovimentar, kardex: abaKardex, repo: abaReposicao, recup: abaRecuperar, etq: abaEtiquetasTrocar };
   tela.querySelectorAll('.abas button').forEach(b => {
     b.onclick = () => {
       tela.querySelectorAll('.abas button').forEach(x => x.classList.toggle('ativa', x === b));
@@ -239,6 +240,15 @@ export async function viewEstoque(alvo) {
   tela.querySelector('#est-pdf').onclick = exportarEstoquePdf;
   tela.querySelector('#est-xlsx').onclick = exportarEstoqueXlsx;
   abaMovimentar(corpo);
+  // v3.35.2 — a aba só aparece enquanto houver etiqueta para trocar
+  api('codigos:etiquetasTrocar').then(r => {
+    if (!r || !r.ok || !r.total) return;
+    const b = tela.querySelector('#aba-etq');
+    const falta = r.total - r.conferidas;
+    b.innerHTML = `🏷️ Etiquetas a trocar${falta > 0 ? ` <span class="etq-badge">${falta}</span>` : ' ✓'}`;
+    b.style.display = '';
+    if (alvo && alvo.dataset && alvo.dataset.aba === 'etq') b.click();
+  }).catch(() => {});
 }
 
 // ---------- Aba: Movimentar ----------
@@ -988,6 +998,154 @@ function imprimirEtiquetas(produto, variacoes, qtds, mostrar = { preco: false, r
   api('config:imprimir', { tipo: 'etiqueta' }).then(r => {
     if (!r.ok) imprimirFolhaEtiquetas(folha);
   }).catch(() => imprimirFolhaEtiquetas(folha));
+}
+
+// ---------- Aba: Etiquetas a trocar (v3.35.2) ----------
+// Variações criadas depois da restauração de 25/10 tinham o mesmo código de
+// etiquetas antigas já coladas em outras peças. Elas ganharam código novo
+// (core/codigos.js). Aqui está, por local, cada peça cuja etiqueta precisa ser
+// trocada — quantidade = saldo do local, nem a mais nem a menos.
+async function abaEtiquetasTrocar(corpo) {
+  corpo.innerHTML = '<div class="painel"><div class="vazio" style="padding:28px">Carregando…</div></div>';
+  const r = await api('codigos:etiquetasTrocar');
+  corpo.innerHTML = '';
+  if (!r || !r.ok) { toast((r && r.erro) || 'Não consegui carregar a lista.', true); return; }
+  if (!r.total) {
+    corpo.appendChild(el('<div class="painel"><div class="vazio" style="padding:28px">Nenhuma etiqueta para trocar. ✓</div></div>'));
+    return;
+  }
+  const pct = (a, b) => b ? Math.round((a / b) * 100) : 0;
+  const varTxt = (v) => [v.cor, v.tamanho].filter(x => x && x !== 'Única' && x !== 'U').join(' · ') || '—';
+  const topo = el(`
+    <div class="etq-troca-topo">
+      <div class="etq-troca-txt">
+        <div class="etq-troca-tit">Etiquetas a trocar</div>
+        <span>Estas peças foram cadastradas depois da restauração e ganharam <b>código novo</b>.
+        O código antigo era igual ao de outras roupas. Imprima a etiqueta nova, cole por cima da antiga
+        e marque como trocada. Etiqueta antiga bipada no caixa avisa e não vende.</span>
+      </div>
+      <div class="etq-troca-num">
+        <div><strong id="etq-tot-falta"></strong><small>faltam</small></div>
+        <div><strong>${r.total}</strong><small>etiquetas</small></div>
+        <div><strong>${r.variacoes}</strong><small>variações</small></div>
+      </div>
+      <div class="etq-barra"><i id="etq-barra-tot"></i></div>
+    </div>`);
+  corpo.appendChild(topo);
+
+  const atualizarTopo = () => {
+    let conf = 0;
+    for (const l of r.locais) for (const it of l.itens) if (it.conferida) conf += it.qtd;
+    topo.querySelector('#etq-tot-falta').textContent = r.total - conf;
+    topo.querySelector('#etq-barra-tot').style.width = pct(conf, r.total) + '%';
+    const b = document.getElementById('aba-etq');
+    if (b) b.innerHTML = `🏷️ Etiquetas a trocar${r.total - conf > 0 ? ` <span class="etq-badge">${r.total - conf}</span>` : ' ✓'}`;
+  };
+
+  for (const loc of r.locais) {
+    const card = el(`
+      <div class="painel etq-local">
+        <div class="etq-local-cab">
+          <div>
+            <h3>${esc(loc.nome)}</h3>
+            <span class="etq-local-info"></span>
+          </div>
+          <div class="etq-local-acoes">
+            <button class="btn btn-suave" data-a="lista">📋 Lista de conferência</button>
+            <button class="btn btn-suave" data-a="faltam">🖨️ Só as que faltam</button>
+            <button class="btn btn-primario" data-a="todas">🖨️ Imprimir ${loc.pecas} etiquetas</button>
+          </div>
+        </div>
+        <div class="etq-barra etq-barra-fina"><i></i></div>
+        <div class="tab-scroll"><table>
+          <thead><tr><th>Produto / variação</th><th>Código antigo</th><th>Código novo</th>
+            <th class="num" style="width:90px">Etiquetas</th><th style="width:120px;text-align:center">Trocada</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>`);
+    const tb = card.querySelector('tbody');
+    const info = () => {
+      const c = loc.itens.reduce((s, it) => s + (it.conferida ? it.qtd : 0), 0);
+      card.querySelector('.etq-local-info').textContent =
+        `${loc.pecas} etiqueta(s) · ${loc.itens.length} variação(ões) · ${c ? `${c} trocada(s)` : 'nenhuma trocada ainda'}`;
+      card.querySelector('.etq-barra-fina i').style.width = pct(c, loc.pecas) + '%';
+      card.querySelector('[data-a="faltam"]').disabled = c >= loc.pecas;
+      atualizarTopo();
+    };
+    for (const it of loc.itens) {
+      const tr = el(`<tr${it.conferida ? ' class="etq-ok"' : ''}>
+        <td><b>${esc(it.produto)}</b>${it.referencia ? ` <small style="color:var(--texto-suave)">Ref. ${esc(it.referencia)}</small>` : ''}
+          <br><small style="color:var(--texto-suave)">${esc(varTxt(it))}</small></td>
+        <td class="etq-cod etq-cod-velho">${esc(it.codigo_antigo)}</td>
+        <td class="etq-cod"><b>${esc(it.codigo_barras)}</b></td>
+        <td class="num"><b>${it.qtd}</b></td>
+        <td style="text-align:center"><label class="chk-inline" style="justify-content:center"><input type="checkbox"${it.conferida ? ' checked' : ''}> ${it.conferida ? 'trocada' : 'trocar'}</label></td>
+      </tr>`);
+      const chk = tr.querySelector('input');
+      chk.onchange = async () => {
+        const rr = await api('codigos:marcarTrocada', { estoque_id: loc.estoque_id, variacao_id: it.variacao_id, feito: chk.checked });
+        if (!rr || !rr.ok) { chk.checked = !chk.checked; toast((rr && rr.erro) || 'Não marcou.', true); return; }
+        it.conferida = chk.checked;
+        tr.classList.toggle('etq-ok', chk.checked);
+        chk.parentElement.lastChild.textContent = chk.checked ? ' trocada' : ' trocar';
+        info();
+      };
+      tb.appendChild(tr);
+    }
+    const imprimir = (soFaltam) => {
+      const lista = loc.itens.filter(it => !soFaltam || !it.conferida);
+      const porProd = new Map();
+      for (const it of lista) {
+        if (!porProd.has(it.produto_id)) porProd.set(it.produto_id, {
+          produto: { id: it.produto_id, nome: it.produto, referencia: it.referencia, preco_venda: it.preco_venda }, variacoes: [] });
+        porProd.get(it.produto_id).variacoes.push({ id: it.variacao_id, cor: it.cor, tamanho: it.tamanho,
+          codigo_barras: it.codigo_barras, estoque: it.qtd });
+      }
+      const n = lista.reduce((s, it) => s + it.qtd, 0);
+      abrirEtiquetasLote([...porProd.values()], {
+        titulo: `Etiquetas novas — ${loc.nome}`,
+        texto: `<b>${n} etiqueta(s)</b> de ${lista.length} variação(ões) em <b>${esc(loc.nome)}</b> — uma por peça no saldo deste local.`,
+        rotuloQtd: '1 por peça deste local'
+      });
+    };
+    card.querySelector('[data-a="todas"]').onclick = () => imprimir(false);
+    card.querySelector('[data-a="faltam"]').onclick = () => imprimir(true);
+    card.querySelector('[data-a="lista"]').onclick = () => imprimirConferencia(loc, varTxt);
+    info();
+    corpo.appendChild(card);
+  }
+  atualizarTopo();
+}
+
+// Folha A4 para conferir na arara: peça, código antigo → novo, quantidade.
+function imprimirConferencia(loc, varTxt) {
+  const w = window.open('about:blank', '_blank', 'width=900,height=700,toolbar=0,menubar=0');
+  if (!w) { toast('O navegador bloqueou a janela de impressão. Libere os pop-ups e tente de novo.', true); return; }
+  const linhas = loc.itens.map(it => `<tr>
+      <td><b>${esc(it.produto)}</b>${it.referencia ? ` <span class="ref">Ref. ${esc(it.referencia)}</span>` : ''}<br><span class="var">${esc(varTxt(it))}</span></td>
+      <td class="cod velho">${esc(it.codigo_antigo)}</td><td class="cod">${esc(it.codigo_barras)}</td>
+      <td class="num">${it.qtd}</td><td class="box"></td></tr>`).join('');
+  const hoje = new Date().toLocaleDateString('pt-BR');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Conferência — ${esc(loc.nome)}</title><style>
+    @page{size:A4;margin:12mm}*{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Segoe UI',Arial,sans-serif;color:#2b2b2b;font-size:11px}
+    header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #B01E23;padding-bottom:6px;margin-bottom:10px}
+    h1{font-size:17px;color:#B01E23}header small{color:#777;font-size:10.5px}
+    table{width:100%;border-collapse:collapse}th{text-align:left;font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;color:#777;border-bottom:1px solid #ccc;padding:5px 6px}
+    td{padding:6px;border-bottom:1px solid #eee;vertical-align:middle}tr{page-break-inside:avoid}
+    .ref,.var{color:#777;font-size:10px}.cod{font-family:Consolas,monospace;font-size:11px;white-space:nowrap}
+    .velho{color:#999;text-decoration:line-through}.num{text-align:right;font-weight:700;font-size:13px;width:60px}
+    .box{width:70px}.box:after{content:'';display:block;width:14px;height:14px;border:1.5px solid #555;border-radius:3px;margin:0 auto}
+    tfoot td{font-weight:700;border-top:2px solid #333;border-bottom:none}
+  </style></head><body>
+    <header><div><h1>Troca de etiquetas — ${esc(loc.nome)}</h1>
+      <small>Cole a etiqueta nova por cima da antiga. Uma por peça.</small></div>
+      <small>${hoje} · ${loc.pecas} etiqueta(s) · ${loc.itens.length} variação(ões)</small></header>
+    <table><thead><tr><th>Peça</th><th>Código antigo</th><th>Código novo</th><th style="text-align:right">Qtd</th><th style="text-align:center">Trocada</th></tr></thead>
+    <tbody>${linhas}</tbody><tfoot><tr><td colspan="3">Total</td><td class="num">${loc.pecas}</td><td></td></tr></tfoot></table>
+  </body></html>`);
+  w.document.close();
+  setTimeout(() => { try { w.print(); } catch { /* ok */ } }, 350);
 }
 
 // ---------- Aba: Recuperar vendas pela contagem (v3.34.0) ----------

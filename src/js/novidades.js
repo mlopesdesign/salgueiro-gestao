@@ -3,6 +3,16 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.35.2',
+    data: '2026-11-03',
+    itens: [
+      '🏷️ CÓDIGO DE BARRAS NÃO SE REPETE MAIS. Depois da restauração de 25/10, as peças cadastradas a partir de 30/10 receberam códigos que já estavam impressos em etiquetas de outras roupas. Essas 61 variações ganharam código novo, no mesmo formato de sempre — um código por peça. A partir de agora o código sai de um contador próprio, guardado também fora do banco: restaurar um backup antigo não faz o código voltar e repetir.',
+      '🖨️ ETIQUETAS A TROCAR. Em Estoque aparece a aba "Etiquetas a trocar", com cada peça por local (Loja Principal, Loja Camarote, Almoxarifado), o código antigo e o novo e a quantidade certa — uma etiqueta por peça do saldo, nem a mais nem a menos. Imprime por local, só as que faltam, ou a lista de conferência. Marque cada linha como trocada; a aba some quando acabar.',
+      '⚠️ ETIQUETA ANTIGA NO CAIXA AVISA. Se alguém bipar uma etiqueta que ainda não foi trocada, o PDV mostra "Etiqueta antiga — não vale mais" e não vende a peça errada.',
+      '🔌 PORTA DA REDE NÃO FICA MAIS PRESA. Quando o sistema fechava de mau jeito, o servidor da rede ficava esquecido segurando a porta, e era preciso trocar o número nos terminais. Agora ele se desliga sozinho quando o sistema fecha, e ao abrir o sistema libera a porta se ela estiver presa por uma sobra dele mesmo. A porta fica sempre a mesma.',
+    ],
+  },
+  {
     versao: '3.35.1',
     data: '2026-11-02',
     itens: [

@@ -1,0 +1,11 @@
+v3.35.2 — Código de barras sem repetição e porta da rede que não fica presa
+
+- core/codigos.js: contador próprio (>= 10000) guardado no banco e em dados/codigos-maior.txt
+- Troca única das variações 601-661 (pós-restauração), refeita igual se banco antigo voltar
+- Estoque: aba Etiquetas a trocar (por local, qtd = saldo, impressão e conferência)
+- PDV: etiqueta antiga avisa e não vende
+- servidor-rede.ps1: sai quando o sistema fecha e libera porta presa por sobra antiga
+- teste-codigos-restauracao.mjs (33 asserções)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01UiSBBjrVtHruCRtEum4jQN
