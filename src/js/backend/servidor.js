@@ -2915,26 +2915,28 @@ async function _iniciar() {
 
   // v3.35.2 — códigos de barras: contador próprio que sobrevive a restauração
   // (core/codigos.js). O maior número já usado fica também em
-  // dados/codigos-maior.txt; a troca única das variações nascidas depois da
-  // restauração fica em dados/codigos-trocados.json, para ser refeita IGUAL se
-  // um banco antigo for restaurado (as etiquetas reimpressas continuam valendo).
+  // dados/codigos-maior.txt, para o próximo cadastro nunca repetir código.
+  //
+  // v3.36.0 — a troca única da v3.35.2 (código novo para as variações > 600)
+  // foi REVERTIDA por ordem do Marcio: as etiquetas coladas nas peças estavam
+  // certas. O boot NÃO refaz mais a troca (nem por dados/codigos-trocados.json,
+  // que é zerado). A reversão roda uma vez, com cópia do banco antes.
   try {
     codigos.definirMarcaExterna(Number(String(await ambiente.lerTextoDados('codigos-maior.txt') || '').trim()) || 0);
-    if (!db.prepare('SELECT valor FROM config WHERE chave=?').get(codigos.MIGR_CHAVE) && !_bancoSubstituido) {
-      let mapa = null;
-      try { mapa = JSON.parse(await ambiente.lerTextoDados('codigos-trocados.json') || 'null'); } catch { mapa = null; }
-      try { await ambiente.salvarCopiaAutomatica(db.exportar(), 'antes-codigos'); } catch { /* segue: o .anterior também protege */ }
-      const r = codigos.migrarPosRestauracao(db, null, mapa);
+    if (!db.prepare('SELECT valor FROM config WHERE chave=?').get(codigos.REVERTE_CHAVE) && !_bancoSubstituido) {
+      const pendentes = codigos.listaTrocados(db).length;
+      if (pendentes) {
+        try { await ambiente.salvarCopiaAutomatica(db.exportar(), 'antes-reverter-codigos'); } catch { /* segue: o .anterior também protege */ }
+      }
+      const r = codigos.reverterTroca(db, null);
       if (r.ok && !r.ja) {
-        if (r.trocados.length && !(Array.isArray(mapa) && mapa.length)) {
-          await ambiente.escreverTextoDados('codigos-trocados.json', JSON.stringify(r.trocados));
-        }
-        ambiente.registrarLog('CODIGOS', `${r.trocados.length} variação(ões) com código novo${mapa ? ' (troca refeita após restauração)' : ''}`);
+        ambiente.registrarLog('CODIGOS', `reversão v3.36.0: ${r.revertidos.length} variação(ões) de volta ao código original, ${r.pulados.length} pulada(s)`);
         try { await db.salvarAgora(); } catch { /* */ }
       } else if (!r.ok) {
-        ambiente.registrarLog('CODIGOS', `troca de códigos falhou, banco intacto: ${r.erro}`);
+        ambiente.registrarLog('CODIGOS', `reversão falhou, banco intacto: ${r.erro}`);
       }
     }
+    try { await ambiente.escreverTextoDados('codigos-trocados.json', '[]'); } catch { /* */ }
     await _gravarMarcaCodigos();
   } catch (e) { console.error('[codigos] falhou (banco intacto):', e && e.message); }
 

@@ -936,7 +936,7 @@ function modalPagamento(total, descontoGeral, pontosResgate, aoConcluir, descont
     if (!r.ok) { m.querySelector('#pg-erro').textContent = r.erro; return; }
     fechar();
     if (r.pontos_ganhos > 0) setTimeout(() => toast(`🎁 +${r.pontos_ganhos} pontos ganhos!`), 400);
-    modalCupom(r);
+    cupomAposVenda(r);
     aoConcluir();
   }, 'Confirmar venda');
 
@@ -1204,6 +1204,26 @@ function _fmtDataHora(s) {
   if (!s) return '';
   const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}:\d{2})/);
   return m ? `${m[3]}/${m[2]}/${m[1]} ${m[4]}` : s;
+}
+
+// v3.36.0 — o cupom não fiscal sai SOZINHO ao finalizar a venda (ordem do
+// Marcio em 05/11/2026), sempre que houver impressora para ele:
+//   • computador principal com impressora de cupom configurada → imprime
+//     direto, sem perguntar (mesmo caminho do botão de sempre);
+//   • terminal em rede → abre a impressão do navegador na hora;
+//   • computador principal SEM impressora configurada → pergunta, como antes.
+// O aviso de venda concluída continua, com "Imprimir de novo" para a 2ª via.
+function cupomAposVenda(d) {
+  const auto = EM_REDE || !!String(getConfig().impressora_cupom || '').trim();
+  if (!auto) { modalCupom(d); return; }
+  const m = modal(`Venda #${d.venda.id} concluída ✅`, `
+    <p style="margin-bottom:14px">Total: <b style="font-size:18px">${moeda(d.venda.total)}</b>
+      ${d.venda.cliente ? ` · Cliente: ${esc(d.venda.cliente)}` : ''}</p>
+    <p style="color:var(--texto-suave)">🖨️ Cupom enviado para a impressora.</p>
+  `, (m, fechar) => { imprimirCupom(d); fechar(); }, 'Imprimir de novo');
+  // "Cancelar" aqui leria como cancelar a venda — a venda já está gravada
+  const bc = m.querySelector('.btn-cancelar'); if (bc) bc.textContent = 'Fechar';
+  setTimeout(() => { imprimirCupom(d); }, 50);
 }
 
 function modalCupom(d) {

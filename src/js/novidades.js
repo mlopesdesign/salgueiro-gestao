@@ -3,6 +3,14 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.36.0',
+    data: '2026-11-05',
+    itens: [
+      '🖨️ CUPOM SAI SOZINHO AO FINALIZAR A VENDA. Com a impressora de cupom configurada, o comprovante não fiscal é impresso na hora em que a venda é confirmada — ninguém precisa clicar em "Imprimir". O aviso de venda concluída continua, com o botão "Imprimir de novo" para a segunda via. Nos terminais em rede a janela de impressão abre sozinha. Sem impressora configurada, o sistema pergunta, como antes.',
+      '🏷️ AS ETIQUETAS QUE ESTÃO NAS PEÇAS VOLTAM A VALER. A troca de códigos da versão 3.35.2 foi desfeita: as 61 variações cadastradas em 30 e 31/10 voltam ao código que está impresso nas etiquetas delas, e o caixa volta a vender bipando essas etiquetas. A aba "Etiquetas a trocar" deixa de existir — não há etiqueta nenhuma para trocar. O sistema guarda uma cópia do banco antes de desfazer, e cadastro novo continua sem repetir código.',
+    ],
+  },
+  {
     versao: '3.35.2',
     data: '2026-11-03',
     itens: [

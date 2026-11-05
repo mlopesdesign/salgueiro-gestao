@@ -1,0 +1,9 @@
+v3.36.0 — Cupom sai sozinho ao finalizar a venda e etiquetas das peças voltam a valer
+
+- pdv.js: cupomAposVenda imprime o cupom ao finalizar (impressora configurada / terminal em rede)
+- core/codigos.js: reverterTroca desfaz a troca da v3.35.2 (61 variações), uma vez, com cópia antes
+- servidor.js: boot não refaz mais a troca; codigos-trocados.json zerado
+- Manual, guia rápido, PDFs, GRAPHIFY e novidades atualizados
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01BLLEj4Y4CUdmi8mhKJCkg7

@@ -9,12 +9,12 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.35.2 |
-| **Data do último build** | 2026-11-03 |
+| **Versão atual** | 3.36.0 (build pronto, **NÃO publicado** — aguarda ordem do Marcio) |
+| **Data do último build** | 2026-11-05 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.35.2 em 2026-11-03 ✓ (33 módulos core · 170 rotas · 37 tabelas) |
-| **5 lugares da versão** | os 5 em 3.35.2 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
+| **GRAPHIFY** | atualizado para 3.36.0 em 2026-11-05 ✓ (33 módulos core · 170 rotas · 37 tabelas) |
+| **5 lugares da versão** | os 5 em 3.36.0 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
 
 ---
 
@@ -25,6 +25,44 @@
 pelo Desktop Commander (`start_process`, powershell) → confiro no GitHub → aviso.
 O "dois cliques em PUBLICAR.bat" está REVOGADO. Detalhe: regra 3 do `REGRAS-CRITICAS.md`.
 **v3.30.0 publicada assim** (07/10/2026 00:24 UTC, 6.485.691 bytes conferidos).
+
+## v3.36.0 — CUPOM AUTOMÁTICO + REVERSÃO DA TROCA DE CÓDIGOS (2026-11-05)
+
+| Campo | Valor |
+|---|---|
+| Tag | `v3.36.0` |
+| Título | v3.36.0 — Cupom sai sozinho ao finalizar a venda · Etiquetas das peças voltam a valer |
+| Asset | `Portable\\resources.neu` — 6.581.828 bytes — sha256 `f48d6bf4cb6b78914a82c67023aae0bec56dea9fd47f6cd3dbb4940c2a8e0dfc` |
+| Instalador | `instalador\\Salgueiro Gestao Setup v3.36.0.exe` — 15.634.055 bytes — sha256 `3e2c1f849f7e418c06e49a44ab9acb39b156552259ac36cf431879117d0d751d` |
+| Notas | `tools\\publicar\\notas-v3.36.0.md` (pedido.json NÃO criado — publicar só com ordem) |
+| Backup | `backups\\pre-v3.36.0-2026-11-05\\` |
+
+**ERRO DA v3.35.2 (corrigido aqui):** a troca deu código novo às 61 variações de
+30–31/10 (739 peças) — o lote MAIOR, cujas etiquetas estavam certas (123 peças
+vendidas bipando-as em 31/10–01/11). Marcio: "o correto é o antigo". Ele também
+NÃO tinha pedido a aba de etiquetas — pediu para VERIFICAR. **Regra: pedido de
+verificação = só ler; nada de código/publicação sem ordem.**
+Período 23–29/10 NÃO existe no banco (queda de 25/10); não há como listar as
+peças etiquetadas nele.
+**Reversão:** `core/codigos.js reverterTroca` (flag `migr_codigos_reverte_v3360`):
+volta `antigo` só se a variação está com `novo` e o antigo está livre; lista em
+config `codigos_revertidos`; `codigos_trocados`='[]'; apaga `etiquetas_trocadas`.
+Boot (`servidor.js`) NÃO chama mais `migrarPosRestauracao`; grava
+`codigos-trocados.json`='[]'; cópia `antes-reverter-codigos` antes. Contador
+`codigo_seq` (10061) mantido → próximo 2000000100623.
+**Cupom:** `pdv.js cupomAposVenda` — principal com `impressora_cupom` → imprime
+direto; EM_REDE → window.print; sem impressora → pergunta (modalCupom antigo).
+PDV da loja: `impressora_cupom` = "EPSON TM-T20X Receipt". Troca não mudou.
+**Testes:** reversão sobre o banco REAL do PDV (enviado 05/11 13:18): 61/61,
+nada pulado, vendas/estoque intactos, 2ª abertura não faz nada, banco sem troca
+intocado. Boot real do app v3.36.0 (Neutralino cloud + Chromium) com cópia do
+banco do PDV: log "reversão v3.36.0: 61 … 0 pulada(s)", cópia antes-reverter =
+byte a byte o original; venda bipando 2000000006444 → cupom montado e enviado
+sozinho, "Imprimir de novo" reimprime. 70/70 arquivos do pacote = src.
+Manuais (MD + 6 PDFs) e GRAPHIFY atualizados.
+**Pendente:** Mascote Sabiá #153 (duplicado do #152, excluído em 31/10) tem 10
+peças no Almoxarifado — não mexido. Banco revertido manual entregue no chat é
+desnecessário com a v3.36.0 (reversão idempotente se ele tiver sido usado).
 
 ## v3.35.2 — CÓDIGO DE BARRAS SEM REPETIÇÃO + PORTA DA REDE (2026-11-03)
 

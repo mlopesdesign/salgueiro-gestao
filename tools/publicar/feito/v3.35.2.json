@@ -1,0 +1,7 @@
+{
+  "tag": "v3.35.2",
+  "titulo": "v3.35.2 — Código de barras sem repetição e porta da rede que não fica presa",
+  "asset": "Portable\\resources.neu",
+  "notas": "tools\\publicar\\notas-v3.35.2.md",
+  "sha256": "5986dfe884b19d3685837e1d12799cc1876726d5baf0ac79738bd74f1a52db72"
+}

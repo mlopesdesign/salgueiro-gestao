@@ -193,3 +193,43 @@ export function marcarEtiquetaTrocada(db, p) {
   gravarCfg(db, CH_CONFERIDAS, JSON.stringify(mapa));
   return { ok: true };
 }
+
+// v3.36.0 — REVERSÃO da troca da v3.35.2 (ordem do Marcio em 05/11/2026).
+// A troca deu código novo às 61 variações cadastradas em 30–31/10, mas as
+// etiquetas coladas nessas peças estavam CERTAS (123 peças vendidas bipando-as
+// em 31/10 e 01/11). Corrigir o lote maior era o caminho errado: as peças
+// voltam ao código original e as etiquetas que estão nelas voltam a valer.
+// Só reverte a variação que ainda está com o código "novo" e cujo código
+// original não pertence a outra peça. A lista revertida fica guardada em
+// config `codigos_revertidos` para auditoria.
+export const REVERTE_CHAVE = 'migr_codigos_reverte_v3360';
+export function reverterTroca(db, usuario) {
+  if (lerCfg(db, REVERTE_CHAVE)) return { ok: true, ja: true, revertidos: [] };
+  const lista = listaTrocados(db);
+  const feitos = [], pulados = [];
+  db.exec('BEGIN');
+  try {
+    const ver = db.prepare('SELECT codigo_barras FROM variacoes WHERE id=?');
+    const dono = db.prepare('SELECT id FROM variacoes WHERE codigo_barras=? AND id<>?');
+    for (const m of lista) {
+      const v = ver.get(m.variacao_id);
+      if (!v || v.codigo_barras !== m.novo || dono.get(m.antigo, m.variacao_id)) { pulados.push(m); continue; }
+      db.prepare('UPDATE variacoes SET codigo_barras=? WHERE id=?').run(m.antigo, m.variacao_id);
+      feitos.push(m);
+    }
+    if (lista.length) gravarCfg(db, 'codigos_revertidos', JSON.stringify(lista));
+    gravarCfg(db, CH_LISTA, '[]');
+    db.prepare('DELETE FROM config WHERE chave=?').run(CH_CONFERIDAS);
+    // a troca antiga nunca mais roda neste banco
+    if (!lerCfg(db, MIGR_CHAVE)) gravarCfg(db, MIGR_CHAVE, 'revertida');
+    gravarCfg(db, REVERTE_CHAVE, new Date().toISOString());
+    db.exec('COMMIT');
+  } catch (e) {
+    db.exec('ROLLBACK');
+    return { ok: false, erro: e.message };
+  }
+  if (feitos.length) {
+    try { auditar(db, usuario || null, 'codigos.reverter', `${feitos.length} variação(ões) voltaram ao código original (reversão da v3.35.2)`); } catch { /* */ }
+  }
+  return { ok: true, ja: false, revertidos: feitos, pulados };
+}

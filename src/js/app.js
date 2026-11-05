@@ -132,7 +132,7 @@ function _avisoCaixaAberto(caixa) {
 const $app = document.getElementById('app');
 let usuario = null;
 let categoriasCache = [];
-let APP_VERSION = '3.35.2'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
+let APP_VERSION = '3.36.0'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
 
 // API dupla: no aplicativo usa IPC (preload); num terminal em rede (navegador),
 // conversa com o servidor do computador principal via HTTP com token de sessão.

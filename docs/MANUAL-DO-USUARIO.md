@@ -201,7 +201,17 @@ Escolha a forma de pagamento:
 
 É possível **dividir o pagamento** entre várias formas na mesma venda.
 
-Ao confirmar, o cupom é impresso automaticamente (se a impressora estiver configurada).
+**O cupom sai sozinho.** Ao confirmar a venda, o comprovante não fiscal é impresso na hora, sem ninguém clicar em nada. Isso existe para o cliente nunca sair sem o comprovante — é com ele que se faz troca depois.
+
+| Onde a venda foi feita | O que acontece ao confirmar |
+|---|---|
+| Computador principal, com impressora de cupom configurada | O cupom sai direto na térmica |
+| Aparelho pela rede (outro computador, tablet, celular) | A janela de impressão do aparelho abre sozinha |
+| Computador principal **sem** impressora configurada | O sistema pergunta se quer imprimir, como antes |
+
+Depois de imprimir aparece o aviso **Venda concluída**, com o botão **Imprimir de novo** para a segunda via. **Fechar** só fecha o aviso — a venda já está gravada.
+
+> A impressora do cupom é escolhida em **Configurações → 🖨️ Impressoras**.
 
 ### Cortesia (brinde)
 
@@ -1510,7 +1520,7 @@ O sistema se adapta à tela do aparelho:
 
 > **Dica:** no navegador do celular, use "Adicionar à tela de início". O sistema abre como se fosse um aplicativo, sem a barra de endereço.
 
-**O que muda no aparelho pela rede:** a impressão sai pela janela de impressão do próprio aparelho, não pela impressora térmica do balcão. Cupom e vale continuam sendo impressos silenciosamente **só no computador principal**.
+**O que muda no aparelho pela rede:** a impressão sai pela janela de impressão do próprio aparelho, não pela impressora térmica do balcão. Cupom e vale saem silenciosamente **só no computador principal**; no aparelho pela rede a janela de impressão abre sozinha ao finalizar a venda.
 
 
 ## 21. Atualizações

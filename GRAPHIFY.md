@@ -3,7 +3,7 @@
 > Mapa técnico gerado automaticamente por `tools/graphify.js`.
 > **Não edite à mão.** Regere com `node tools/graphify.js` a cada alteração estrutural.
 
-**Versão:** 3.35.2 · **Gerado em:** 2026-11-03
+**Versão:** 3.36.0 · **Gerado em:** 2026-11-05
 **Aplicação:** `br.com.mllopes.salgueirogestao` (Neutralino 6 + WebView2)
 **Cliente:** Boutique do Salgueiro · **Autor:** ML Lopes Design
 
@@ -73,7 +73,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `auth.js` | 185 | 8 | autorizarDescontoAdmin, descontoLivre, listarUsuarios, login, salvarUsuario, trocarSenha, verificarAdmin, verificarOperador |
 | `caixa-terminal.js` | 80 | 0 | CAIXA_HORAS_ALERTA, caixaDoTerminal, caixasDeOutros, descricaoTerminal, horasAberto, terminalDe, textoCaixaAberto |
 | `clientes.js` | 223 | 7 | excluirCategoria, exportar, importar, listar, listarCategorias, salvar, salvarCategoria |
-| `codigos.js` | 196 | 3 | LIMITE_RESTAURACAO, MIGR_CHAVE, SEQ_INICIAL, _zerarMarcaTeste, codigoAposentado, definirMarcaExterna, etiquetasATrocar, listaTrocados, +6 |
+| `codigos.js` | 236 | 3 | LIMITE_RESTAURACAO, MIGR_CHAVE, REVERTE_CHAVE, SEQ_INICIAL, _zerarMarcaTeste, codigoAposentado, definirMarcaExterna, etiquetasATrocar, +8 |
 | `compras.js` | 157 | 8 | cancelarCompra, criarCompra, excluirFornecedor, listarCompras, listarFornecedores, obterCompra, receberCompra, salvarFornecedor |
 | `config.js` | 85 | 2 | obter, salvar |
 | `consignacao.js` | 95 | 3 | acertar, listar, resumo |
@@ -111,7 +111,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `ambiente.js` | 559 | 8 |
 | `db.js` | 743 | 6 |
 | `servidor-rede-embutido.js` | 906 | 29 |
-| `servidor.js` | 3083 | 18 |
+| `servidor.js` | 3085 | 18 |
 
 ## 6. Telas (`src/js`)
 
@@ -129,8 +129,8 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `impressao.js` | 179 | LIMITES, PADRAO, aplicarEstiloImpressao, cssCupomArquivo, cssCupomTela |
 | `mensagens.js` | 758 | abrirBalao, encerrarTelaMensagens, iniciarMensagens, pararMensagens, viewMensagens |
 | `neutralino.js` | 2 | — |
-| `novidades.js` | 1138 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
-| `pdv.js` | 2590 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
+| `novidades.js` | 1146 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
+| `pdv.js` | 2610 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
 | `ranking.js` | 360 | viewRanking |
 | `relatorios.js` | 1899 | viewRelatorios |
 

@@ -24,6 +24,7 @@
 | 3 | Se o cliente é cadastrado, aperte **F4** e busque pelo nome |
 | 4 | Aperte **F10** para finalizar |
 | 5 | Escolha a forma de pagamento e confirme |
+| 6 | O cupom sai **sozinho** na impressora. Para outra via: **Imprimir de novo** |
 
 **Teclas de atalho no PDV:**
 
