@@ -9,7 +9,7 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.37.0 — pronta no disco (build sha256 c0a1367b…5893), NÃO publicada · em produção: 3.36.0 |
+| **Versão atual** | 3.37.0 — publicada 06/11/2026 00:16 (Latest, asset conferido sem login) · repositório PÚBLICO por ordem do Marcio |
 | **Data do último build** | 2026-11-05 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
@@ -25,7 +25,8 @@
 - Causa provável do PDV zerado: `salgueiro.db` ausente no boot → criava banco vazio e a 2ª gravação sobrescrevia o `.anterior`; e o cliente "Consumidor final" fazia o banco vazio passar como "com dados". Corrigido: boot recupera do backup com MAIS vendas, guarda `banco-com-problema`, avisa após login.
 - Senha de acesso e senha mestra NÃO alteradas (ordem do Marcio). Cercadas: trava de login, mestra só local, rotas perigosas só local.
 - Testes: `testes/teste-v3370-correcoes.mjs` 32/32; `teste-restauracao-gruda` 14/14. Falhas antigas inalteradas (consignado-rel 6, frete 3, origem-vendas 4).
-- **PENDENTE p/ publicar:** repo `salgueiro-gestao` está PRIVADO → updater sem login dá HTTP 404. Precisa autorização para: (1) criar repo público só de releases `mlopesdesign/salgueiro-gestao-atualizacoes` (a v3.37.0 já procura lá primeiro); (2) abrir o principal temporariamente para PDV e laptop (em 3.36.0) atualizarem online, depois fechar.
+- **PUBLICADA 06/11 00:16** — Marcio mandou deixar o repositório público ("coloca public"). Canal `salgueiro-gestao-atualizacoes` não foi criado (desnecessário enquanto o principal for público).
+- (histórico) Antes: repo `salgueiro-gestao` está PRIVADO → updater sem login dá HTTP 404. Precisa autorização para: (1) criar repo público só de releases `mlopesdesign/salgueiro-gestao-atualizacoes` (a v3.37.0 já procura lá primeiro); (2) abrir o principal temporariamente para PDV e laptop (em 3.36.0) atualizarem online, depois fechar.
 
 ## 0. COMO SE PUBLICA (regra nova do Marcio em 07/10/2026)
 
