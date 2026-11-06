@@ -11,7 +11,10 @@ const SOMENTE_LOCAL = new Set([
   'config:listarImpressoras', 'config:imprimir',
   'backup:manual', 'backup:restaurar',
   'nuvem:conectar', 'nuvem:desconectar', 'nuvem:backup',
-  'rede:aplicar', 'rede:abrirNavegador', 'dev:entrar', 'dev:aplicar', 'dev:remover'
+  'rede:aplicar', 'rede:abrirNavegador', 'dev:entrar', 'dev:aplicar', 'dev:remover',
+  // v3.37.0 — nada de suporte, reset ou restauração pela rede
+  'dev:trocarSenha', 'dev:setores', 'dev:resetarFabrica',
+  'backup:restaurarLocal', 'app:garantirExtensao'
 ]);
 
 let estado = { ativa: false, porta: 8750, ips: [], erro: null, extensaoPronta: false };

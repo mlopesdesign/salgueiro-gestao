@@ -14,6 +14,7 @@
 import { caixaDoTerminal } from './caixa-terminal.js';
 import { auditar } from './util.js';
 import * as estoques from './estoques.js';
+import * as consignacao from './consignacao.js';
 
 const arred = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const FORMAS = ['dinheiro', 'pix', 'debito', 'credito', 'crediario', 'vale', 'cortesia'];
@@ -170,8 +171,12 @@ function analisar(db, p) {
       });
     }
 
-    const subtotal = arred(itens.reduce((s, i) => s + i.qtd * i.preco_unit, 0));
-    const desconto = arred(itens.reduce((s, i) => s + i.desconto, 0));
+    // v3.37.0 — mesmo formato do PDV: subtotal = soma dos itens JÁ LÍQUIDOS do
+    // desconto da linha, e `vendas.desconto` só para desconto do fechamento
+    // (aqui não há). Antes o desconto da linha ia nos dois lugares e uma
+    // devolução depois devolvia R$ 81 de uma peça paga R$ 90.
+    const subtotal = arred(itens.reduce((s, i) => s + i.total, 0));
+    const desconto = 0;
     vendas.push({
       ref: g.ref,
       cliente_id: cliente ? cliente.id : null,
@@ -279,6 +284,7 @@ function confirmar(db, p, quem) {
         baixa.run(i.qtd, i.variacao_id);
         insMov.run(i.variacao_id, 'venda', -i.qtd, `Venda importada #${vendaId}`, quem?.id || null, localId);
         if (localId) estoques.aplicarEstrito(db, localId, i.variacao_id, -i.qtd);
+        consignacao.registrarSaida(db, vendaId, i.variacao_id, i.qtd, i.total);   // v3.37.0 — peça consignada gera repasse
       }
       if (v.total > 0) insPag.run(vendaId, v.forma, v.total, 1);
       criadas.push({ ref: v.ref, venda_id: vendaId, total: v.total });

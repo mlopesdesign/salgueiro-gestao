@@ -3,7 +3,7 @@
 > Mapa técnico gerado automaticamente por `tools/graphify.js`.
 > **Não edite à mão.** Regere com `node tools/graphify.js` a cada alteração estrutural.
 
-**Versão:** 3.36.0 · **Gerado em:** 2026-11-05
+**Versão:** 3.37.0 · **Gerado em:** 2026-11-06
 **Aplicação:** `br.com.mllopes.salgueirogestao` (Neutralino 6 + WebView2)
 **Cliente:** Boutique do Salgueiro · **Autor:** ML Lopes Design
 
@@ -70,36 +70,36 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 
 | Arquivo | Linhas | Funções | Exporta |
 |---|---|---|---|
-| `auth.js` | 185 | 8 | autorizarDescontoAdmin, descontoLivre, listarUsuarios, login, salvarUsuario, trocarSenha, verificarAdmin, verificarOperador |
+| `auth.js` | 193 | 8 | autorizarDescontoAdmin, descontoLivre, listarUsuarios, login, salvarUsuario, trocarSenha, verificarAdmin, verificarOperador |
 | `caixa-terminal.js` | 80 | 0 | CAIXA_HORAS_ALERTA, caixaDoTerminal, caixasDeOutros, descricaoTerminal, horasAberto, terminalDe, textoCaixaAberto |
 | `clientes.js` | 223 | 7 | excluirCategoria, exportar, importar, listar, listarCategorias, salvar, salvarCategoria |
 | `codigos.js` | 236 | 3 | LIMITE_RESTAURACAO, MIGR_CHAVE, REVERTE_CHAVE, SEQ_INICIAL, _zerarMarcaTeste, codigoAposentado, definirMarcaExterna, etiquetasATrocar, +8 |
 | `compras.js` | 157 | 8 | cancelarCompra, criarCompra, excluirFornecedor, listarCompras, listarFornecedores, obterCompra, receberCompra, salvarFornecedor |
 | `config.js` | 85 | 2 | obter, salvar |
-| `consignacao.js` | 95 | 3 | acertar, listar, resumo |
+| `consignacao.js` | 149 | 5 | acertar, estornarDevolucao, listar, registrarSaida, resumo |
 | `crediario.js` | 109 | 5 | aniversariantes, excluirCliente, obterCliente, parcelasAbertas, receberParcela |
 | `dashboard.js` | 275 | 2 | resumo |
-| `devolucoes.js` | 128 | 3 | itensVenda, listar, registrar |
+| `devolucoes.js` | 153 | 4 | estornarPontos, itensVenda, listar, registrar |
 | `estoque.js` | 183 | 5 | buscarVariacoes, kardex, listarCompleto, movimentar, reposicao |
 | `estoques.js` | 474 | 20 | aplicar, aplicarEstrito, arred, conferirSaldo, conteudo, daLoja, desativar, garantirDaLoja, +13 |
 | `filtro-estoque.js` | 50 | 1 | descreverFiltro, filtrarEstoque, filtroAtivo |
 | `financeiro.js` | 142 | 5 | baixar, excluir, fluxo, listar, salvar |
 | `frete.js` | 51 | 0 | FRETE_TIPOS, freteDoPeriodo, rotuloFrete, tipoFreteValido |
-| `importar-vendas.js` | 302 | 6 | COLUNAS, analisar, confirmar |
+| `importar-vendas.js` | 308 | 6 | COLUNAS, analisar, confirmar |
 | `licenca.js` | 288 | 25 | DEV_USUARIO, MODULOS, NOME_PLANO, PLANOS, SETORES, devAplicar, devEntrar, devRemover, +14 |
 | `logo-default.js` | 4 | 0 | LOGO_DEFAULT |
 | `lojas.js` | 99 | 5 | arred, desativar, excluir, listar, lojaPadrao, salvar |
 | `mensagens.js` | 406 | 21 | JANELA_POPUP_H, ONLINE_TTL_S, confirmarAviso, contatos, encerrarAviso, enviar, enviarAviso, historico, +4 |
 | `nuvem.js` | 353 | 14 | desconectar, fazerBackup, fazerBackupTodos, iniciarOAuth, obterStatus, precisaBackupDiario, registrarOAuthListener, salvarClientId |
-| `pdv.js` | 686 | 15 | abrirCaixa, assumirCaixa, caixaAtual, caixasAbertosDeOutros, cancelarVenda, fecharCaixa, listarVendas, listarVendasGeral, +5 |
+| `pdv.js` | 722 | 15 | abrirCaixa, assumirCaixa, caixaAtual, caixasAbertosDeOutros, cancelarVenda, fecharCaixa, listarVendas, listarVendasGeral, +5 |
 | `permissoes.js` | 103 | 4 | CATALOGO, DEFAULTS, TODAS, efetivas, normalizar, pode, veValoresCaixa |
 | `pontos.js` | 110 | 9 | ajustar, calcularGanho, calcularResgate, creditar, debitar, getConfig, historico, saldo, +1 |
-| `produtos.js` | 462 | 7 | excluirCategoria, excluirProduto, listarCategorias, listarProdutos, obterProduto, salvarCategoria, salvarProduto |
+| `produtos.js` | 465 | 7 | excluirCategoria, excluirProduto, listarCategorias, listarProdutos, obterProduto, salvarCategoria, salvarProduto |
 | `recuperar-vendas.js` | 148 | 3 | OBS_RECUPERADA, confirmar, posicao, previa |
-| `rede.js` | 178 | 3 | SOMENTE_LOCAL, imprimir, iniciar, listarImpressoras, parar, preparar, status |
-| `relatorios.js` | 1657 | 22 | TAXAS_PADRAO, comprasAcompanhadas, consignadosMensal, curvaAbc, estoqueDetalhado, eventosVenda, maisVendidos, pecasParadas, +6 |
-| `trocas.js` | 428 | 3 | DESTINOS, registrar, registrarRapida |
-| `updater.js` | 50 | 1 | verificarAtualizacao |
+| `rede.js` | 181 | 3 | SOMENTE_LOCAL, imprimir, iniciar, listarImpressoras, parar, preparar, status |
+| `relatorios.js` | 1658 | 22 | TAXAS_PADRAO, comprasAcompanhadas, consignadosMensal, curvaAbc, estoqueDetalhado, eventosVenda, maisVendidos, pecasParadas, +6 |
+| `trocas.js` | 464 | 4 | DESTINOS, registrar, registrarRapida |
+| `updater.js` | 59 | 1 | verificarAtualizacao |
 | `util.js` | 68 | 4 | auditar, codigoInterno, dvEan13, hashSenha, verificarSenha |
 | `vales_troca.js` | 122 | 9 | VALIDADE_PADRAO_DIAS, consultar, criar, estaVencido, listar, usar |
 | `vendas-sql.js` | 108 | 6 | NAO_TROCA, RECEBIDO, RECEBIDO_BRUTO, RECEBIDO_PRODUTOS, SQL_TROCAS, trocasDoPeriodo |
@@ -108,20 +108,20 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 
 | Arquivo | Linhas | Funções |
 |---|---|---|
-| `ambiente.js` | 559 | 8 |
-| `db.js` | 743 | 6 |
-| `servidor-rede-embutido.js` | 906 | 29 |
-| `servidor.js` | 3085 | 18 |
+| `ambiente.js` | 562 | 8 |
+| `db.js` | 759 | 6 |
+| `servidor-rede-embutido.js` | 947 | 29 |
+| `servidor.js` | 3248 | 21 |
 
 ## 6. Telas (`src/js`)
 
 | Arquivo | Linhas | Exporta |
 |---|---|---|
-| `app.js` | 2177 | EM_REDE, ajustarLarguraModal, api, aplicarTema, campoTroco |
+| `app.js` | 2214 | EM_REDE, ajustarLarguraModal, api, aplicarTema, campoTroco |
 | `catalogo.js` | 262 | viewCatalogo |
 | `clientes.js` | 538 | viewClientes |
 | `compras.js` | 229 | viewCompras |
-| `configuracoes.js` | 1963 | viewConfiguracoes |
+| `configuracoes.js` | 1991 | viewConfiguracoes |
 | `estoque.js` | 1353 | abrirEtiquetas, ean13Svg, formMovimento, formMovimentoProduto, viewEstoque |
 | `estoques.js` | 989 | viewEstoques |
 | `etiquetas.js` | 169 | abrirEtiquetasLote, imprimirFolhaEtiquetas |
@@ -129,8 +129,8 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `impressao.js` | 179 | LIMITES, PADRAO, aplicarEstiloImpressao, cssCupomArquivo, cssCupomTela |
 | `mensagens.js` | 758 | abrirBalao, encerrarTelaMensagens, iniciarMensagens, pararMensagens, viewMensagens |
 | `neutralino.js` | 2 | — |
-| `novidades.js` | 1146 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
-| `pdv.js` | 2610 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
+| `novidades.js` | 1163 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
+| `pdv.js` | 2626 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
 | `ranking.js` | 360 | viewRanking |
 | `relatorios.js` | 1899 | viewRelatorios |
 
@@ -388,7 +388,7 @@ a rota exige apenas sessão válida.
 | `pdv:movimentoCaixa` | `caixa.sangria` | `pdv.movimentoCaixa(db, p, sessao.usuario)` |
 | `pdv:resumoCaixa` | `pdv.ver` | `{` |
 | `pdv:fecharCaixa` | `caixa.abrir_fechar` | `{` |
-| `pdv:venda` | `pdv.vender` | `pdv.registrarVenda(db, p, sessao.usuario)` |
+| `pdv:venda` | `pdv.vender` | `{` |
 | `pdv:obterVenda` | `pdv.ver` | `pdv.obterVenda(db, p.id)` |
 | `pdv:listarVendas` | `pdv.ver` | `pdv.listarVendas(db, p \|\| {})` |
 | `pdv:listarVendasGeral` | `pdv.ver` | `pdv.listarVendasGeral(db, p \|\| {})` |

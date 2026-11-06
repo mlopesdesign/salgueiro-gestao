@@ -513,7 +513,7 @@ function relatorioEvento(db, p) {
     JOIN vendas v ON v.id = cg.venda_id
     JOIN fornecedores f ON f.id = cg.fornecedor_id
     JOIN produtos pr ON pr.id = cg.produto_id
-    WHERE v.status='concluida' AND v.criado_em BETWEEN ? AND ? ${fLoja}
+    WHERE v.status='concluida' AND cg.status <> 'cancelado' AND v.criado_em BETWEEN ? AND ? ${fLoja}
     ORDER BY f.nome, cg.venda_id
   `).all(...ar);
 
@@ -564,7 +564,8 @@ function relatorioEvento(db, p) {
       it.tabela = arred(it.total + it.desconto);         // preço cheio da linha
       acumulado = arred(acumulado + it.recebido);
     }
-    const sobra = arred(v.total - acumulado);
+    // v3.37.0 — frete fora da sobra (antes caía inteiro no item mais caro)
+    const sobra = arred(v.total - (v.frete || 0) - acumulado);
     if (Math.abs(sobra) > 0.005) {
       const maior = v.itens.reduce((a, b) => (b.recebido > a.recebido ? b : a), v.itens[0]);
       maior.recebido = arred(maior.recebido + sobra);

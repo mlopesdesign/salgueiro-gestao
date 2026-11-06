@@ -37,6 +37,14 @@ async function salvarUsuario(db, p, quem) {
   const usuario = String(p.usuario || '').trim().toLowerCase();
   const perfil = ['admin', 'caixa', 'estoque'].includes(p.perfil) ? p.perfil : 'caixa';
   if (!nome || !usuario) return { ok: false, erro: 'Nome e usuário são obrigatórios.' };
+  // v3.37.0 — só administrador cria/promove administrador e mexe na conta de um
+  // administrador (senão a permissão "gerenciar usuários" equivalia a ser admin).
+  if (!quem || quem.perfil !== 'admin') {
+    const alvo = p.id ? db.prepare('SELECT perfil FROM usuarios WHERE id=?').get(p.id) : null;
+    if (perfil === 'admin' || (alvo && alvo.perfil === 'admin')) {
+      return { ok: false, erro: 'Apenas um administrador pode criar ou alterar a conta de um administrador.' };
+    }
+  }
 
   // permissões: admin = todas (null); senão o que veio do formulário (validado) ou o modelo do perfil
   const permJson = perfil === 'admin'

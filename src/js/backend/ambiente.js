@@ -85,6 +85,9 @@ export async function lerFotoArquivo(valor) {
   const s = valor == null ? '' : String(valor);
   if (!s) return null;
   if (s.startsWith('data:image/')) return s;
+  // v3.37.0 — só NOME de arquivo dentro de dados/fotos. Antes "../salgueiro.db"
+  // devolvia o banco inteiro para qualquer terminal logado.
+  if (/[\\/]|\.\./.test(s) || !/^[\w.\- ]+\.(jpe?g|png|webp|gif)$/i.test(s)) return null;
   try {
     const dir = await dirFotos();
     const buf = await Neutralino.filesystem.readBinaryFile(`${dir}/${s}`);
@@ -512,7 +515,7 @@ export async function lerLogs(dia) {
 
 // ── App ──────────────────────────────────────────────────────────────────────
 export function versaoApp() {
-  try { return NL_APPVERSION; } catch { return '3.36.0'; }
+  try { return NL_APPVERSION; } catch { return '3.37.0'; }
 }
 
 // v3.34.2 — o reinício TEM de encerrar este processo. Na loja (27/10) a

@@ -1,0 +1,11 @@
+v3.37.0 — Banco nunca abre zerado · segurança reforçada · correções da auditoria
+
+- servidor.js/db.js: boot recupera do backup com mais vendas se o banco sumir ou vier vazio; gravação serializada; faixa vermelha em falha
+- servidor.js: trava de login (5 erros → 5 min), terminal revalidado a cada pedido, restaurar de arquivo com confirmação
+- pdv/trocas/devolucoes/consignacao: venda idempotente, preço do banco, desconto por item com autorização, estorno de consignação e pontos
+- servidor-rede.ps1: timeouts, bloqueio de banco/arquivos internos, limite de conexões
+- updater: canal de atualizações dedicado com reserva no repositório principal
+- Manual, guia, PDFs, GRAPHIFY, novidades e teste novo (32/32)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01BLLEj4Y4CUdmi8mhKJCkg7

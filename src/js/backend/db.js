@@ -79,11 +79,13 @@ class SqlJsWrapper {
       // quebrou (ver _semWal), não deixa um arquivo vazio sobrescrever o bom.
       if (!bytes || bytes.length < 8192) {
         console.error('[db] gravação recusada: banco em memória vazio (' + (bytes ? bytes.length : 0) + ' bytes)');
+        _avisarFalhaGravacao('banco em memória vazio — gravação recusada');
         return;
       }
       await this._salvarBytes(bytes);
     } catch (e) {
       console.error('[db] erro ao salvar em disco:', e.message || e);
+      _avisarFalhaGravacao(e && e.message ? e.message : String(e));
     }
   }
   async salvarAgora() {
@@ -94,6 +96,12 @@ class SqlJsWrapper {
     await this.salvarAgora();
     this._db.close();
   }
+}
+
+// v3.37.0 — gravação que falha NUNCA mais fica só no console: a tela mostra
+// uma faixa vermelha fixa (app.js define globalThis.__falhaGravacao).
+export function _avisarFalhaGravacao(motivo) {
+  try { if (typeof globalThis.__falhaGravacao === 'function') globalThis.__falhaGravacao(String(motivo || '')); } catch { /* */ }
 }
 
 // Módulo sql.js inicializado uma única vez (o vendor sql-asm.js define
@@ -161,6 +169,14 @@ export async function radiografar(bytes) {
       usuarios: n('usuarios'), produtos: n('produtos'),
       vendas: n('vendas'), clientes: n('clientes')
     };
+    // v3.37.0 — o "Consumidor final" nasce em TODO banco novo (migração). Contá-lo
+    // fazia um banco recém-criado parecer "com dados" e a recuperação nunca rodava.
+    if (r.clientes > 0) {
+      try {
+        const g = t.prepare('SELECT COUNT(*) AS n FROM clientes WHERE COALESCE(generico,0)=1').get().n;
+        r.clientes = Math.max(0, r.clientes - g);
+      } catch { /* banco antigo sem a coluna generico: não há cliente genérico */ }
+    }
     r.tabelasOk = Object.values(r).every(v => v >= 0);
     r.totalDados = Math.max(0, r.produtos) + Math.max(0, r.vendas) + Math.max(0, r.clientes);
     r.temDados = r.totalDados > 0;

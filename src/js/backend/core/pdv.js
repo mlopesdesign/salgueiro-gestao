@@ -307,6 +307,18 @@ function registrarVenda(db, p, quem) {
     }
   }
 
+  // v3.37.0 — PREÇO DA PEÇA VEM DO BANCO, nunca do payload. Antes um terminal
+  // em rede podia mandar preco_unit: 0.01 e a venda era aceita. (Na venda a
+  // custo o bloco acima já trocou pelo custo.)
+  if (!aCusto) {
+    const buscaPreco = db.prepare(`SELECT p.preco_venda FROM variacoes v JOIN produtos p ON p.id = v.produto_id WHERE v.id = ?`);
+    for (const i of itens) {
+      const pr = buscaPreco.get(i.variacao_id);
+      if (!pr) return { ok: false, erro: 'Peça não encontrada no estoque.' };
+      i.preco_unit = arred(Number(pr.preco_venda) || 0);
+    }
+  }
+
   // totais
   let subtotal = 0;
   for (const i of itens) {
@@ -657,6 +669,18 @@ function cancelarVenda(db, p, quem) {
   if (!d.ok) return d;
   if (d.venda.status !== 'concluida' && d.venda.status !== 'troca') return { ok: false, erro: 'Esta venda não está ativa.' };
   if (d.parcelas.some(x => x.pago_em)) return { ok: false, erro: 'Há parcelas de crediário já pagas.' };
+  // v3.37.0 — cancelamento só desfaz o que dá para desfazer por inteiro.
+  // Venda com devolução/troca: o estoque já voltou em parte (cancelar devolvia
+  // em dobro) — resolver pela devolução. Vale usado: o vale não tem como ser
+  // recarregado com segurança. Consignação já paga ao fornecedor: o dinheiro
+  // já saiu. Nos três casos o cancelamento é recusado com a orientação.
+  const nDev = db.prepare('SELECT COUNT(*) AS n FROM devolucoes WHERE venda_id=?').get(d.venda.id).n;
+  if (nDev) return { ok: false, erro: 'Esta venda já teve devolução ou troca e não pode ser cancelada. Use a devolução para as peças que restam.' };
+  if ((d.pagamentos || []).some(pg => pg.forma === 'vale')) {
+    return { ok: false, erro: 'Venda paga com vale-troca não pode ser cancelada. Faça a devolução das peças (gera um vale novo).' };
+  }
+  const nAcert = db.prepare("SELECT COUNT(*) AS n FROM consignacoes WHERE venda_id=? AND status='acertado'").get(d.venda.id).n;
+  if (nAcert) return { ok: false, erro: 'O repasse de peça consignada desta venda já foi pago ao fornecedor. Faça a devolução em vez de cancelar.' };
 
   db.exec('BEGIN');
   try {
@@ -671,6 +695,18 @@ function cancelarVenda(db, p, quem) {
       if (localCanc) estoques.aplicar(db, localCanc.id, i.variacao_id, i.qtd);
     }
     db.prepare('DELETE FROM crediario_parcelas WHERE venda_id=?').run(d.venda.id);
+    // v3.37.0 — pontos da venda desfeitos: tira os ganhos (sem deixar negativo)
+    // e devolve os resgatados.
+    if (d.venda.cliente_id) {
+      const ganhos = db.prepare(`SELECT COALESCE(SUM(pontos),0) AS n FROM clientes_pontos WHERE origem='venda' AND origem_id=? AND tipo='credito'`).get(d.venda.id).n;
+      const resg = db.prepare(`SELECT COALESCE(SUM(pontos),0) AS n FROM clientes_pontos WHERE origem='resgate' AND origem_id=? AND tipo='debito'`).get(d.venda.id).n;
+      if (resg > 0) pontos.creditar(db, { clienteId: d.venda.cliente_id, pontos: resg, origem: 'cancelamento', origemId: d.venda.id, obs: `Cancelamento da venda #${d.venda.id} — resgate devolvido` }, quem);
+      if (ganhos > 0) {
+        const cli = db.prepare('SELECT pontos FROM clientes WHERE id=?').get(d.venda.cliente_id);
+        const tira = Math.min(ganhos, Math.max(0, (cli && cli.pontos) || 0));
+        if (tira > 0) pontos.debitar(db, { clienteId: d.venda.cliente_id, pontos: tira, origem: 'cancelamento', origemId: d.venda.id, obs: `Cancelamento da venda #${d.venda.id}` }, quem);
+      }
+    }
     db.prepare("UPDATE consignacoes SET status='cancelado' WHERE venda_id=? AND status='pendente'").run(d.venda.id);
     db.prepare("UPDATE vendas SET status='cancelada', obs = COALESCE(obs,'') || ' [CANCELADA: ' || ? || ']' WHERE id=?")
       .run(p.motivo || 'sem motivo', d.venda.id);

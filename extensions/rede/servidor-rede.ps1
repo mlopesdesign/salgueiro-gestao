@@ -72,11 +72,15 @@ function Enviar-Evento([string]$evento, $dados) {
   $b = $enc.GetBytes($msg)
   $seg = New-Object System.ArraySegment[byte] -ArgumentList @(,$b)
   try {
-    $ws.SendAsync($seg, [System.Net.WebSockets.WebSocketMessageType]::Text, $true,
-      [Threading.CancellationToken]::None).Wait() | Out-Null
-  } catch {}
+    # v3.37.0 - prazo de 5 s: sem ele, um envio travado parava o servidor inteiro
+    # (a porta continuava aceitando conexao e ninguem era atendido)
+    $t = $ws.SendAsync($seg, [System.Net.WebSockets.WebSocketMessageType]::Text, $true,
+      [Threading.CancellationToken]::None)
+    if (-not $t.Wait(5000)) { $script:falhasEnvio++ } else { $script:falhasEnvio = 0 }
+  } catch { $script:falhasEnvio++ }
 }
 
+$script:falhasEnvio = 0
 $wsBuf = New-Object byte[] 262144
 $wsTexto = New-Object System.Text.StringBuilder
 $script:tarefaWS = $null
@@ -520,7 +524,8 @@ function Nova-Conexao($cli) {
   try { $ip = [string]$cli.Client.RemoteEndPoint.Address } catch {}
   $c = @{ cli = $cli; stream = $cli.GetStream(); buf = (New-Object System.IO.MemoryStream);
           inicio = [DateTime]::UtcNow; ip = $ip }
-  $c.stream.WriteTimeout = 15000
+  $c.stream.WriteTimeout = 5000
+  $c.stream.ReadTimeout = 5000
   [void]$script:conexoes.Add($c)
 }
 
@@ -593,13 +598,29 @@ function Atender($c, $req) {
     $q = $caminho.IndexOf('?'); if ($q -ge 0) { $caminho = $caminho.Substring(0, $q) }
     if ($caminho -eq '/') { $caminho = '/index.html' }
     if ($caminho.Contains('..')) { Responder $c.stream 404 'text/plain' $enc.GetBytes('nao'); return }
+    # v3.37.0 - so caminho LOCAL do proprio sistema (antes "GET @outro-ip/" buscava
+    # qualquer endereco) e nada que nao seja da tela do terminal: codigo do
+    # servidor, licenca e bancos nunca saem pela rede.
+    $bloq = $false
+    if (-not $caminho.StartsWith('/') -or $caminho.StartsWith('//') -or $caminho.Contains('@') -or $caminho.Contains('\') -or $caminho.Contains(':')) { $bloq = $true }
+    $cl = $caminho.ToLower()
+    if ($cl -match '\.db($|-)|\.json$|\.sql$|^/dados-iniciais|neutralino\.config') { $bloq = $true }
+    if ($cl.StartsWith('/js/backend/') -and -not ($cl -eq '/js/backend/core/caixa-terminal.js' -or $cl -eq '/js/backend/core/filtro-estoque.js' -or $cl -eq '/js/backend/core/frete.js')) { $bloq = $true }
+    if ($bloq) {
+      Log-Rede 'BLOQUEADO' "$($c.ip) $caminho"
+      Responder $c.stream 404 'text/plain; charset=utf-8' $enc.GetBytes('Arquivo nao encontrado.'); return
+    }
     try {
       # Bytes brutos para preservar UTF-8 (Invoke-WebRequest decodificaria com
       # o encoding do Windows, que pode não ser UTF-8)
-      $wc = New-Object System.Net.WebClient
-      $wc.Encoding = [System.Text.Encoding]::UTF8
-      $conteudo = $wc.DownloadData("http://127.0.0.1:$nlPort" + $caminho)
-      $tipo = $wc.ResponseHeaders['Content-Type']
+      # v3.37.0 - com prazo de 10 s (antes sem prazo: um arquivo travado parava tudo)
+      $hr = [System.Net.HttpWebRequest]::Create("http://127.0.0.1:$nlPort" + $caminho)
+      $hr.Timeout = 10000; $hr.ReadWriteTimeout = 10000; $hr.Proxy = $null
+      $resp = $hr.GetResponse()
+      $ms = New-Object System.IO.MemoryStream
+      try { $resp.GetResponseStream().CopyTo($ms) } finally { $resp.Close() }
+      $conteudo = $ms.ToArray()
+      $tipo = $resp.ContentType
       if (-not $tipo) { $tipo = 'application/octet-stream' }
       if ($tipo -match '^text/' -and $tipo -notmatch 'charset') { $tipo = $tipo + '; charset=utf-8' }
       if ($caminho -eq '/index.html') {
@@ -872,7 +893,12 @@ while ($ws.State -eq 'Open') {
     # espera curta por mensagem do sistema; depois esvazia o que já chegou
     if (Bombear-WS 15) { $k = 0; while ($k -lt 50 -and (Bombear-WS 0)) { $k++ } }
     if ($script:http) {
-      while ($script:http -and $script:http.Pending()) { Nova-Conexao ($script:http.AcceptTcpClient()) }
+      while ($script:http -and $script:http.Pending()) {
+        $novo = $script:http.AcceptTcpClient()
+        # v3.37.0 - no maximo 64 conexoes abertas ao mesmo tempo
+        if ($script:conexoes.Count -ge 64) { try { $novo.Close() } catch {}; Log-Rede 'LOTADO' 'mais de 64 conexoes abertas - recusada'; continue }
+        Nova-Conexao $novo
+      }
       if ($script:conexoes.Count -gt 0) { Servir-Conexoes }
       Vencer-Pendentes
     }
@@ -887,10 +913,25 @@ while ($ws.State -eq 'Open') {
     Batimento
     # v3.35.2 - o sistema (processo pai) fechou? Entao este servidor sai e
     # SOLTA a porta. Antes ele podia ficar rodando escondido segurando a porta.
-    if ($ppid -gt 0 -and ([DateTime]::UtcNow - $script:ultimoPai).TotalSeconds -ge 5) {
+    # v3.37.0 - vigia de verdade: confere o PID E o nome do processo (PID
+    # reaproveitado pelo Windows enganava a vigia), funciona mesmo quando o PID
+    # do pai nao foi lido, e sai se o envio ao sistema travar 3 vezes seguidas.
+    if (([DateTime]::UtcNow - $script:ultimoPai).TotalSeconds -ge 5) {
       $script:ultimoPai = [DateTime]::UtcNow
-      if (-not (Get-Process -Id $ppid -ErrorAction SilentlyContinue)) {
+      $vivo = $false
+      if ($ppid -gt 0) {
+        $pp = Get-Process -Id $ppid -ErrorAction SilentlyContinue
+        if ($pp -and $pp.ProcessName -like '*algueiro*') { $vivo = $true }
+      }
+      if (-not $vivo) {
+        $vivo = [bool](Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -like '*algueiro*' } | Select-Object -First 1)
+      }
+      if (-not $vivo) {
         Log-Rede 'EXTENSAO' ("o sistema (pid $ppid) fechou - servidor de rede encerrando e soltando a porta")
+        break
+      }
+      if ($script:falhasEnvio -ge 3) {
+        Log-Rede 'EXTENSAO' 'envio ao sistema travou 3 vezes seguidas - servidor de rede encerrando'
         break
       }
     }

@@ -269,6 +269,16 @@ No botão **Vendas**, escolha **Cancelar** na linha desejada e informe o motivo.
 
 > **Cancelar** é diferente de **devolver**. Cancelar anula a venda por completo (ela sai dos relatórios e do Painel) e devolve as peças ao estoque. Use quando a venda foi lançada errada. Para o cliente que comprou e depois trouxe a peça de volta, use **Devolver**.
 
+O cancelamento também desfaz os **pontos** da cliente: tira os que ela ganhou na compra e devolve os que ela usou.
+
+**Quando o sistema NÃO deixa cancelar** (e o porquê):
+
+| Situação | Por quê | O que fazer |
+|---|---|---|
+| A venda já teve devolução ou troca | Parte das peças já voltou; cancelar devolveria o estoque em dobro | Use **Devolver** nas peças que restam |
+| A venda foi paga com vale-troca | O vale não tem como ser recarregado com segurança | Use **Devolver** (gera um vale novo) |
+| O repasse de uma peça consignada já foi pago ao fornecedor | O dinheiro já saiu da loja | Use **Devolver** |
+
 ### Fechando o caixa
 
 Clique em **Fechar caixa**. O sistema mostra o esperado por forma de pagamento. Informe quanto há de dinheiro na gaveta — ele calcula a diferença (sobra ou falta) e registra o fechamento.
@@ -339,6 +349,12 @@ Cliente traz a peça e quer o dinheiro de volta.
 4. Informe o motivo (opcional) e confirme
 
 As peças voltam ao estoque automaticamente. Se a venda teve desconto geral, o valor devolvido é calculado proporcionalmente.
+
+O que acontece por trás da devolução:
+
+- a peça volta para o estoque **da loja onde foi vendida** (não para o almoxarifado);
+- peça **consignada** devolvida sai do repasse do fornecedor, porque ele não vai receber por uma peça que voltou para a arara;
+- os **pontos** que a cliente ganhou saem na mesma proporção do que foi devolvido (nunca deixando o saldo negativo).
 
 ### Troca
 
@@ -1437,9 +1453,19 @@ Para trocar a senha de alguém, entre em Configurações → Usuários, edite o 
 
 ## 19. Backup e segurança
 
+### O sistema nunca abre zerado
+
+Se o arquivo do banco **sumir** ou vier **estragado** (queda de energia, computador reiniciado no meio de uma gravação), o sistema procura sozinho, entre todas as cópias, a que tem **mais vendas**, volta para ela e avisa na tela qual cópia usou e de quando ela é.
+
+> Apareceu o aviso **⚠️ RECUPERAÇÃO AUTOMÁTICA**? Confira as últimas vendas antes de continuar. Se aparecer **🛑 BANCO DE DADOS NÃO ENCONTRADO**, não venda: restaure um backup do pendrive ou chame o suporte.
+
+### Faixa vermelha no topo
+
+Se o computador não conseguir gravar os dados (disco cheio, antivírus segurando o arquivo), aparece uma **faixa vermelha fixa** no alto da tela dizendo que os dados não estão sendo gravados. **Não feche o sistema** e chame o suporte — as vendas feitas nesse momento podem se perder se o sistema for fechado. A faixa some sozinha quando a gravação volta a funcionar.
+
 ### Backup automático
 
-O sistema faz uma cópia do banco **uma vez por dia**, na primeira vez que é aberto. Mantém as **últimas 30 cópias**, em:
+Além da cópia de **uma vez por dia**, o sistema guarda cópias a cada 30 minutos de uso, ao abrir e fechar o caixa, ao fechar o sistema e antes de cada atualização. Elas ficam em:
 
 ```
 C:\Users\<seu usuário>\AppData\Roaming\SalgueiroGestao\dados\backups
@@ -1456,6 +1482,8 @@ Configurações → **💾 Backup** → **Fazer backup agora**. Escolha onde sal
 Configurações → **☁️ Nuvem** — conecta com Google Drive ou OneDrive para envio automático.
 
 ### Restaurando
+
+**Restaurar de um arquivo** (pendrive, nuvem): se o arquivo escolhido tiver **menos dados** que o sistema atual, a tela mostra os dois lados — vendas, produtos e clientes de cada um — e pede confirmação. Antes de trocar, o banco atual é guardado como "antes de restaurar".
 
 Configurações → **💾 Backup**. A tela lista todas as cópias disponíveis, e cada linha mostra:
 
@@ -1554,6 +1582,10 @@ Use isso depois de atualizar, para saber o que apareceu de novo no sistema.
 | **Painel com número estranho** | Clique em 📊 Painel no menu para recarregar |
 | **Terminal não conecta** | Veja a seção [Terminal em rede](#19-terminal-em-rede) |
 | **Esqueci a senha** | Peça a um administrador para redefinir |
+| **"Muitas tentativas erradas. Aguarde…"** | Cinco senhas erradas seguidas bloqueiam aquele usuário por 5 minutos (o tempo dobra se continuar errando). Espere e digite com calma |
+| **Faixa vermelha "dados não estão sendo gravados"** | Não feche o sistema; chame o suporte (veja Backup e segurança) |
+| **"Esta venda já teve devolução… não pode ser cancelada"** | Use Devolver nas peças que restam |
+| **Desconto na peça pedindo senha do administrador** | É de propósito: desconto manual, no total ou na peça, sempre passa pelo administrador |
 | **Produto não aparece na busca** | Verifique se está ativo e se tem o código de barras correto |
 | **Estoque diferente da contagem** | Estoque → Kardex para ver o histórico; corrija com um Ajuste |
 | **"Acabou na loja, pegue no almoxarifado"** | A peça saiu da arara sem a descida ter sido registrada. Faça a transferência em 🏢 Estoques (locais) |

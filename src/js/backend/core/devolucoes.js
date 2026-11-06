@@ -3,11 +3,14 @@ import { caixaDoTerminal } from './caixa-terminal.js';
 import { auditar } from './util.js';
 import * as valesTroca from './vales_troca.js';
 import * as estoques from './estoques.js';
+import * as consignacao from './consignacao.js';
+import * as pontos from './pontos.js';
 const arred = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
 // Itens ainda devolvíveis de uma venda (vendido − já devolvido)
 function itensVenda(db, venda_id) {
-  const venda = db.prepare('SELECT id, status, cliente_id, total, subtotal, desconto, COALESCE(frete,0) frete FROM vendas WHERE id=?').get(venda_id);
+  // v3.37.0 — loja_id no SELECT: sem ele a peça devolvida ia para o Almoxarifado
+  const venda = db.prepare('SELECT id, status, cliente_id, loja_id, total, subtotal, desconto, COALESCE(frete,0) frete FROM vendas WHERE id=?').get(venda_id);
   if (!venda) return { ok: false, erro: 'Venda não encontrada.' };
   if (venda.status !== 'concluida' && venda.status !== 'troca') return { ok: false, erro: 'Só é possível devolver itens de vendas concluídas.' };
   const itens = db.prepare(`
@@ -48,9 +51,14 @@ function registrar(db, p, quem) {
   const disp = {};
   for (const i of info.itens) disp[i.variacao_id] = { max: i.disponivel, valor_unit: i.valor_unit };
 
-  const itens = (Array.isArray(p.itens) ? p.itens : [])
-    .map(i => ({ variacao_id: Number(i.variacao_id), qtd: Math.round(Number(i.qtd) || 0) }))
-    .filter(i => i.qtd > 0);
+  // v3.37.0 — a mesma peça repetida no pedido é SOMADA antes de conferir o
+  // disponível (antes [{v:5,qtd:1},{v:5,qtd:1}] devolvia 2 de 1 vendida)
+  const soma = new Map();
+  for (const i of (Array.isArray(p.itens) ? p.itens : [])) {
+    const v = Number(i.variacao_id), q = Math.round(Number(i.qtd) || 0);
+    if (q > 0) soma.set(v, (soma.get(v) || 0) + q);
+  }
+  const itens = [...soma].map(([variacao_id, qtd]) => ({ variacao_id, qtd }));
   if (!itens.length) return { ok: false, erro: 'Selecione ao menos um item para devolver.' };
   for (const it of itens) {
     const d = disp[it.variacao_id];
@@ -82,10 +90,12 @@ function registrar(db, p, quem) {
       movEstoque.run(it.variacao_id, 'devolucao', it.qtd, `Devolução venda #${p.venda_id}`,
                      quem ? quem.id : null, localDevId);
       if (localDevId) estoques.aplicar(db, localDevId, it.variacao_id, it.qtd);
+      consignacao.estornarDevolucao(db, p.venda_id, it.variacao_id, it.qtd, quem);   // v3.37.0
       valorTotal += total;
     }
     valorTotal = arred(valorTotal);
     db.prepare('UPDATE devolucoes SET valor_devolvido=? WHERE id=?').run(valorTotal, devId);
+    estornarPontos(db, info.venda, valorTotal, devId, quem);   // v3.37.0
 
     // reembolso em dinheiro sai da gaveta (sangria)
     if (forma === 'dinheiro' && caixa) {
@@ -112,6 +122,21 @@ function registrar(db, p, quem) {
   }
 }
 
+// v3.37.0 — pontos ganhos na compra saem na proporção do que foi devolvido
+// (devolveu tudo = perde tudo). Nunca deixa o saldo negativo: se a cliente já
+// gastou os pontos, tira só o que restar.
+function estornarPontos(db, venda, valorDevolvido, devId, quem) {
+  if (!venda || !venda.cliente_id || !(Number(venda.total) > 0)) return;
+  const g = db.prepare(`SELECT COALESCE(SUM(pontos),0) AS n FROM clientes_pontos WHERE origem='venda' AND origem_id=? AND tipo='credito'`).get(venda.id).n;
+  if (!g) return;
+  const ja = db.prepare(`SELECT COALESCE(SUM(pontos),0) AS n FROM clientes_pontos WHERE origem='devolucao' AND obs = ? AND tipo='debito'`).get(`Devolução da venda #${venda.id}`).n;
+  const devido = Math.min(g - ja, Math.round(g * Math.min(1, valorDevolvido / Number(venda.total))));
+  const cli = db.prepare('SELECT pontos FROM clientes WHERE id=?').get(venda.cliente_id);
+  const tira = Math.max(0, Math.min(devido, (cli && cli.pontos) || 0));
+  if (tira > 0) pontos.debitar(db, { clienteId: venda.cliente_id, pontos: tira, origem: 'devolucao', origemId: devId,
+                                     obs: `Devolução da venda #${venda.id}` }, quem);
+}
+
 function listar(db) {
   const linhas = db.prepare(`
     SELECT d.id, d.venda_id, d.valor_devolvido, d.forma_reembolso, d.motivo, d.criado_em,
@@ -125,4 +150,4 @@ function listar(db) {
   return { ok: true, devolucoes: linhas };
 }
 
-export { itensVenda, registrar, listar };
+export { itensVenda, registrar, listar, estornarPontos };

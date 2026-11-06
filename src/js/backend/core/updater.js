@@ -4,8 +4,13 @@
 /* global NL_APPVERSION */
 
 const GITHUB_OWNER = 'mlopesdesign';
-const GITHUB_REPO  = 'salgueiro-gestao';
-const API_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
+// v3.37.0 — o repositório do CÓDIGO ficou privado (05/11/2026). As
+// atualizações saem de um repositório PÚBLICO só com os arquivos da release
+// (sem código). O antigo fica de reserva, caso volte a ser público.
+const CANAIS = [
+  `https://api.github.com/repos/${GITHUB_OWNER}/salgueiro-gestao-atualizacoes/releases/latest`,
+  `https://api.github.com/repos/${GITHUB_OWNER}/salgueiro-gestao/releases/latest`,
+];
 
 // Compara duas versões semver "X.Y.Z" → 1 se a > b, -1 se a < b, 0 se igual
 function _cmp(a, b) {
@@ -21,11 +26,15 @@ function _cmp(a, b) {
 // Consultado pela rota updater:verificar
 export async function verificarAtualizacao(versaoAtual) {
   try {
-    const resp = await fetch(API_URL, {
-      headers: { Accept: 'application/vnd.github.v3+json' },
-      signal: AbortSignal.timeout(10000)
-    });
-    if (!resp.ok) return { ok: false, erro: `GitHub HTTP ${resp.status}` };
+    let resp = null, ultimoErro = '';
+    for (const url of CANAIS) {
+      try {
+        const r = await fetch(url, { headers: { Accept: 'application/vnd.github.v3+json' }, signal: AbortSignal.timeout(10000) });
+        if (r.ok) { resp = r; break; }
+        ultimoErro = `GitHub HTTP ${r.status}`;
+      } catch (e) { ultimoErro = e.message || 'Sem conexão.'; }
+    }
+    if (!resp) return { ok: false, erro: ultimoErro || 'Sem conexão.' };
     const release = await resp.json();
 
     const tag  = (release.tag_name || '').replace(/^v/, '');

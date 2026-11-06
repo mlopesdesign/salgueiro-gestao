@@ -92,4 +92,58 @@ function acertar(db, p, quem) {
   } catch (e) { db.exec('ROLLBACK'); throw e; }
 }
 
-export { resumo, listar, acertar };
+// v3.37.0 — PEÇA CONSIGNADA DEVOLVIDA (devolução ou troca). Antes nada mexia
+// em `consignacoes`: o fornecedor recebia pela peça que voltou para a arara e
+// recebia de novo quando ela fosse revendida. Agora a quantidade devolvida sai
+// do repasse PENDENTE daquela venda, na proporção (valores divididos pela qtd).
+// Se o repasse já foi ACERTADO (pago), não há o que desfazer aqui: fica na
+// auditoria para o acerto seguinte ser corrigido à mão.
+function estornarDevolucao(db, vendaId, variacaoId, qtd, quem) {
+  let falta = Math.round(Number(qtd) || 0);
+  if (falta <= 0) return { ok: true, estornado: 0 };
+  const v = db.prepare('SELECT produto_id FROM variacoes WHERE id=?').get(variacaoId);
+  if (!v) return { ok: true, estornado: 0 };
+  const linhas = db.prepare(`SELECT * FROM consignacoes WHERE venda_id=? AND produto_id=? AND status='pendente' AND qtd > 0 ORDER BY id`)
+    .all(vendaId, v.produto_id);
+  let estornado = 0;
+  for (const c of linhas) {
+    if (falta <= 0) break;
+    const tira = Math.min(falta, c.qtd);
+    if (tira >= c.qtd) {
+      db.prepare("UPDATE consignacoes SET status='cancelado' WHERE id=?").run(c.id);
+    } else {
+      const f = (c.qtd - tira) / c.qtd;
+      const r2 = (n) => Math.round((Number(n) || 0) * f * 100) / 100;
+      db.prepare(`UPDATE consignacoes SET qtd=?, valor_venda=?, valor_custo=?, valor_fornecedor=?, valor_loja=? WHERE id=?`)
+        .run(c.qtd - tira, r2(c.valor_venda), r2(c.valor_custo), r2(c.valor_fornecedor), r2(c.valor_loja), c.id);
+    }
+    falta -= tira; estornado += tira;
+  }
+  if (falta > 0) {
+    const pagas = db.prepare(`SELECT COUNT(*) AS n FROM consignacoes WHERE venda_id=? AND produto_id=? AND status='acertado'`).get(vendaId, v.produto_id).n;
+    if (pagas) auditar(db, quem, 'consignacao_devolvida_apos_acerto',
+      `venda #${vendaId} produto #${v.produto_id}: ${falta} peça(s) devolvida(s) com o repasse já pago — descontar no próximo acerto`);
+  }
+  return { ok: true, estornado, sem_estorno: falta };
+}
+
+// v3.37.0 — peça consignada que SAI numa troca também gera repasse (antes não
+// gerava: o fornecedor nunca recebia pela peça levada na troca). Mesma conta de
+// pdv.registrarVenda: custo + % do lucro sobre o valor efetivamente cobrado.
+function registrarSaida(db, vendaId, variacaoId, qtd, valorCobrado) {
+  const pr = db.prepare(`SELECT p.id, p.consignado, p.pct_fornecedor, p.fornecedor_id, p.preco_custo
+                           FROM variacoes v JOIN produtos p ON p.id = v.produto_id WHERE v.id=?`).get(variacaoId);
+  if (!pr || !pr.consignado || !pr.fornecedor_id || !(pr.pct_fornecedor > 0)) return null;
+  const a2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+  const valorConsig = a2(valorCobrado);
+  const custoTotal = a2((Number(pr.preco_custo) || 0) * qtd);
+  const lucro = a2(valorConsig - custoTotal);
+  const valorForn = a2(custoTotal + lucro * pr.pct_fornecedor / 100);
+  db.prepare(`INSERT INTO consignacoes
+      (venda_id, produto_id, fornecedor_id, qtd, valor_venda, valor_custo, pct_fornecedor, valor_fornecedor, valor_loja)
+      VALUES (?,?,?,?,?,?,?,?,?)`)
+    .run(vendaId, pr.id, pr.fornecedor_id, qtd, valorConsig, custoTotal, pr.pct_fornecedor, valorForn, a2(valorConsig - valorForn));
+  return valorForn;
+}
+
+export { resumo, listar, acertar, estornarDevolucao, registrarSaida };

@@ -3,6 +3,23 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.37.0',
+    data: '2026-11-05',
+    itens: [
+      '🛡️ O SISTEMA NUNCA MAIS ABRE ZERADO. Se o arquivo do banco sumir ou vier estragado (queda de energia, reinício no meio de uma gravação), o sistema procura sozinho a cópia de segurança com MAIS vendas e volta para ela, avisando na tela. Antes, com o arquivo sumido, ele abria vazio "como se fosse o primeiro dia" e ainda apagava a cópia anterior.',
+      '🔴 AVISO VERMELHO QUANDO OS DADOS NÃO ESTÃO SENDO GRAVADOS. Se por qualquer motivo o computador não conseguir gravar, aparece uma faixa vermelha fixa no topo. Antes as vendas pareciam gravadas e sumiam ao reiniciar.',
+      '↩️ RESTAURAR BACKUP ANTIGO PELO ARQUIVO FUNCIONA. Ao escolher um backup com menos dados que o sistema atual, a tela mostra os dois lados (vendas, produtos, clientes) e pede confirmação. Antes ficava parado sem explicar.',
+      '🔒 SEGURANÇA REFORÇADA, SEM MUDAR NENHUMA SENHA. Cinco senhas erradas seguidas bloqueiam o login por alguns minutos; a senha do suporte só funciona no computador principal; terminais em rede não conseguem mais baixar arquivos do sistema nem do banco; usuário desativado perde o acesso na hora; só administrador cria ou altera outro administrador.',
+      '💰 PREÇO SEMPRE DO CADASTRO. O preço da peça é lido do cadastro na hora da venda e da troca — ninguém consegue vender por outro valor mandando o pedido à mão. Desconto em uma peça também passa a pedir a autorização do administrador, como o desconto do total.',
+      '🤝 CONSIGNADO CERTO NA DEVOLUÇÃO E NA TROCA. Peça consignada devolvida sai do repasse do fornecedor; peça consignada levada numa troca ou vendida pela planilha entra no repasse. Antes o fornecedor recebia pela peça que voltou e não recebia pela que saiu na troca.',
+      '↩️ DEVOLUÇÃO E CANCELAMENTO MAIS SEGUROS. A peça devolvida volta para a loja de onde saiu (não para o almoxarifado); os pontos da cliente acompanham a devolução e o cancelamento; venda que já teve devolução, foi paga com vale ou teve o repasse pago não pode mais ser cancelada (o estoque voltava em dobro).',
+      '🔄 TROCA: a diferença só pode ser paga em dinheiro, PIX ou cartão, e o troco em dinheiro fica gravado — o caixa bate com a gaveta.',
+      '🖱️ CLIQUE DUPLO NÃO DUPLICA VENDA. O botão de confirmar fica travado enquanto a venda é gravada, e o sistema reconhece a mesma venda enviada duas vezes.',
+      '🖨️ IMPRESSÃO: o aviso diz se o cupom foi mesmo impresso; impressora removida não trava mais a tela com caixa em inglês; acentos no nome da impressora ou do usuário do Windows não quebram mais a impressão; impressora que sumiu aparece marcada em vez de ser apagada sem aviso.',
+      '🌐 REDE: o servidor da rede não trava mais com os terminais esperando e se desliga sozinho quando o sistema fecha. Ao aplicar a rede, o Windows libera a porta configurada no firewall (pede a confirmação de administrador).',
+    ],
+  },
+  {
     versao: '3.36.0',
     data: '2026-11-05',
     itens: [

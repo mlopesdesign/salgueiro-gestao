@@ -20,12 +20,45 @@ import { caixaDoTerminal } from './caixa-terminal.js';
 import * as valesTroca from './vales_troca.js';
 import { auditar } from './util.js';
 import * as estoques from './estoques.js';
+import * as consignacao from './consignacao.js';
 const arred = n => Math.round((Number(n) || 0) * 100) / 100;
 
 const DESTINOS = ['vale', 'dinheiro', 'estorno', 'nada'];
 
 function moedaF(v) {
   return 'R$ ' + (Number(v) || 0).toFixed(2).replace('.', ',');
+}
+
+// v3.37.0 — pagamento da DIFERENÇA da troca conferido no servidor:
+//  · só dinheiro, PIX, débito e crédito (antes 'vale' entrava sem abater o vale
+//    — dava para usar o mesmo vale infinitas vezes — e 'crediario' sem parcela);
+//  · sem diferença a pagar, não aceita pagamento;
+//  · pago a mais: o excesso tem de ser em DINHEIRO e vira TROCO gravado (antes
+//    o caixa esperava R$ 200 e a gaveta tinha R$ 170).
+const FORMAS_TROCA = ['dinheiro', 'pix', 'debito', 'credito'];
+function conferirPagamentosTroca(extrasBrutos, diferenca) {
+  const extras = (extrasBrutos || []).filter(pg => Number(pg.valor) > 0)
+    .map(pg => ({ forma: String(pg.forma || ''), valor: arred(Number(pg.valor)), parcelas: Math.max(1, Math.round(Number(pg.parcelas) || 1)), troco: 0 }));
+  if (extras.some(pg => !FORMAS_TROCA.includes(pg.forma))) {
+    return { ok: false, erro: 'Na troca, a diferença só pode ser paga em dinheiro, PIX, débito ou crédito.' };
+  }
+  if (diferenca <= 0.01) {
+    if (extras.length) return { ok: false, erro: 'Não há diferença a pagar nesta troca — tire o pagamento.' };
+    return { ok: true, extras: [] };
+  }
+  const pago = arred(extras.reduce((s, pg) => s + pg.valor, 0));
+  if (pago < diferenca - 0.01) return { ok: false, erro: `Diferença de ${moedaF(diferenca)} não coberta pelos pagamentos.` };
+  let excesso = arred(pago - diferenca);
+  if (excesso > 0.01) {
+    const dinheiro = arred(extras.filter(pg => pg.forma === 'dinheiro').reduce((s, pg) => s + pg.valor, 0));
+    if (dinheiro < excesso - 0.01) return { ok: false, erro: 'Pagamento em cartão ou PIX acima da diferença. Só o dinheiro pode passar do valor (gera troco).' };
+    for (let i = extras.length - 1; i >= 0 && excesso > 0.004; i--) {
+      if (extras[i].forma !== 'dinheiro') continue;
+      const t = Math.min(excesso, extras[i].valor);
+      extras[i].troco = arred(t); excesso = arred(excesso - t);
+    }
+  }
+  return { ok: true, extras, troco: arred(pago - diferenca) };
 }
 
 function registrar(db, p, quem) {
@@ -52,11 +85,19 @@ function registrar(db, p, quem) {
   // exceder o crédito.
   // Cortesia (total 0) fica de fora: o fator seria 0 e a peça nova sairia de
   // graça. Nesse caso a peça nova vai pelo preço de tabela.
-  const fatorNovo = (sub > 0 && tot > 0) ? tot / sub : 1;
+  // v3.37.0 — nunca acima de 1: venda a custo com acréscimo da maquininha dava
+  // fator > 1 e a peça nova saía mais cara que a tabela.
+  const fatorNovo = (sub > 0 && tot > 0) ? Math.min(1, tot / sub) : 1;
   const pctDesconto = Math.round((1 - fatorNovo) * 10000) / 100; // ex.: 10 = 10%
 
   // ── 2. Itens que voltaram ───────────────────────────────────────────────────
-  const itensDevolver = (p.itens_devolver || []).filter(i => Number(i.qtd) > 0);
+  // v3.37.0 — a mesma peça repetida no pedido é somada antes de conferir
+  const _somaDev = new Map();
+  for (const i of (p.itens_devolver || [])) {
+    const q = Math.round(Number(i.qtd) || 0), v = Number(i.variacao_id);
+    if (q > 0) _somaDev.set(v, (_somaDev.get(v) || 0) + q);
+  }
+  const itensDevolver = [..._somaDev].map(([variacao_id, qtd]) => ({ variacao_id, qtd }));
   if (!itensDevolver.length) return { ok: false, erro: 'Selecione os itens que voltaram.' };
 
   const devInfos = [];
@@ -93,7 +134,8 @@ function registrar(db, p, quem) {
     `).get(it.variacao_id);
     if (!va) return { ok: false, erro: `Produto de variação ${it.variacao_id} não encontrado.` };
     if (va.estoque < it.qtd) return { ok: false, erro: `Estoque insuficiente: ${va.nome} (tem ${va.estoque}).` };
-    const precoTabela = arred(Number(it.preco_unit) || va.preco_venda || 0);
+    // v3.37.0 — preço de tabela vem do BANCO (antes aceitava o do pedido, até R$ 0,01)
+    const precoTabela = arred(va.preco_venda || 0);
     const precoComDesc = arred(precoTabela * fatorNovo);
     const bruto = arred(it.qtd * precoTabela);
     const tt = arred(it.qtd * precoComDesc);
@@ -111,13 +153,9 @@ function registrar(db, p, quem) {
 
   // ── 4. Diferença, pagamentos extras e destino do excedente ─────────────────
   const diferenca = arred(totalNovo - credito); // > 0 → cliente paga; < 0 → excedente
-  const extras = (p.pagamentos_extra || []).filter(pg => Number(pg.valor) > 0);
-  if (diferenca > 0.01) {
-    const totalPago = arred(extras.reduce((s, pg) => s + Number(pg.valor), 0));
-    if (totalPago < diferenca - 0.01) {
-      return { ok: false, erro: `Diferença de ${moedaF(diferenca)} não coberta pelos pagamentos.` };
-    }
-  }
+  const _cp = conferirPagamentosTroca(p.pagamentos_extra, diferenca);
+  if (!_cp.ok) return _cp;
+  const extras = _cp.extras;
   const excedente = arred(credito - totalNovo);
   const destino = DESTINOS.includes(p.destino_excedente) ? p.destino_excedente : 'vale';
 
@@ -149,6 +187,7 @@ function registrar(db, p, quem) {
       db.prepare('INSERT INTO movimentos_estoque (variacao_id, tipo, qtd, motivo, usuario_id, estoque_id) VALUES (?,?,?,?,?,?)')
         .run(it.variacao_id, 'devolucao', it.qtd, `Troca (venda #${venda.id})`, quem?.id || null, _localId);
       if (_localId) estoques.aplicar(db, _localId, it.variacao_id, it.qtd);
+      consignacao.estornarDevolucao(db, venda.id, it.variacao_id, it.qtd, quem);   // v3.37.0
     }
 
     // 5b. Criar nova venda (se houver itens novos)
@@ -188,6 +227,7 @@ function registrar(db, p, quem) {
         db.prepare('INSERT INTO movimentos_estoque (variacao_id, tipo, qtd, motivo, usuario_id, estoque_id) VALUES (?,?,?,?,?,?)')
           .run(it.variacao_id, 'venda', -it.qtd, `Troca (nova venda #${novaVendaId})`, quem?.id || null, _localId);
         if (_localId) estoques.aplicar(db, _localId, it.variacao_id, -it.qtd);
+        consignacao.registrarSaida(db, novaVendaId, it.variacao_id, it.qtd, it.total);   // v3.37.0
       }
 
       // Pagamento: crédito da troca (abate automático)
@@ -201,9 +241,8 @@ function registrar(db, p, quem) {
       // NÃO lançar em caixa_movimentos: o CHECK só aceita sangria/suprimento e
       // `resumoCaixa` já soma o dinheiro da venda por `venda_pagamentos`.
       for (const pg of extras) {
-        const v = arred(Number(pg.valor));
         db.prepare('INSERT INTO venda_pagamentos (venda_id, forma, valor, parcelas, troco) VALUES (?,?,?,?,?)')
-          .run(novaVendaId, pg.forma, v, pg.parcelas || 1, 0);
+          .run(novaVendaId, pg.forma, pg.valor, pg.parcelas || 1, pg.troco || 0);
       }
     }
 
@@ -319,13 +358,9 @@ function registrarRapida(db, p, quem) {
   totalNovo = arred(totalNovo);
 
   const diferenca = arred(totalNovo - credito);
-  const extras = (p.pagamentos_extra || []).filter(pg => Number(pg.valor) > 0);
-  if (diferenca > 0.01) {
-    const pago = arred(extras.reduce((s, pg) => s + Number(pg.valor), 0));
-    if (pago < diferenca - 0.01) {
-      return { ok: false, erro: `Diferença de ${moedaF(diferenca)} não coberta pelos pagamentos.` };
-    }
-  }
+  const _cp = conferirPagamentosTroca(p.pagamentos_extra, diferenca);
+  if (!_cp.ok) return _cp;
+  const extras = _cp.extras;
   const excedente = arred(credito - totalNovo);
   const destino = DESTINOS.includes(p.destino_excedente) ? p.destino_excedente : 'vale';
   const clienteId = Number(p.cliente_id) || null;
@@ -378,6 +413,7 @@ function registrarRapida(db, p, quem) {
         db.prepare('UPDATE variacoes SET estoque=estoque-? WHERE id=?').run(it.qtd, it.variacao_id);
         insMov.run(it.variacao_id, 'venda', -it.qtd, `Troca rápida (venda #${novaVendaId})`, quem?.id || null, localId);
         if (localId) estoques.aplicar(db, localId, it.variacao_id, -it.qtd);
+        consignacao.registrarSaida(db, novaVendaId, it.variacao_id, it.qtd, it.total);   // v3.37.0
       }
 
       const creditoAplicado = arred(Math.min(credito, totalNovo));
@@ -387,7 +423,7 @@ function registrarRapida(db, p, quem) {
       }
       for (const pg of extras) {
         db.prepare('INSERT INTO venda_pagamentos (venda_id, forma, valor, parcelas, troco) VALUES (?,?,?,?,?)')
-          .run(novaVendaId, pg.forma, arred(Number(pg.valor)), pg.parcelas || 1, 0);
+          .run(novaVendaId, pg.forma, pg.valor, pg.parcelas || 1, pg.troco || 0);
       }
     }
 

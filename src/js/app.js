@@ -32,6 +32,28 @@ document.addEventListener('wheel', (e) => {
 // "Fechar o sistema". Venda montada no PDV aparece no aviso.
 // Sem usuário logado (tela de entrada) fecha direto. Duas tentativas seguidas
 // (X de novo com a pergunta aberta) reaproveitam a mesma pergunta.
+// v3.37.0 — GRAVAÇÃO QUE FALHOU NÃO FICA MAIS ESCONDIDA. O backend (db.js /
+// servidor.js) chama __falhaGravacao quando o banco não foi para o disco; a
+// faixa vermelha fica fixa no topo até uma gravação dar certo (__gravacaoOk).
+// Antes, as vendas respondiam "ok", ficavam só na memória e sumiam ao reiniciar.
+globalThis.__falhaGravacao = (motivo) => {
+  try {
+    let f = document.getElementById('faixa-gravacao');
+    if (!f) {
+      f = document.createElement('div');
+      f.id = 'faixa-gravacao';
+      f.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#b00020;color:#fff;'
+        + 'padding:10px 16px;font:600 14px/1.4 system-ui,sans-serif;text-align:center;box-shadow:0 2px 8px #0005';
+      document.body.appendChild(f);
+    }
+    f.textContent = '⚠️ OS DADOS NÃO ESTÃO SENDO GRAVADOS NO COMPUTADOR (' + String(motivo || '').slice(0, 160)
+      + '). Não feche o sistema e chame o suporte — vendas feitas agora podem se perder.';
+  } catch { /* sem DOM */ }
+};
+globalThis.__gravacaoOk = () => {
+  try { const f = document.getElementById('faixa-gravacao'); if (f) f.remove(); } catch { /* */ }
+};
+
 let _pedidoFechar = null;
 window.__pedirFechar = () => {
   if (!usuario) return Promise.resolve(true);
@@ -132,7 +154,7 @@ function _avisoCaixaAberto(caixa) {
 const $app = document.getElementById('app');
 let usuario = null;
 let categoriasCache = [];
-let APP_VERSION = '3.36.0'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
+let APP_VERSION = '3.37.0'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
 
 // API dupla: no aplicativo usa IPC (preload); num terminal em rede (navegador),
 // conversa com o servidor do computador principal via HTTP com token de sessão.
@@ -415,7 +437,15 @@ function modal(titulo, corpoHtml, aoSalvar, rotuloSalvar = 'Salvar') {
   m.querySelector('.fechar').onclick = fechar;
   m.querySelector('.btn-cancelar').onclick = fechar;
   m.addEventListener('mousedown', e => { if (e.target === m) fechar(); });
-  m.querySelector('.btn-salvar').onclick = () => aoSalvar(m, fechar);
+  // v3.37.0 — o botão fica travado enquanto a ação roda: clique duplo (ou
+  // impaciente, com a rede lenta) não dispara a mesma venda duas vezes.
+  const $salvar = m.querySelector('.btn-salvar');
+  $salvar.onclick = async () => {
+    if ($salvar.disabled) return;
+    $salvar.disabled = true;
+    try { await aoSalvar(m, fechar); }
+    finally { if (document.body.contains(m)) $salvar.disabled = false; }
+  };
   document.body.appendChild(m);
   aplicarOlhinhos(m);
   ajustarLarguraModal(m);
@@ -594,7 +624,7 @@ function telaLogin() {
   if (LICENCA.vencida) {
     boxLic.appendChild(el(`
       <div style="background:#FFF4E0;border:1px solid #E0B25E;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12.5px">
-        ⚠️ <b>Licença vencida em ${esc(LICENCA.validade)}.</b> O sistema está em modo consulta.
+        ⚠️ <b>Licença vencida em ${esc(String(LICENCA.validade || '').replace(/^(\d{4})-(\d{2}).*$/, '$2/$1'))}.</b> O sistema está em modo consulta.
         <div style="display:flex;gap:6px;margin-top:8px">
           <input id="lg-cod" placeholder="Código de renovação" style="flex:1;text-transform:uppercase">
           <button class="btn btn-primario" id="lg-renovar" type="button">OK</button>
@@ -605,7 +635,7 @@ function telaLogin() {
       const r = await api('licenca:renovar', { codigo: boxLic.querySelector('#lg-cod').value });
       if (!r.ok) { boxLic.querySelector('#lg-cod-erro').textContent = r.erro; return; }
       await recarregarLicenca();
-      toast(`Licença renovada — plano ${r.plano} até ${r.validade}. ✅`);
+      toast(`Licença renovada — plano ${r.plano} até ${String(r.validade || '').replace(/^(\d{4})-(\d{2}).*$/, '$2/$1')}. ✅`);
       telaLogin();
     };
   }
@@ -719,6 +749,13 @@ function telaPrincipal() {
       const rec = await api('app:recuperacao');
       if (rec?.ok && rec.recuperacao) {
         const r = rec.recuperacao;
+        // v3.37.0 — banco ausente e NENHUMA cópia com dados: aviso próprio
+        if (r.vazio) {
+          alert('🛑 BANCO DE DADOS NÃO ENCONTRADO\n\n' + r.backup
+            + '\n\nNÃO faça vendas nem cadastros. Restaure um backup em Configurações → Backup '
+            + '(arquivo do pendrive ou da nuvem) ou chame o suporte.');
+          return;
+        }
         const det = (r.vendas != null)
           ? `\n\nForam recuperadas ${r.vendas} venda(s) e ${r.produtos} produto(s) da cópia "${r.backup}".`
           : `\n\nOrigem: ${r.backup}.`;
@@ -866,7 +903,7 @@ function painelDev(senha, dados) {
     if (!r.ok) { mm.querySelector('#dv-erro2').textContent = r.erro; return; }
     fechar();
     await recarregarLicenca();
-    toast(`Licença aplicada: ${planosNomes[r.estado.plano]} até ${r.estado.validade}.`);
+    toast(`Licença aplicada: ${planosNomes[r.estado.plano]} até ${String(r.estado.validade || '').replace(/^(\d{4})-(\d{2}).*$/, '$2/$1')}.`);
     usuario ? telaPrincipal() : telaLogin();
   }, 'Aplicar licença');
 

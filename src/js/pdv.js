@@ -361,6 +361,8 @@ function telaVenda(alvo, caixa, manterVenda = false) {
         $desc.addEventListener('input', () => {
           const v = Number(String($desc.value).replace(',', '.'));
           i.desconto = isFinite(v) && v > 0 ? v : 0;
+          // v3.37.0 — mudou o desconto da peça: a autorização anterior não vale mais
+          tela._descontoAutorizado = false; tela._descontoJustificativa = null;
           repintarLinha();
         });
         $desc.addEventListener('blur', () => { $desc.value = String(i.desconto); repintarLinha(); });
@@ -531,8 +533,10 @@ function telaVenda(alvo, caixa, manterVenda = false) {
     // servidor, que é quem de fato decide (auth.descontoLivre).
     const livreCategoria = (cliente && (cliente.categoria_desconto || 0) > 0)
       ? arred(ts.sub * cliente.categoria_desconto / 100) : 0;
-    if (ts.desc > livreCategoria + 0.01 && !tela._descontoAutorizado) {
-      const just = await modalAutorizarDesconto(ts.desc);
+    // v3.37.0 — desconto POR PEÇA também é manual: passa pela mesma autorização.
+    const descItens = arred(itens.reduce((s, i) => s + (Number(i.desconto) || 0), 0));
+    if ((ts.desc > livreCategoria + 0.01 || descItens > 0.01) && !tela._descontoAutorizado) {
+      const just = await modalAutorizarDesconto(arred(ts.desc + descItens));
       if (!just) return;
       tela._descontoAutorizado = true;
       tela._descontoJustificativa = just;   // { autorizado_por, motivo, token } → vai para a venda
@@ -902,7 +906,9 @@ function modalPagamento(total, descontoGeral, pontosResgate, aoConcluir, descont
         'Cortesia: preencha quem autorizou e para quem foi.';
       return;
     }
+    if (!m._idUnico) m._idUnico = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     const r = await api('pdv:venda', {
+      id_unico: m._idUnico,   // v3.37.0 — a mesma venda reenviada não grava duas vezes
       itens: itens.map(i => ({ variacao_id: i.variacao_id, qtd: i.qtd, preco_unit: i.preco_unit, desconto: i.desconto })),
       // Venda a preço de custo: o servidor relê o custo de cada peça no banco e
       // ignora o preço enviado aqui. Este campo é o que dispara a trava.
@@ -1219,11 +1225,20 @@ function cupomAposVenda(d) {
   const m = modal(`Venda #${d.venda.id} concluída ✅`, `
     <p style="margin-bottom:14px">Total: <b style="font-size:18px">${moeda(d.venda.total)}</b>
       ${d.venda.cliente ? ` · Cliente: ${esc(d.venda.cliente)}` : ''}</p>
-    <p style="color:var(--texto-suave)">🖨️ Cupom enviado para a impressora.</p>
+    <p id="cupom-status" style="color:var(--texto-suave)">🖨️ Imprimindo o cupom…</p>
   `, (m, fechar) => { imprimirCupom(d); fechar(); }, 'Imprimir de novo');
   // "Cancelar" aqui leria como cancelar a venda — a venda já está gravada
   const bc = m.querySelector('.btn-cancelar'); if (bc) bc.textContent = 'Fechar';
-  setTimeout(() => { imprimirCupom(d); }, 50);
+  // v3.37.0 — o aviso diz o que de fato aconteceu (antes dizia "enviado" antes de tentar)
+  setTimeout(async () => {
+    let res = null;
+    try { res = await imprimirCupom(d); } catch { res = null; }
+    const st = m.querySelector('#cupom-status');
+    if (!st) return;
+    st.textContent = res === 'impresso' ? '✅ Cupom enviado para a impressora.'
+      : res === 'janela' ? '🖨️ Janela de impressão aberta — confirme a impressão.'
+      : '⚠️ Não foi possível imprimir. Use "Imprimir de novo".';
+  }, 50);
 }
 
 function modalCupom(d) {
@@ -1279,9 +1294,10 @@ async function imprimirCupom(d) {
     </div>`;
   // Terminal em rede: imprime direto pelo diálogo do navegador (impressora desta máquina).
   // Computador principal: usa a impressora configurada silenciosamente; fallback para diálogo.
-  if (EM_REDE) { window.print(); return; }
+  if (EM_REDE) { window.print(); return 'janela'; }
   const r = await api('config:imprimir', { tipo: 'cupom' });
-  if (!r.ok) window.print();
+  if (!r.ok) { window.print(); return 'janela'; }
+  return 'impresso';
 }
 
 

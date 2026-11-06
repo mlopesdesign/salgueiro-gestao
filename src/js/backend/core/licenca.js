@@ -204,7 +204,7 @@ function verificar(canal) {
     return `O módulo "${MODULOS[mod]}" não está incluído no seu plano (${e.nome_plano}). Fale com o suporte para liberar.`;
   }
   if (e.vencida && !LEITURA.has(canal)) {
-    return `Licença vencida em ${e.validade}. O sistema está em modo consulta — informe o código de renovação em Configurações → Licença.`;
+    return `Licença vencida em ${String(e.validade || '').replace(/^(\d{4})-(\d{2}).*$/, '$2/$1')}. O sistema está em modo consulta — informe o código de renovação em Configurações → Licença.`;
   }
   return null;
 }

@@ -284,12 +284,15 @@ function salvarProduto(db, p, quem) {
         ).get(produtoId, cor, tamanho);
         let varId;
         if (inativa) {
+          // v3.37.0 — reativada com o TOTAL = soma dos locais (regra de ouro). Antes
+          // voltava com 0 enquanto os saldos dos locais continuavam com as peças.
+          const SOMA = '(SELECT COALESCE(SUM(qtd),0) FROM estoque_saldos WHERE variacao_id=?)';
           if (vfoto !== undefined) {
-            db.prepare('UPDATE variacoes SET ativo=1, estoque=0, estoque_minimo=?, foto=? WHERE id=?')
-              .run(minVar, vfoto || null, inativa.id);
+            db.prepare(`UPDATE variacoes SET ativo=1, estoque=${SOMA}, estoque_minimo=?, foto=? WHERE id=?`)
+              .run(inativa.id, minVar, vfoto || null, inativa.id);
           } else {
-            db.prepare('UPDATE variacoes SET ativo=1, estoque=0, estoque_minimo=? WHERE id=?')
-              .run(minVar, inativa.id);
+            db.prepare(`UPDATE variacoes SET ativo=1, estoque=${SOMA}, estoque_minimo=? WHERE id=?`)
+              .run(inativa.id, minVar, inativa.id);
           }
           varId = inativa.id;
         } else {

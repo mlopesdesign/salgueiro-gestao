@@ -9,14 +9,23 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.36.0 (build pronto, **NÃO publicado** — aguarda ordem do Marcio) |
+| **Versão atual** | 3.37.0 — pronta no disco (build sha256 c0a1367b…5893), NÃO publicada · em produção: 3.36.0 |
 | **Data do último build** | 2026-11-05 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.36.0 em 2026-11-05 ✓ (33 módulos core · 170 rotas · 37 tabelas) |
-| **5 lugares da versão** | os 5 em 3.36.0 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
+| **GRAPHIFY** | atualizado para 3.37.0 em 2026-11-05 ✓ (33 módulos core · 170 rotas · 37 tabelas) |
+| **5 lugares da versão** | os 5 em 3.37.0 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
 
 ---
+
+## v3.37.0 — correções da auditoria (05/11/2026, noite)
+
+- Pronta e conferida no disco: `resources.neu` + `Portable\resources.neu` (sha256 `c0a1367b7ca4c9486445b413c6dd93033a4f24b2d8a6d9fda5b4f6d163bd5893`) e `instalador\Salgueiro Gestao Setup v3.37.0.exe` (`acdc7e8c…ecefb`).
+- Backup antes de mexer: `backups\pre-v3.37.0-2026-11-05\` (36 arquivos).
+- Causa provável do PDV zerado: `salgueiro.db` ausente no boot → criava banco vazio e a 2ª gravação sobrescrevia o `.anterior`; e o cliente "Consumidor final" fazia o banco vazio passar como "com dados". Corrigido: boot recupera do backup com MAIS vendas, guarda `banco-com-problema`, avisa após login.
+- Senha de acesso e senha mestra NÃO alteradas (ordem do Marcio). Cercadas: trava de login, mestra só local, rotas perigosas só local.
+- Testes: `testes/teste-v3370-correcoes.mjs` 32/32; `teste-restauracao-gruda` 14/14. Falhas antigas inalteradas (consignado-rel 6, frete 3, origem-vendas 4).
+- **PENDENTE p/ publicar:** repo `salgueiro-gestao` está PRIVADO → updater sem login dá HTTP 404. Precisa autorização para: (1) criar repo público só de releases `mlopesdesign/salgueiro-gestao-atualizacoes` (a v3.37.0 já procura lá primeiro); (2) abrir o principal temporariamente para PDV e laptop (em 3.36.0) atualizarem online, depois fechar.
 
 ## 0. COMO SE PUBLICA (regra nova do Marcio em 07/10/2026)
 
@@ -26,6 +35,45 @@ pelo Desktop Commander (`start_process`, powershell) → confiro no GitHub → a
 O "dois cliques em PUBLICAR.bat" está REVOGADO. Detalhe: regra 3 do `REGRAS-CRITICAS.md`.
 **v3.30.0 publicada assim** (07/10/2026 00:24 UTC, 6.485.691 bytes conferidos).
 
+## PLANO DA SEMANA DE 09/11/2026 (ordem do Marcio, 05/11 22:23)
+
+**Ponto de retorno:** `backups\ESTADO-v3.36.0-FUNCIONANDO-2026-11-05\` — instalador
+v3.36.0, resources.neu (f48d6bf4…), código da tag, bundle git completo, LEIA-ME.
+**A loja não pode ficar sem PDV:** toda correção sai com esse retorno à mão.
+
+**Repositório `mlopesdesign/salgueiro-gestao` ficou PRIVADO em 05/11 22:30** (ordem do
+Marcio: nunca devia ter sido público). CONSEQUÊNCIA: `core/updater.js:6-8` busca
+`api.github.com/repos/mlopesdesign/salgueiro-gestao/releases/latest` SEM login →
+agora 403 → **o PDV não recebe atualização** até trocar o canal. Plano: criar repo
+PÚBLICO só de releases (ex.: `salgueiro-gestao-atualizacoes`, sem código), a v3.36.1
+aponta para ele; para entregar a v3.36.1 ao PDV que está na v3.36.0, abrir o repo
+principal por minutos durante a publicação e fechar logo após o PDV atualizar
+(ou instalar o Setup pelo AnyDesk). Ajustar o vigia (`tools/auto-commit.ps1`) para
+publicar o asset no repo de releases.
+
+**1. Corrigir TODAS as falhas de `recuperar-loja\AUDITORIA-CODIGO-2026-11-05.md`**
+(35 itens). Restrições do Marcio: **NÃO trocar senhas de acesso e NÃO trocar a senha
+mestra** (só ele tem) — mas cercar de segurança (limite de tentativas, bloqueio
+temporário, mestra só na máquina local / não pela rede, rotas dev com login,
+nada de segredo servido pela rede). Prioridade: dados (1,2,18,20,24) → segurança
+(3,4,22,26) → dinheiro/estoque (5-8,12-15) → rede/impressão (9-11,16,17).
+Junto: pasta extra de cópias (Google Drive) em Configurações › Backup.
+
+**2. Programas satélites** = terminais instaláveis (Neutralino + JS + NSIS) que
+substituem o navegador: acham o PDV sozinhos na rede, imprimem em silêncio na
+impressora local. Escopo em 1 página para aprovação antes do código.
+
+**3. Unificação com a loja virtual** (que o Marcio vai montar): mesmo estoque, ou
+sincronização quando o PDV for ligado. Só levantamento/escopo nesta semana.
+
+## PRÓXIMO TRABALHO — TERMINAL INSTALÁVEL (ordem do Marcio, 05/11/2026)
+
+Detalhado no plano acima (item 2). Fatos de rede de 05/11: PDV em `192.168.15.51`
+(Wi-Fi 4, isolado — sem ping/ARP a partir do laptop no cabo), porta 2020 gravada
+pela tela de Rede em 29/10; firewall do instalador só libera 8750
+(`salgueiro-setup.nsi:158`). Servidor PS1 trava com porta aceitando conexão
+(auditoria item 9) e deixa órfãos (item 10) — visto no laptop: PS1 de 15:23 vivo às 22h.
+
 ## v3.36.0 — CUPOM AUTOMÁTICO + REVERSÃO DA TROCA DE CÓDIGOS (2026-11-05)
 
 | Campo | Valor |
@@ -34,7 +82,7 @@ O "dois cliques em PUBLICAR.bat" está REVOGADO. Detalhe: regra 3 do `REGRAS-CRI
 | Título | v3.36.0 — Cupom sai sozinho ao finalizar a venda · Etiquetas das peças voltam a valer |
 | Asset | `Portable\\resources.neu` — 6.581.828 bytes — sha256 `f48d6bf4cb6b78914a82c67023aae0bec56dea9fd47f6cd3dbb4940c2a8e0dfc` |
 | Instalador | `instalador\\Salgueiro Gestao Setup v3.36.0.exe` — 15.634.055 bytes — sha256 `3e2c1f849f7e418c06e49a44ab9acb39b156552259ac36cf431879117d0d751d` |
-| Notas | `tools\\publicar\\notas-v3.36.0.md` (pedido.json NÃO criado — publicar só com ordem) |
+| Notas | `tools\\publicar\\notas-v3.36.0.md` — publicada pelo vigia (commit `d740260`), ordem do Marcio 15:32 |
 | Backup | `backups\\pre-v3.36.0-2026-11-05\\` |
 
 **ERRO DA v3.35.2 (corrigido aqui):** a troca deu código novo às 61 variações de

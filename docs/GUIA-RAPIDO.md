@@ -489,6 +489,9 @@ Crédito parcelado. Salve e gere o relatório de evento de novo.
 | Situação | Solução |
 |---|---|
 | "Nenhum caixa aberto" | PDV → **Abrir caixa** |
+| "Muitas tentativas erradas" no login | Espere 5 minutos e digite a senha com calma |
+| Faixa vermelha no topo | Não feche o sistema e chame o suporte |
+| Aviso "Recuperação automática" ao abrir | Confira as últimas vendas antes de continuar |
 | Cupom não imprime | Configurações → **🖨️ Impressoras** → verifique a impressora selecionada |
 | Painel com número errado | Clique em **📊 Painel** no menu para recarregar |
 | Esqueci a senha | Peça a um administrador para redefinir em Configurações → Usuários |

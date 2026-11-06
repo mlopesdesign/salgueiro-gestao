@@ -1068,9 +1068,27 @@ async function abaBackup(corpo) {
   };
 
   painel.querySelector('#bk-restaurar').onclick = async () => {
-    const r = await api('backup:restaurar');
-    if (!r.ok && r.erro !== 'Operação cancelada.') painel.querySelector('#bk-erro').textContent = r.erro;
-    // em caso de sucesso o app reinicia sozinho
+    const btn = painel.querySelector('#bk-restaurar');
+    const erroEl = painel.querySelector('#bk-erro');
+    erroEl.textContent = '';
+    btn.disabled = true; const txt = btn.textContent; btn.textContent = '⏳ Lendo o backup…';
+    try {
+      let r = await api('backup:restaurar');
+      // v3.37.0 — backup com MENOS dados: mostra os dois lados e pede a confirmação
+      if (!r.ok && r.precisaConfirmar) {
+        const n = r.novo || {}, a = r.atual || {};
+        const ok = confirm('⚠️ ESTE BACKUP TEM MENOS DADOS QUE O SISTEMA ATUAL\n\n'
+          + `Backup escolhido: ${n.vendas ?? '?'} vendas · ${n.produtos ?? '?'} produtos · ${n.clientes ?? '?'} clientes\n`
+          + `Sistema hoje:      ${a.vendas ?? '?'} vendas · ${a.produtos ?? '?'} produtos · ${a.clientes ?? '?'} clientes\n\n`
+          + 'Restaurar vai APAGAR a diferença. Antes, o sistema guarda uma cópia do banco atual '
+          + '(aparece na lista como "antes de restaurar") para você poder voltar.\n\nRestaurar mesmo assim?');
+        if (!ok) { erroEl.textContent = 'Restauração cancelada — nada foi alterado.'; return; }
+        btn.textContent = '⏳ Restaurando…';
+        r = await api('backup:restaurar', { confirmado: true, origem: r.origem });
+      }
+      if (!r.ok && r.erro !== 'Operação cancelada.') erroEl.textContent = r.erro;
+      // em caso de sucesso o app reinicia sozinho
+    } finally { btn.disabled = false; btn.textContent = txt; }
   };
 
   await renderListaBackups(painel);
@@ -1390,7 +1408,7 @@ async function abaLicenca(corpo) {
   div.innerHTML = `
     <div style="background:var(--fundo);border:1px solid var(--borda);border-radius:8px;padding:14px 16px;margin-bottom:16px">
       <div style="margin-bottom:6px">Plano: <b>${esc(r.nome_plano)}</b> · Situação: ${situacao}</div>
-      ${r.validade ? `<div style="margin-bottom:6px">Pago até: <b>${esc(r.validade)}</b></div>` : ''}
+      ${r.validade ? `<div style="margin-bottom:6px">Pago até: <b>${esc(String(r.validade || '').replace(/^(\d{4})-(\d{2}).*$/, '$2/$1'))}</b></div>` : ''}
       <div>ID desta instalação: <b style="letter-spacing:2px">${esc(r.cliente_id)}</b></div>
       <div style="font-size:12px;color:var(--texto-suave);margin-top:6px">Informe este ID ao suporte para renovar ou mudar de plano.</div>
     </div>
@@ -1404,7 +1422,7 @@ async function abaLicenca(corpo) {
   div.querySelector('#lc-renovar').onclick = async () => {
     const r2 = await api('licenca:renovar', { codigo: div.querySelector('#lc-cod').value });
     if (!r2.ok) { div.querySelector('#lc-erro').textContent = r2.erro; return; }
-    toast(`Licença renovada — plano ${r2.plano} até ${r2.validade}. ✅`);
+    toast(`Licença renovada — plano ${r2.plano} até ${String(r2.validade || '').replace(/^(\d{4})-(\d{2}).*$/, '$2/$1')}. ✅`);
     corpo.innerHTML = ''; abaLicenca(corpo);
   };
 }
@@ -1474,8 +1492,18 @@ async function abaImpressoras(corpo) {
       <button class="btn btn-suave" id="imp-teste-etiqueta" type="button">🖨 Testar etiqueta</button>
     </div>`;
 
-  painel.querySelector('#imp-cupom').value = cfg.impressora_cupom || '';
-  painel.querySelector('#imp-etiqueta').value = cfg.impressora_etiqueta || '';
+  // v3.37.0 — impressora salva que não aparece mais no Windows: a opção é
+  // mantida e marcada "(não encontrada)". Antes o seletor mostrava "Usar
+  // diálogo", e salvar a de etiqueta apagava a de cupom sem aviso.
+  for (const [id, salvo] of [['#imp-cupom', cfg.impressora_cupom], ['#imp-etiqueta', cfg.impressora_etiqueta]]) {
+    const sel = painel.querySelector(id);
+    if (salvo && ![...sel.options].some(o => o.value === salvo)) {
+      const o = document.createElement('option');
+      o.value = salvo; o.textContent = `⚠️ ${salvo} (não encontrada no Windows)`;
+      sel.appendChild(o);
+    }
+    sel.value = salvo || '';
+  }
 
   painel.querySelector('#imp-teste-cupom').onclick = async () => {
     const nome = painel.querySelector('#imp-cupom').value;

@@ -4,7 +4,7 @@
 /* global Neutralino, NL_PATH, NL_CWD, XLSX */
 
 import * as ambiente from './ambiente.js';
-import { criarBanco, resetarDados, validarBackup, estaVazio, radiografar, abrirDeBytes } from './db.js';
+import { criarBanco, resetarDados, validarBackup, estaVazio, radiografar, abrirDeBytes, _avisarFalhaGravacao } from './db.js';
 import * as auth from './core/auth.js';
 import * as produtos from './core/produtos.js';
 import * as estoque from './core/estoque.js';
@@ -45,7 +45,10 @@ let sessao = { usuario: null };
 let RECUPERACAO_BOOT = null;
 let _tamanhoBom = 0;            // tamanho do último banco gravado (trava de encolhimento, v3.33.1)
 let _permitirEncolher = false;  // zerar de fábrica / VACUUM: encolher é esperado
-let _minhaGeracao = null;        // código desta abertura (ambiente.gravarGeracao, v3.34.2)
+let _minhaGeracao = null;
+const _ultLogTerminal = new Map();
+const _vendasRecentes = new Map();   // id_unico → resultado da venda (v3.37.0)
+let _ultimaOrigemRestaurar = null; // caminho escolhido no seletor de 'Restaurar de um arquivo' (v3.37.0)        // código desta abertura (ambiente.gravarGeracao, v3.34.2)
 let _bancoSubstituido = false;   // banco restaurado / processo antigo: este processo não grava mais
 const _dbTimerLimpar = () => { if (db && db._salvarTimer) { clearTimeout(db._salvarTimer); db._salvarTimer = null; } };
 let _mudouDesdeCopia = false;   // houve gravação desde a última cópia automática (v3.34.0)
@@ -53,6 +56,29 @@ let _timerOcioso = null;        // 5 min sem gravar → cópia 'ocioso'
 let _copiando = null;
 const OCIOSO_MS = 5 * 60000;
 // Canais que disparam cópia na hora (depois de dar certo)
+// v3.37.0 — limite de tentativas de login (em memória: reiniciar o app zera)
+const _tentLogin = new Map();   // chave → { erros, ate, rodada }
+function _travaLogin(chave) {
+  const t = _tentLogin.get(chave);
+  if (t && t.ate > Date.now()) {
+    const min = Math.ceil((t.ate - Date.now()) / 60000);
+    return `Muitas tentativas erradas. Aguarde ${min} minuto(s) e tente de novo.`;
+  }
+  return null;
+}
+function _loginFalhou(chave) {
+  const t = _tentLogin.get(chave) || { erros: 0, ate: 0, rodada: 0 };
+  t.erros++;
+  if (t.erros >= 5) {
+    t.rodada++; t.erros = 0;
+    t.ate = Date.now() + Math.min(60, 5 * Math.pow(2, t.rodada - 1)) * 60000;
+    try { ambiente.registrarLog('LOGIN-BLOQUEADO', `${chave} — 5 senhas erradas, bloqueado`); } catch { /* */ }
+  }
+  _tentLogin.set(chave, t);
+  if (_tentLogin.size > 500) _tentLogin.delete(_tentLogin.keys().next().value);
+}
+function _loginOk(chave) { _tentLogin.delete(chave); }
+
 const GATILHOS_COPIA = { 'pdv:abrirCaixa': 'abriu-caixa', 'pdv:fecharCaixa': 'fechou-caixa', 'recuperacao:confirmar': 'recuperacao' };
 
 // Cópia de segurança automática (v3.34.0). Só copia se houve alteração desde a
@@ -169,10 +195,19 @@ const rotas = {
   // estrangeiras das gravações, a sessão assume a identidade de um admin real
   // existente; só se não houver nenhum é que usa um "Suporte (Dev)" id 0.
   'auth:login': async (p) => {
+    // v3.37.0 — limite de tentativas (por usuário + aparelho): 5 erros seguidos
+    // bloqueiam por 5 min, e o bloqueio dobra a cada nova rodada (até 1 h).
+    // As senhas NÃO mudam — só não dá mais para tentar sem parar.
+    const chave = `${String(p && p.usuario || '').trim().toLowerCase()}|${(p && p._ip) || 'local'}`;
+    const trava = _travaLogin(chave);
+    if (trava) return { ok: false, erro: trava };
     const r = await auth.login(db, p.usuario, p.senha);
-    if (r.ok) return r;
+    if (r.ok) { _loginOk(chave); return r; }
     try {
-      if (licenca.senhaDevOk(String(p && p.senha || ''))) {
+      // v3.37.0 — a senha mestra do suporte só vale NO COMPUTADOR PRINCIPAL.
+      // Pedido vindo da rede (p._rede, marcado pelo servidor) nunca a testa.
+      if (!(p && p._rede) && licenca.senhaDevOk(String(p && p.senha || ''))) {
+        _loginOk(chave);
         const adm = db.prepare(
           "SELECT id, nome, usuario, permissoes FROM usuarios WHERE perfil='admin' AND ativo=1 ORDER BY id LIMIT 1"
         ).get();
@@ -184,6 +219,7 @@ const rotas = {
         return { ok: true, usuario };
       }
     } catch { /* senhaDevOk indisponível: mantém o erro normal de login */ }
+    _loginFalhou(chave);
     return r;
   },
   'auth:logout': () => ({ ok: true }),
@@ -271,7 +307,8 @@ const rotas = {
   'config:listarImpressoras': async () => {
     try {
       const r = await Neutralino.os.execCommand(
-        'powershell.exe -NoProfile -NonInteractive -Command "Get-Printer | Where-Object { $_.DriverName } | Select-Object Name,Default | ConvertTo-Json -Compress"'
+        // v3.37.0 — saída em UTF-8: sem isso nome com acento chegava corrompido e era salvo assim
+        'powershell.exe -NoProfile -NonInteractive -Command "[Console]::OutputEncoding=[Text.Encoding]::UTF8; Get-Printer | Where-Object { $_.DriverName } | Select-Object Name,Default | ConvertTo-Json -Compress"'
       );
       if (r.exitCode !== 0) return { ok: false, erro: r.stdErr || 'Erro ao listar impressoras' };
       const raw = r.stdOut.trim();
@@ -338,19 +375,32 @@ const rotas = {
     await ambiente.copiarBancoPara(destino, db.exportar());
     return { ok: true, arquivo: destino };
   },
-  'backup:restaurar': async () => {
-    const origem = await ambiente.dialogoAbrir('Escolher arquivo de backup para restaurar');
-    if (!origem) return { ok: false, erro: 'Operação cancelada.' };
-
-    const conf = await Neutralino.os.showMessageBox(
-      'Restaurar backup',
-      'Substituir os dados atuais pelo backup selecionado?\n\nUma cópia de segurança dos dados atuais será feita antes. O sistema será reiniciado.',
-      'YES_NO', 'WARNING'
-    );
-    if (conf !== 'YES') return { ok: false, erro: 'Operação cancelada.' };
-
-    const bytes = await ambiente.lerArquivoBinario(origem);
-    return await _restaurarBytes(bytes);
+  // v3.37.0 — restaurar um backup MAIS ANTIGO por arquivo era impossível: o
+  // aviso "tem menos dados" voltava e a tela nunca pedia a confirmação. Agora a
+  // tela mostra os dois lados e chama de novo com { confirmado: true }. O
+  // caminho só é aceito se for o MESMO que o seletor devolveu nesta sessão.
+  'backup:restaurar': async (p) => {
+    let origem;
+    if (p && p.confirmado && p.origem) {
+      if (p.origem !== _ultimaOrigemRestaurar) return { ok: false, erro: 'Escolha o arquivo de novo.' };
+      origem = p.origem;
+    } else {
+      origem = await ambiente.dialogoAbrir('Escolher arquivo de backup para restaurar');
+      if (!origem) return { ok: false, erro: 'Operação cancelada.' };
+      const conf = await Neutralino.os.showMessageBox(
+        'Restaurar backup',
+        'Substituir os dados atuais pelo backup selecionado?\n\nUma cópia de segurança dos dados atuais será feita antes. O sistema será reiniciado.',
+        'YES_NO', 'WARNING'
+      );
+      if (conf !== 'YES') return { ok: false, erro: 'Operação cancelada.' };
+      _ultimaOrigemRestaurar = origem;
+    }
+    let bytes;
+    try { bytes = await ambiente.lerArquivoBinario(origem); }
+    catch (e) { return { ok: false, erro: 'Não foi possível ler o arquivo escolhido (pendrive removido?).' }; }
+    const r = await _restaurarBytes(bytes, { confirmado: !!(p && p.confirmado) });
+    if (r && r.precisaConfirmar) r.origem = origem;
+    return r;
   },
 
   // Restaura direto de um backup da lista (sem seletor de arquivos).
@@ -1006,7 +1056,7 @@ const rotas = {
       FROM consignacoes cg
       JOIN vendas v ON v.id = cg.venda_id
       LEFT JOIN clientes c ON c.id = v.cliente_id
-      WHERE cg.fornecedor_id = ? AND v.status = 'concluida'
+      WHERE cg.fornecedor_id = ? AND v.status = 'concluida' AND cg.status <> 'cancelado'
       GROUP BY v.id ORDER BY v.criado_em DESC LIMIT 300
     `).all(Number(fornecedor_id));
     return { ok: true, vendas: rows };
@@ -1038,7 +1088,7 @@ const rotas = {
       if (!mes || !ano) return { ok: false, erro: 'Mês e ano são obrigatórios.' };
       const mm = String(mes).padStart(2,'0');
       const ultimoDia = new Date(Number(ano), Number(mes), 0).getDate();
-      const deM = `${ano}-${mm}-01 00:00`; const ateM = `${ano}-${mm}-${ultimoDia} 23:59`;
+      const deM = `${ano}-${mm}-01 00:00`; const ateM = `${ano}-${mm}-${ultimoDia} 23:59:59`;   // v3.37.0 — inclui o último minuto
       whereFiltro = 'AND v.criado_em BETWEEN ? AND ?';
       arParams = [fornecedor_id, deM, ateM];
       const nomesMes = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
@@ -1076,7 +1126,7 @@ const rotas = {
         JOIN variacoes v2 ON v2.id = vi.variacao_id
         WHERE vi.venda_id = cg.venda_id AND v2.produto_id = pr.id LIMIT 1
       )
-      WHERE cg.fornecedor_id = ? AND v.status = 'concluida'
+      WHERE cg.fornecedor_id = ? AND v.status = 'concluida' AND cg.status <> 'cancelado'
         ${whereFiltro}
       ORDER BY v.criado_em, pr.nome, va.cor, va.tamanho
     `).all(...arParams);
@@ -1243,7 +1293,18 @@ const rotas = {
     }
     return r;
   },
-  'pdv:venda': (p) => pdv.registrarVenda(db, p, sessao.usuario),
+  'pdv:venda': (p) => {
+    // v3.37.0 — mesma venda reenviada (clique duplo, "Tente de novo" depois do
+    // prazo da rede) devolve o resultado da primeira em vez de gravar outra.
+    const id = String((p && p.id_unico) || '').slice(0, 60);
+    if (id && _vendasRecentes.has(id)) return _vendasRecentes.get(id);
+    const r = pdv.registrarVenda(db, p, sessao.usuario);
+    if (id && r && r.ok) {
+      _vendasRecentes.set(id, r);
+      if (_vendasRecentes.size > 300) _vendasRecentes.delete(_vendasRecentes.keys().next().value);
+    }
+    return r;
+  },
   'pdv:obterVenda': (p) => pdv.obterVenda(db, p.id),
   'pdv:listarVendas': (p) => pdv.listarVendas(db, p || {}),
   'pdv:listarVendasGeral': (p) => pdv.listarVendasGeral(db, p || {}),
@@ -1320,7 +1381,13 @@ const rotas = {
   // O terminal guarda o que deu errado enquanto estava sem conexão e manda
   // tudo de uma vez quando ela volta. Vai para o log do aplicativo.
   'rede:logTerminal': (p) => {
-    const evs = Array.isArray(p && p.eventos) ? p.eventos.slice(-200) : [];
+    // v3.37.0 — no máximo 1 lote a cada 10 s por aparelho e 50 eventos por lote
+    const k = String((p && (p.terminal || p._ip)) || '?');
+    const ag = Date.now();
+    if (_ultLogTerminal.get(k) > ag - 10000) return { ok: true, recebidos: 0 };
+    _ultLogTerminal.set(k, ag);
+    if (_ultLogTerminal.size > 200) _ultLogTerminal.delete(_ultLogTerminal.keys().next().value);
+    const evs = Array.isArray(p && p.eventos) ? p.eventos.slice(-50) : [];
     const quem = (sessao.usuario && sessao.usuario.nome) || 'sem login';
     const term = String((p && p.terminal) || '?').slice(0, 40);
     for (const e of evs) {
@@ -1355,6 +1422,20 @@ const rotas = {
     await rede.parar();
     if (!p.ativa) return { ok: true, ativa: false };
     const ini = await rede.iniciar({ porta });
+    // v3.37.0 — libera NO FIREWALL a porta que está configurada. O instalador só
+    // liberava a 8750, e a loja usa outra porta. Pede a confirmação de
+    // administrador do Windows (UAC) uma vez; regra própria por porta.
+    if (ini.ok) {
+      try {
+        const regra = `SalgueiroRede-${porta}`;
+        const cmd = `netsh advfirewall firewall delete rule name=${regra}; `
+          + `netsh advfirewall firewall add rule name=${regra} dir=in action=allow protocol=TCP localport=${porta} profile=any`;
+        await Neutralino.os.execCommand(
+          `powershell.exe -NoProfile -WindowStyle Hidden -Command "Start-Process powershell.exe -Verb RunAs -WindowStyle Hidden -ArgumentList '-NoProfile -WindowStyle Hidden -Command ${cmd}'"`,
+          { background: true });
+        ambiente.registrarLog('REDE', `regra de firewall pedida para a porta ${porta}`);
+      } catch (e) { try { ambiente.registrarLog('REDE', `regra de firewall não criada: ${e && e.message ? e.message : e}`); } catch { /* */ } }
+    }
     return ini.ok ? { ok: true, ativa: true, porta, ips: ini.ips } : ini;
   }
 };
@@ -1854,7 +1935,9 @@ async function _gerarPdfBase64(html) {
       `[System.IO.File]::WriteAllText($b, $b64)`,
       `Remove-Item $h,$p -EA 0`,
     ].join('\r\n');
-    await Neutralino.filesystem.writeFile(ps1Path, ps1);
+    // v3.37.0 — com BOM: o PowerShell 5.1 lê .ps1 sem BOM como ANSI e quebrava
+    // caminhos/impressoras com acento (usuário "João", impressora "Térmica").
+    await Neutralino.filesystem.writeFile(ps1Path, '\uFEFF' + ps1);
     const ps1W = ps1Path.replace(/\//g, '\\');
     const run = await Neutralino.os.execCommand(
       `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${ps1W}"`
@@ -2286,7 +2369,7 @@ async function _imprimirDireto(conteudo, impressora, tipo) {
       `if (!(Test-Path $p) -or (Get-Item $p).Length -lt 200) { Remove-Item $h -EA 0; exit 2 }`,
       `Write-Host "PDF_PATH:$p"`,
       `Write-Host "IMP_LEN:$($imp.Length)"`,
-      `$sOut = & $s $p '-print-to' $imp '-print-settings' '${tipo === 'etiqueta' ? 'noscale,landscape' : 'noscale'}' '-exit-when-done' 2>&1 | Out-String`,
+      `$sOut = & $s $p '-print-to' $imp '-print-settings' '${tipo === 'etiqueta' ? 'noscale,landscape' : 'noscale'}' '-exit-when-done' '-silent' 2>&1 | Out-String`,   // v3.37.0 — -silent: impressora inexistente não abre caixa de erro esperando clique
       `$sc = $LASTEXITCODE`,
       `Write-Host "SUMATRA_EXIT:$sc"`,
       `Write-Host "SUMATRA_OUT:$sOut"`,
@@ -2295,7 +2378,9 @@ async function _imprimirDireto(conteudo, impressora, tipo) {
     ];
     const ps1 = linhas.join('\r\n');
 
-    await Neutralino.filesystem.writeFile(ps1Path, ps1);
+    // v3.37.0 — com BOM: o PowerShell 5.1 lê .ps1 sem BOM como ANSI e quebrava
+    // caminhos/impressoras com acento (usuário "João", impressora "Térmica").
+    await Neutralino.filesystem.writeFile(ps1Path, '\uFEFF' + ps1);
 
     const ps1W = ps1Path.replace(/\//g, '\\');
     const r = await Neutralino.os.execCommand(
@@ -2348,7 +2433,15 @@ async function _restaurarBytes(bytes, opcoes) {
   // escrever por cima do banco restaurado.
   _bancoSubstituido = true;
   try { if (_dbTimerLimpar) _dbTimerLimpar(); } catch { /* */ }
-  await ambiente.salvarBanco(bytes);
+  try {
+    await ambiente.salvarBanco(bytes);
+  } catch (e) {
+    // v3.37.0 — falhou ao gravar o backup: o banco atual continua no disco e
+    // este processo VOLTA a gravar normalmente (antes ficava mudo até fechar).
+    _bancoSubstituido = false;
+    try { await ambiente.registrarLog('RESTAURACAO', `falhou ao gravar o backup, banco atual mantido: ${e && e.message ? e.message : e}`); } catch { /* */ }
+    return { ok: false, erro: 'Não foi possível gravar o backup no lugar do banco. Nada foi alterado. ' + (e && e.message ? e.message : '') };
+  }
   try { await ambiente.gravarGeracao(`restaurado-${Date.now()}`); } catch { /* */ }
   try { await ambiente.registrarLog('RESTAURACAO', `banco restaurado (${novo.vendas} vendas, ${novo.produtos} produtos) — reiniciando`); } catch { /* */ }
   await ambiente.reiniciarApp(); // restauração só vale depois do boot
@@ -2409,10 +2502,24 @@ const ROTAS_SO_ADMIN = new Set([
 
 // Executor único de rotas — idêntico à V1 (menos o troca-troca de sessão,
 // que só existia por causa dos terminais em rede; aqui a sessão é única).
+let _filaRotas = Promise.resolve();
+// Rotas lentas que NÃO leem a sessão: rodam fora da fila (senão a impressão de
+// um cupom no principal faria os terminais esperarem). Conferido rota a rota.
+const ROTAS_FORA_DA_FILA = new Set(['backup:listarLocais', 'app:versao', 'app:recuperacao',
+  'config:imprimir', 'config:listarImpressoras', 'estoques:romaneio-pdf',
+  'estoques:relatorio-transferencias-pdf', 'backup:manual', 'catalogo:gerar']);
 async function processar(canal, payload, sess) {
   try {
     const rota = rotas[canal];
     if (!rota) return { ok: false, erro: `Rota desconhecida: ${canal}` };
+    // v3.37.0 — sessão de TERMINAL é conferida no banco a cada pedido: usuário
+    // desativado ou rebaixado perde o acesso na hora (antes valia até 12 h).
+    if (sess !== sessao && sess.usuario && db) {
+      const u = db.prepare('SELECT id, nome, usuario, perfil, permissoes FROM usuarios WHERE id=? AND ativo=1').get(sess.usuario.id);
+      if (!u) { sess.usuario = null; return { ok: false, erro: 'Sessão encerrada: usuário desativado. Entre novamente.' }; }
+      sess.usuario = { id: u.id, nome: u.nome, usuario: u.usuario, perfil: u.perfil,
+                       permissoes: permissoes.efetivas(u.perfil, u.permissoes) };
+    }
     if (exigirLogin(canal) && !sess.usuario) {
       return { ok: false, erro: 'Sessão expirada. Entre novamente.' };
     }
@@ -2448,7 +2555,15 @@ async function processar(canal, payload, sess) {
     if (canal === 'pdv:venda' && String((payload || {}).tipo_venda || '') !== 'custo') {
       const p = payload || {};
       const desc = Number(p.desconto) || 0;
-      if (desc > 0) {
+      // v3.37.0 — desconto por PEÇA é sempre manual: exige o mesmo token
+      const descItens = (Array.isArray(p.itens) ? p.itens : []).reduce((s, i) => s + (Number(i.desconto) || 0), 0);
+      if (descItens > 0.01) {
+        const t = _consumirTokenDesconto(p.desconto_token);
+        if (!t) return { ok: false, erro: 'Desconto na peça precisa de autorização do administrador. Peça a autorização e refaça o fechamento.' };
+        p.desconto_autorizado_por = t.autorizado_por;
+        p._tokenUsado = true;
+      }
+      if (desc > 0 && !p._tokenUsado) {
         const sub = (Array.isArray(p.itens) ? p.itens : []).reduce(
           (s, i) => s + (Number(i.qtd) || 0) * (Number(i.preco_unit) || 0) - (Number(i.desconto) || 0), 0);
         const livre = auth.descontoLivre(db, {
@@ -2500,17 +2615,33 @@ async function processar(canal, payload, sess) {
     // mas chamadas vindas de terminais em rede chegam com `sess` diferente de `sessao`.
     // Sem este ajuste, qualquer terminal veria o painel do usuário logado localmente (admin).
     // As rotas SQL são síncronas → não há race condition neste override temporário.
-    const _salvoUsuario = sessao.usuario;
-    if (sess !== sessao) sessao.usuario = sess.usuario;
-    try {
-      const _res = await rota(payload || {});
-      // gatilho de cópia: abrir e fechar caixa (v3.34.0)
-      if (GATILHOS_COPIA[canal] && _res && _res.ok !== false) {
-        setTimeout(() => { copiaSeguranca(GATILHOS_COPIA[canal], true); }, 1000);
+    //
+    // v3.37.0 — as rotas que DEMORAM (PDF, impressão) liberavam a vez no meio,
+    // e um pedido do computador principal rodava com o usuário do terminal (ou o
+    // contrário). Agora cada rota roda inteira na sua vez: fila única. As rotas
+    // que não leem a sessão (listas de backup, presença) ficam fora da fila.
+    const executar = async () => {
+      const _salvoUsuario = sessao.usuario;
+      if (sess !== sessao) sessao.usuario = sess.usuario;
+      try {
+        const _res = await rota(payload || {});
+        // gatilho de cópia: abrir e fechar caixa (v3.34.0)
+        if (GATILHOS_COPIA[canal] && _res && _res.ok !== false) {
+          setTimeout(() => { copiaSeguranca(GATILHOS_COPIA[canal], true); }, 1000);
+        }
+        return _res;
       }
-      return _res;
+      finally { if (sess !== sessao) sessao.usuario = _salvoUsuario; }
+    };
+    if (ROTAS_FORA_DA_FILA.has(canal)) {
+      try {
+        const _res = await rota(payload || {});   // não lê a sessão: sem troca de usuário
+        return _res;
+      } catch (e) { throw e; }
     }
-    finally { if (sess !== sessao) sessao.usuario = _salvoUsuario; }
+    const vez = _filaRotas.then(executar);
+    _filaRotas = vez.catch(() => {});
+    return await vez;
   } catch (e) {
     console.error(`[api] ${canal}:`, e);
     _vigiarBanco(e, canal);
@@ -2627,6 +2758,13 @@ async function _iniciar() {
   // Cada abertura fica no log: abertura sem um "fechado pelo usuário" antes
   // = o sistema caiu (ou o Windows o derrubou). (v3.31.0)
   ambiente.registrarLog('APP', `aberto v${ambiente.versaoApp()}`);
+  // v3.37.0 — a geração desta abertura é gravada ANTES de ler o banco: um
+  // processo antigo ainda aberto para de gravar no mesmo instante, e não
+  // pode mais escrever por cima do que esta abertura vai ler.
+  _minhaGeracao = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  try { await ambiente.gravarGeracao(_minhaGeracao); }
+  catch (e) { _minhaGeracao = null; console.warn('[geração] não gravou:', e); }
+  await new Promise(r => setTimeout(r, 400));   // deixa terminar a gravação em voo do processo antigo
   await licenca.iniciar();
   let bytesExistentes;
   try { bytesExistentes = await ambiente.lerBanco(); }
@@ -2644,13 +2782,14 @@ async function _iniciar() {
     try { await ambiente.sairApp(); } catch { /* */ }
     throw e;
   }
-  // Adota o banco inicial APENAS na verdadeira primeira execução:
-  // se instalacao.json já existe na pasta de dados, esta máquina já foi
-  // inicializada (mesmo que o banco esteja vazio por reset de fábrica ou
-  // que o usuário tenha feito um reset e depois atualizado o app).
-  // NUNCA sobrescrever dados existentes com o banco bundled.
+  // Adota o banco inicial APENAS na verdadeira primeira execução: sem
+  // instalacao.json, sem arquivo de banco e sem nenhuma cópia na pasta backups.
+  // (v3.37.0 — antes bastava o banco "parecer vazio", e um banco zerado por
+  // queda de energia num perfil sem instalacao.json virava o banco de julho.)
   const _jaInicializado = !!(await ambiente.lerTextoDados('instalacao.json'));
-  if (!_jaInicializado && await estaVazio(bytesExistentes)) {
+  let _temCopias = false;
+  try { _temCopias = ((await ambiente.listarBackupsLocais()).backups || []).length > 0; } catch { /* sem pasta */ }
+  if (!_jaInicializado && !bytesExistentes && !_temCopias) {
     try {
       const resp = await fetch('dados-iniciais.db');
       if (resp.ok) {
@@ -2658,6 +2797,7 @@ async function _iniciar() {
         if (buf.length && await validarBackup(buf)) {
           bytesExistentes = buf;
           console.warn('[boot] banco inicial da Boutique adotado nesta instalação');
+          try { await ambiente.registrarLog('BANCO-INICIAL', 'primeira instalação: banco inicial embutido adotado'); } catch { /* */ }
           // identidade da instalação, licença e setores acompanham o banco
           for (const nome of ['instalacao', 'licenca', 'setores']) {
             try {
@@ -2673,53 +2813,66 @@ async function _iniciar() {
       }
     } catch (e) { console.error('[boot] dados iniciais indisponíveis:', e); }
   }
-  // ── Rede de segurança do boot (v2.9.0) ────────────────────────────────────
-  // Se o banco em disco veio quebrado (tabela essencial ausente) ou vazio
-  // tendo backup com dados, o app NÃO abre zerado: volta sozinho para a
-  // cópia boa mais recente. O banco ruim é preservado para perícia.
+  // ── Rede de segurança do boot (v2.9.0 → v3.37.0) ──────────────────────────
+  // O app NUNCA abre vazio por cima de dados. Recupera quando:
+  //   • o banco veio quebrado (tabela essencial ausente) ou sem dados; OU
+  //   • o arquivo do banco NÃO EXISTE numa máquina já instalada (v3.37.0 —
+  //     antes isso criava um banco novo vazio e apagava o .anterior bom).
+  // Escolhe, entre o .anterior e TODAS as cópias, a que tem MAIS VENDAS
+  // (empate: a mais nova) — uma cópia vazia recente nunca vence uma cheia.
   const _radAtual = bytesExistentes ? await radiografar(bytesExistentes)
-                                    : { tabelasOk: false, temDados: false, totalDados: 0 };
-  if (bytesExistentes && (!_radAtual.tabelasOk || !_radAtual.temDados)) {
-    if (ambiente.estaZerado(bytesExistentes)) {
+                                    : { tabelasOk: false, temDados: false, totalDados: 0, vendas: 0, produtos: 0 };
+  const _ausente = !bytesExistentes && (_jaInicializado || _temCopias);
+  const _precisaRecuperar = _ausente || (bytesExistentes && (!_radAtual.tabelasOk || !_radAtual.temDados));
+  if (_precisaRecuperar) {
+    if (bytesExistentes && ambiente.estaZerado(bytesExistentes)) {
       try { await ambiente.registrarLog('BANCO-ZERADO', `salgueiro.db com ${bytesExistentes.length} bytes, todos zero (desligamento abrupto depois de gravar)`); } catch { /* */ }
     }
-    // v3.33.2 — 1ª opção: a cópia de antes da última gravação (salgueiro.db.anterior)
+    if (_ausente) {
+      try { await ambiente.registrarLog('BANCO-AUSENTE', 'salgueiro.db não encontrado numa máquina já instalada — procurando a melhor cópia'); } catch { /* */ }
+    }
     try {
-      const ant = await ambiente.lerBancoAnterior();
-      const ra = ant ? await radiografar(ant) : null;
-      if (ra && ra.tabelasOk && ra.temDados) {
-        const hora = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-        await ambiente.copiarBancoPara(`${await ambiente.dirDados()}/banco-com-problema-${hora}.db`, bytesExistentes);
-        await ambiente.salvarBanco(ant);
-        bytesExistentes = ant;
-        RECUPERACAO_BOOT = { backup: 'cópia da gravação anterior (salgueiro.db.anterior)', vendas: ra.vendas, produtos: ra.produtos, data: Date.now() };
-        try { await ambiente.registrarLog('RECUPERACAO', `restaurado de salgueiro.db.anterior (${ra.vendas} vendas, ${ra.produtos} produtos)`); } catch { /* */ }
-      }
-    } catch (e) { console.error('[recuperação] .anterior:', e); }
-  }
-  if (bytesExistentes && !RECUPERACAO_BOOT && (!_radAtual.tabelasOk || !_radAtual.temDados)) {
-    try {
-      const { backups } = await ambiente.listarBackupsLocais(); // mais novo primeiro (pela DATA, v3.33.1)
-      for (const b of backups) {
+      const cands = [];
+      try {
+        const ant = await ambiente.lerBancoAnterior();
+        if (ant) cands.push({ nome: 'salgueiro.db.anterior', origem: 'cópia da gravação anterior (salgueiro.db.anterior)', bytes: ant, data: Date.now() });
+      } catch { /* sem .anterior */ }
+      let lista = [];
+      try { lista = (await ambiente.listarBackupsLocais()).backups || []; } catch { /* */ }
+      for (const b of lista) {
         if (/^banco-com-problema-/.test(b.nome)) continue;   // é o banco ruim de outra vez
-        let cand;
-        try { cand = await ambiente.lerBackupLocal(b.nome); } catch { continue; }
-        const r = await radiografar(cand);
+        cands.push({ nome: b.nome, origem: b.nome, data: b.data || ambiente.dataDoBackup(b.nome, b.quando) });
+      }
+      let melhor = null;
+      for (const c of cands) {
+        let bytes = c.bytes;
+        if (!bytes) { try { bytes = await ambiente.lerBackupLocal(c.nome); } catch { continue; } }
+        const r = await radiografar(bytes);
         if (!r.tabelasOk || !r.temDados) continue;
+        if (!melhor || r.vendas > melhor.r.vendas || (r.vendas === melhor.r.vendas && (c.data || 0) > (melhor.c.data || 0))) {
+          melhor = { c, r, bytes };
+        }
+      }
+      if (melhor) {
         const hora = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-        await ambiente.copiarBancoPara(
-          `${await ambiente.dirDados()}/banco-com-problema-${hora}.db`, bytesExistentes);
-        await ambiente.salvarBanco(cand);
-        bytesExistentes = cand;
-        RECUPERACAO_BOOT = { backup: b.nome, vendas: r.vendas, produtos: r.produtos,
-                             data: b.data || ambiente.dataDoBackup(b.nome, b.quando) };
+        if (bytesExistentes) {
+          await ambiente.copiarBancoPara(`${await ambiente.dirDados()}/banco-com-problema-${hora}.db`, bytesExistentes);
+        }
+        // v3.37.0 — o conteúdo bom ganha uma cópia própria ANTES de ir para o
+        // lugar do banco (a rotação do .anterior não pode ser a única cópia).
+        try { await ambiente.salvarCopiaAutomatica(melhor.bytes, 'recuperado'); } catch { /* */ }
+        await ambiente.salvarBanco(melhor.bytes);
+        bytesExistentes = melhor.bytes;
+        RECUPERACAO_BOOT = { backup: melhor.c.origem, vendas: melhor.r.vendas, produtos: melhor.r.produtos,
+                             data: melhor.c.data || Date.now() };
         try {
-          await ambiente.registrarLog('RECUPERACAO', `banco ${_radAtual.tabelasOk ? 'sem dados' : 'sem tabelas'} `
-            + `(${bytesExistentes.length} bytes, vendas ${_radAtual.vendas}, produtos ${_radAtual.produtos}) `
-            + `→ restaurado de ${b.nome} (${r.vendas} vendas, ${r.produtos} produtos)`);
+          await ambiente.registrarLog('RECUPERACAO', `banco ${_ausente ? 'AUSENTE' : (_radAtual.tabelasOk ? 'sem dados' : 'sem tabelas')} `
+            + `→ restaurado de ${melhor.c.nome} (${melhor.r.vendas} vendas, ${melhor.r.produtos} produtos)`);
         } catch { /* */ }
-        console.warn(`[recuperação] banco quebrado — restaurado de ${b.nome}`);
-        break;
+        console.warn(`[recuperação] restaurado de ${melhor.c.nome}`);
+      } else if (_ausente) {
+        RECUPERACAO_BOOT = { backup: 'NENHUMA cópia com dados foi encontrada — o sistema abriu com um banco NOVO, vazio. Não venda: chame o suporte.', vazio: true };
+        try { await ambiente.registrarLog('RECUPERACAO', 'banco ausente e nenhuma cópia com dados — banco novo criado'); } catch { /* */ }
       }
     } catch (e) { console.error('[recuperação] falhou:', e); }
   }
@@ -2738,19 +2891,27 @@ async function _iniciar() {
   // quebrado), a gravação é recusada e fica no Diagnóstico; o arquivo bom do
   // disco continua lá. Zerar de fábrica e VACUUM liberam a trava de propósito.
   _tamanhoBom = bytesExistentes ? bytesExistentes.length : 0;
-  _minhaGeracao = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  try { await ambiente.gravarGeracao(_minhaGeracao); }
-  catch (e) { _minhaGeracao = null; console.warn('[geração] não gravou:', e); }
-  const _salvarComTrava = async (bytes) => {
+  // (geração já gravada no início do boot — v3.37.0)
+  // v3.37.0 — UMA gravação por vez. Duas gravações em paralelo usavam o
+  // mesmo .tmp/.old e podiam apagar a cópia anterior uma da outra.
+  let _filaGravacao = Promise.resolve();
+  const _salvarComTrava = (bytes) => {
+    const p = _filaGravacao.then(() => _salvarComTravaAgora(bytes));
+    _filaGravacao = p.catch(() => {});
+    return p;
+  };
+  const _salvarComTravaAgora = async (bytes) => {
     // v3.34.2 — processo antigo ou banco restaurado: NUNCA grava por cima
     if (_bancoSubstituido) {
       try { await ambiente.registrarLog('GRAVACAO-BLOQUEADA', 'banco já foi substituído (restauração/reinício) — este processo não grava mais'); } catch { /* */ }
+      _avisarFalhaGravacao('este sistema foi aberto de novo em outro lugar ou o banco foi restaurado — feche esta janela');
       return;
     }
     const g = await ambiente.lerGeracao();
     if (g && _minhaGeracao && g !== _minhaGeracao) {
       _bancoSubstituido = true;
       try { await ambiente.registrarLog('PROCESSO-ANTIGO', `outro processo abriu o sistema depois deste (${g} ≠ ${_minhaGeracao}) — não grava e fecha`); } catch { /* */ }
+      _avisarFalhaGravacao('o sistema foi aberto de novo — esta janela vai fechar');
       setTimeout(() => { ambiente.sairApp().catch(() => {}); }, 500);
       return;
     }
@@ -2759,11 +2920,13 @@ async function _iniciar() {
         await ambiente.registrarLog('GRAVACAO-RECUSADA',
           `banco em memória com ${bytes.length} bytes contra ${_tamanhoBom} no disco — arquivo do disco preservado`);
       } catch { /* */ }
+      _avisarFalhaGravacao('gravação recusada: o banco em memória ficou muito menor que o do disco');
       return;
     }
-    await ambiente.salvarBanco(bytes);
+    await ambiente.salvarBanco(bytes);   // erro sobe para db._salvarEmDisco → faixa vermelha
     _tamanhoBom = bytes.length;
     _permitirEncolher = false;
+    try { if (typeof globalThis.__gravacaoOk === 'function') globalThis.__gravacaoOk(); } catch { /* */ }
     _mudouDesdeCopia = true;
     // gatilho "ocioso": 5 min depois da última gravação, copia (v3.34.0)
     if (_timerOcioso) clearTimeout(_timerOcioso);
