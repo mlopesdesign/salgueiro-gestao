@@ -25,8 +25,17 @@ function _aleatorioHex(nBytes) {
   return _hex(b);
 }
 
+// v3.40.1 — SÍNCRONO. O scrypt assíncrono pausa com setTimeout entre os pedaços
+// do cálculo (vendor/scrypt.js:318 e :427). Com a janela do sistema MINIMIZADA
+// (o modo servidor fica assim), o WebView2 segura cada setTimeout por ~1 s e o
+// login vindo de um caixa passava de 30 s e estourava — visto em 09/11 no
+// DESKTOP-MARCIO (rede-2026-11-09.log: auth:login SEM-RESPOSTA 30011ms).
+// O síncrono calcula de uma vez (~160 ms no Node) e dá o mesmo resultado.
 async function _scryptHex(senha, salStr) {
-  const chave = await scrypt.scrypt(_enc.encode(String(senha)), _enc.encode(String(salStr)), N, R, P, DKLEN);
+  const s = _enc.encode(String(senha)), sal = _enc.encode(String(salStr));
+  const chave = typeof scrypt.syncScrypt === 'function'
+    ? scrypt.syncScrypt(s, sal, N, R, P, DKLEN)
+    : await scrypt.scrypt(s, sal, N, R, P, DKLEN);
   return _hex(chave);
 }
 

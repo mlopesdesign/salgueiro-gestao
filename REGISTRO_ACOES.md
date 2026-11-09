@@ -39,4 +39,6 @@
 - 2026-11-09 — Instalador do Salgueiro também travaria no /S (MessageBox sem /SD IDYES). Corrigido antes de instalar. CERTO.
 - 2026-11-09 — Instalador do terminal refeito como assistente profissional (MUI2 pt-BR, boas-vindas, pasta, progresso, conclusão com "Abrir agora", arte do Salgueiro, desinstalador com páginas). .nsi com BOM UTF-8 (acentos). Aberto na tela do Marcio por tarefa agendada. CERTO.
 - 2026-11-09 — Varredura do terminal passou a priorizar 192.168.x/10.x; placas virtuais (WSL 172.x, Tailscale 100.x) por último — o PC do Marcio tem as quatro. CERTO.
+- 2026-11-09 09:55 — Login do Marcio no terminal não entrava. Diagnóstico pelo log com evidência: rede ok (outras rotas em ms), só auth:login estourando 30 s; servidor minimizado. Causa: scrypt assíncrono depende de cadeia de setTimeout, que o WebView2 freia em janela minimizada. Corrigido no código (syncScrypt), v3.40.1, comprovado em 981 ms. CERTO.
+- 2026-11-09 — Ligar modo servidor/rede editando o banco deste PC foi só para o teste aqui; na loja é a chave em Configurações → 🖥️ Servidor (vale para qualquer máquina). Toda correção vai no código, nunca no PC. Lembrete do Marcio.
 

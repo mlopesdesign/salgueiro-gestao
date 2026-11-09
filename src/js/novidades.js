@@ -3,6 +3,13 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.40.1',
+    data: '2026-11-09',
+    itens: [
+      '🔐 LOGIN NOS CAIXAS COM O SERVIDOR MINIMIZADO. Com o computador do escritório em modo servidor (janela minimizada), o login feito num caixa demorava mais de 30 segundos e não entrava. Agora entra na hora, com a janela do servidor minimizada ou não.',
+    ],
+  },
+  {
     versao: '3.40.0',
     data: '2026-11-09',
     itens: [
