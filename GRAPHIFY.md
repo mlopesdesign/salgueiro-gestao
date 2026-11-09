@@ -3,7 +3,7 @@
 > Mapa técnico gerado automaticamente por `tools/graphify.js`.
 > **Não edite à mão.** Regere com `node tools/graphify.js` a cada alteração estrutural.
 
-**Versão:** 3.38.0 · **Gerado em:** 2026-11-09
+**Versão:** 3.39.0 · **Gerado em:** 2026-11-09
 **Aplicação:** `br.com.mllopes.salgueirogestao` (Neutralino 6 + WebView2)
 **Cliente:** Boutique do Salgueiro · **Autor:** ML Lopes Design
 
@@ -75,7 +75,7 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `clientes.js` | 223 | 7 | excluirCategoria, exportar, importar, listar, listarCategorias, salvar, salvarCategoria |
 | `codigos.js` | 236 | 3 | LIMITE_RESTAURACAO, MIGR_CHAVE, REVERTE_CHAVE, SEQ_INICIAL, _zerarMarcaTeste, codigoAposentado, definirMarcaExterna, etiquetasATrocar, +8 |
 | `compras.js` | 157 | 8 | cancelarCompra, criarCompra, excluirFornecedor, listarCompras, listarFornecedores, obterCompra, receberCompra, salvarFornecedor |
-| `config.js` | 85 | 2 | obter, salvar |
+| `config.js` | 86 | 2 | obter, salvar |
 | `consignacao.js` | 149 | 5 | acertar, estornarDevolucao, listar, registrarSaida, resumo |
 | `crediario.js` | 109 | 5 | aniversariantes, excluirCliente, obterCliente, parcelasAbertas, receberParcela |
 | `dashboard.js` | 275 | 2 | resumo |
@@ -108,20 +108,20 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 
 | Arquivo | Linhas | Funções |
 |---|---|---|
-| `ambiente.js` | 816 | 15 |
+| `ambiente.js` | 973 | 19 |
 | `db.js` | 774 | 6 |
 | `servidor-rede-embutido.js` | 971 | 30 |
-| `servidor.js` | 3309 | 21 |
+| `servidor.js` | 3369 | 21 |
 
 ## 6. Telas (`src/js`)
 
 | Arquivo | Linhas | Exporta |
 |---|---|---|
-| `app.js` | 2248 | EM_REDE, ajustarLarguraModal, api, aplicarTema, campoTroco |
+| `app.js` | 2289 | EM_REDE, ajustarLarguraModal, api, aplicarTema, campoTroco |
 | `catalogo.js` | 262 | viewCatalogo |
 | `clientes.js` | 538 | viewClientes |
 | `compras.js` | 229 | viewCompras |
-| `configuracoes.js` | 2048 | viewConfiguracoes |
+| `configuracoes.js` | 2129 | viewConfiguracoes |
 | `estoque.js` | 1353 | abrirEtiquetas, ean13Svg, formMovimento, formMovimentoProduto, viewEstoque |
 | `estoques.js` | 989 | viewEstoques |
 | `etiquetas.js` | 169 | abrirEtiquetasLote, imprimirFolhaEtiquetas |
@@ -129,14 +129,14 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `impressao.js` | 179 | LIMITES, PADRAO, aplicarEstiloImpressao, cssCupomArquivo, cssCupomTela |
 | `mensagens.js` | 758 | abrirBalao, encerrarTelaMensagens, iniciarMensagens, pararMensagens, viewMensagens |
 | `neutralino.js` | 2 | — |
-| `novidades.js` | 1173 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
+| `novidades.js` | 1182 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
 | `pdv.js` | 2626 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
 | `ranking.js` | 360 | viewRanking |
 | `relatorios.js` | 1899 | viewRelatorios |
 
 ---
 
-## 7. Rotas da API (173)
+## 7. Rotas da API (176)
 
 Toda comunicação tela ↔ backend passa por `api('canal:acao', payload)`.
 A coluna **Permissão** vem de `PERMISSAO_ROTA` em `servidor.js` — sem entrada ali,
@@ -240,7 +240,7 @@ a rota exige apenas sessão válida.
 | Canal | Permissão | Destino |
 |---|---|---|
 | `config:obter` | — | `config.obter(db)` |
-| `config:salvar` | `config.gerenciar` | `config.salvar(db, p, sessao.usuario)` |
+| `config:salvar` | `config.gerenciar` | `{` |
 | `config:iconeStatus` | — | `{` |
 | `config:definirIcone` | `config.gerenciar` | `{` |
 | `config:removerIcone` | `config.gerenciar` | `{` |
@@ -464,6 +464,14 @@ a rota exige apenas sessão válida.
 | `relatorios:listarVendasFornecedor` | `relatorios.ver` | `{` |
 | `relatorios:reciboConsignado` | `relatorios.ver` | `{` |
 
+### `servidor:*`
+
+| Canal | Permissão | Destino |
+|---|---|---|
+| `servidor:status` | `config.gerenciar` | `{` |
+| `servidor:ligar` | `config.gerenciar` | `{` |
+| `servidor:pausar` | — | `{ await ambiente.pausarVigia(); try { await ambiente.registr…` |
+
 ### `trocas:*`
 
 | Canal | Permissão | Destino |
@@ -555,6 +563,14 @@ a rota exige apenas sessão válida.
 > (`PRAGMA quick_check`); corrompido → recupera da cópia íntegra com mais vendas
 > (HD + pendrive), mas **nunca** por uma com MENOS vendas que o corrompido.
 > Mudou o PS1? Regenere `servidor-rede-embutido.js` (`node tools/gerar-rede-embutida.js`).
+
+> **Modo servidor (v3.39.0):** `ambiente.aplicarModoServidor` grava
+> `HKCU\...\Run\SalgueiroGestaoServidor` (`--salg-servidor`), a tarefa
+> `SalgueiroVigiaServidor` (a cada minuto, `wscript` + `%APPDATA%\SalgueiroGestao\vigia-servidor.vbs`
+> em latin-1) e zera suspender/hibernar na tomada (valor anterior em `dados/energia-antes.json`).
+> Tudo sem administrador. O comando vai por `-EncodedCommand` e TEM de caber nos
+> 8.191 caracteres do `cmd.exe` — por isso o `.vbs` é gravado pelo JS, não dentro do comando.
+> Fechar de propósito grava `servidor-pausa.txt` (vigia espera 30 min); o instalador também.
 
 ---
 

@@ -529,7 +529,7 @@ export async function lerLogs(dia) {
 
 // ── App ──────────────────────────────────────────────────────────────────────
 export function versaoApp() {
-  try { return NL_APPVERSION; } catch { return '3.38.0'; }
+  try { return NL_APPVERSION; } catch { return '3.39.0'; }
 }
 
 // v3.34.2 — o reinício TEM de encerrar este processo. Na loja (27/10) a
@@ -812,4 +812,161 @@ export async function candidatosEspelho() {
     }
   } catch { /* sem cópias */ }
   return out;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// v3.39.0 — MODO SERVIDOR (Fase 1 do projeto Servidor + Terminais)
+// ═════════════════════════════════════════════════════════════════════════════
+// O computador do escritório vira o servidor da loja. Com a chave ligada:
+//   1. abre junto com o Windows   — HKCU\...\Run\SalgueiroGestaoServidor
+//   2. vigia                      — tarefa agendada (a cada minuto) roda um .vbs
+//                                   que reabre o sistema se ele não estiver aberto
+//   3. não entra em suspensão     — powercfg: suspender/hibernar na tomada = nunca
+//                                   (o valor anterior é guardado e volta ao desligar)
+// Nada disso pede administrador (testado no Windows em 09/11/2026: Run do HKCU,
+// schtasks do próprio usuário e powercfg do esquema atual funcionam sem UAC).
+// O .vbs roda escondido (wscript): nenhuma janela pisca a cada minuto.
+// Fechar o servidor de propósito grava servidor-pausa.txt e o vigia espera 30 min.
+export const ARG_SERVIDOR = '--salg-servidor';
+const RUN_NOME = 'SalgueiroGestaoServidor';
+const TAREFA_VIGIA = 'SalgueiroVigiaServidor';
+
+function _b64Utf16(s) {
+  let bin = '';
+  for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); bin += String.fromCharCode(c & 255, c >> 8); }
+  return btoa(bin);
+}
+// Roda um script PowerShell sem problema de aspas (-EncodedCommand) e devolve o
+// JSON que o script escrever na última linha.
+async function _psJson(script) {
+  const cmd = `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand ${_b64Utf16(script)}`;
+  const r = await Neutralino.os.execCommand(cmd);
+  const linhas = String((r && r.stdOut) || '').trim().split(/\r?\n/).filter(Boolean);
+  try { return JSON.parse(linhas[linhas.length - 1]); }
+  catch { throw new Error('resposta inesperada do Windows: ' + String((r && (r.stdErr || r.stdOut)) || '').slice(0, 300)); }
+}
+export function caminhoExe() {
+  let a0 = '';
+  try { a0 = (globalThis.NL_ARGS && NL_ARGS[0]) || ''; } catch { /* */ }
+  if (/\.exe$/i.test(a0)) return a0.replace(/\//g, '\\');
+  let base = '';
+  try { base = NL_PATH; } catch { /* */ }
+  return `${base}/Salgueiro Gestao.exe`.replace(/\//g, '\\');
+}
+export function iniciadoComoServidor() {
+  try { return Array.isArray(globalThis.NL_ARGS) && NL_ARGS.includes(ARG_SERVIDOR); } catch { return false; }
+}
+const _psq = (s) => "'" + String(s).replace(/'/g, "''") + "'";   // literal do PowerShell
+
+// Conteúdo do vigia (.vbs). Exportado para o teste conferir.
+export function scriptVigia(exe) {
+  const vb = String(exe).replace(/"/g, '""');
+  return [
+    "' Vigia do servidor Salgueiro Gestao (v3.39.0) - gerado pelo sistema, nao editar.",
+    "' Roda a cada minuto (tarefa agendada). Se o sistema nao estiver aberto, abre.",
+    'Option Explicit',
+    'Dim fso, sh, wmi, exe, pausa, nome, lista',
+    `exe = "${vb}"`,
+    'Set fso = CreateObject("Scripting.FileSystemObject")',
+    'Set sh = CreateObject("WScript.Shell")',
+    'If Not fso.FileExists(exe) Then WScript.Quit 0',
+    'pausa = sh.ExpandEnvironmentStrings("%APPDATA%") & "\\SalgueiroGestao\\servidor-pausa.txt"',
+    'If fso.FileExists(pausa) Then',
+    '  If DateDiff("n", fso.GetFile(pausa).DateLastModified, Now) < 30 Then WScript.Quit 0',
+    'End If',
+    'Set wmi = GetObject("winmgmts:\\\\.\\root\\cimv2")',
+    "Set lista = wmi.ExecQuery(\"SELECT ProcessId FROM Win32_Process WHERE Name LIKE 'Salgueiro Gestao Setup%' OR Name = 'uninstall.exe'\")",
+    'If lista.Count > 0 Then WScript.Quit 0',
+    'nome = fso.GetFileName(exe)',
+    "Set lista = wmi.ExecQuery(\"SELECT ProcessId FROM Win32_Process WHERE Name = '\" & Replace(nome, \"'\", \"''\") & \"'\")",
+    `If lista.Count = 0 Then sh.Run """" & exe & """ ${ARG_SERVIDOR}", 1, False`,
+    '',
+  ].join('\r\n');
+}
+
+// Liga ou desliga as três peças no Windows. Devolve o estado depois.
+export async function aplicarModoServidor(ligar) {
+  const exe = caminhoExe();
+  const vbs = `${(await Neutralino.os.getPath('data')).replace(/\//g, '\\')}\\SalgueiroGestao\\vigia-servidor.vbs`;
+  const energiaArq = `${(await dirDados()).replace(/\//g, '\\')}\\energia-antes.json`;
+  if (ligar) {
+    // o .vbs vai em ANSI/latin-1 (o wscript não lê UTF-8 sem BOM) e é gravado
+    // aqui, não dentro do comando: o comando do PowerShell tem de caber no
+    // limite de 8.191 caracteres do cmd.exe (com o .vbs dentro dava 7.702).
+    const txt = scriptVigia(exe);
+    const ansi = new Uint8Array(txt.length);
+    for (let i = 0; i < txt.length; i++) { const c = txt.charCodeAt(i); ansi[i] = c < 256 ? c : 63; }
+    await _garantirDir(vbs.replace(/\\[^\\]+$/, '').replace(/\\/g, '/'));
+    await Neutralino.filesystem.writeBinaryFile(vbs.replace(/\\/g, '/'), ansi.buffer);
+    const ps = `
+$ErrorActionPreference = 'Stop'
+$r = @{ ok = $true; erros = @() }
+try { New-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name '${RUN_NOME}' -Value ('"' + ${_psq(exe)} + '" ${ARG_SERVIDOR}') -PropertyType String -Force | Out-Null } catch { $r.erros += 'inicializacao: ' + $_.Exception.Message }
+$o = schtasks /Create /TN '${TAREFA_VIGIA}' /SC MINUTE /MO 1 /TR ('wscript.exe "' + ${_psq(vbs)} + '"') /F 2>&1
+if ($LASTEXITCODE -ne 0) { $r.erros += 'vigia (tarefa): ' + ($o -join ' ') }
+function Ler($sub) { $h = powercfg /query SCHEME_CURRENT SUB_SLEEP $sub | Select-String '0x[0-9a-fA-F]{8}' -AllMatches | ForEach-Object { $_.Matches } | ForEach-Object { $_.Value }; if ($h.Count -ge 2) { return [Convert]::ToInt64($h[-2],16) } else { return $null } }
+try {
+  if (-not (Test-Path ${_psq(energiaArq)})) { @{ standby = (Ler 'STANDBYIDLE'); hibernar = (Ler 'HIBERNATEIDLE') } | ConvertTo-Json -Compress | Set-Content -Path ${_psq(energiaArq)} -Encoding UTF8 }
+  powercfg /setacvalueindex SCHEME_CURRENT SUB_SLEEP STANDBYIDLE 0
+  powercfg /setacvalueindex SCHEME_CURRENT SUB_SLEEP HIBERNATEIDLE 0
+  powercfg /setactive SCHEME_CURRENT
+} catch { $r.erros += 'energia: ' + $_.Exception.Message }
+$r.ok = ($r.erros.Count -eq 0)
+$r | ConvertTo-Json -Compress`;
+    const r = await _psJson(ps);
+    try { registrarLog('SERVIDOR', `modo servidor LIGADO (${exe})${r.erros && r.erros.length ? ' — ' + r.erros.join(' | ') : ''}`); } catch { /* */ }
+    return r;
+  }
+  const ps = `
+$r = @{ ok = $true; erros = @() }
+Remove-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name '${RUN_NOME}' -ErrorAction SilentlyContinue
+schtasks /Delete /TN '${TAREFA_VIGIA}' /F 2>&1 | Out-Null
+Remove-Item -Path ${_psq(vbs)} -Force -ErrorAction SilentlyContinue
+try {
+  if (Test-Path ${_psq(energiaArq)}) {
+    $e = Get-Content ${_psq(energiaArq)} -Raw | ConvertFrom-Json
+    if ($null -ne $e.standby)  { powercfg /setacvalueindex SCHEME_CURRENT SUB_SLEEP STANDBYIDLE  ([int64]$e.standby) }
+    if ($null -ne $e.hibernar) { powercfg /setacvalueindex SCHEME_CURRENT SUB_SLEEP HIBERNATEIDLE ([int64]$e.hibernar) }
+    powercfg /setactive SCHEME_CURRENT
+    Remove-Item ${_psq(energiaArq)} -Force
+  }
+} catch { $r.erros += 'energia: ' + $_.Exception.Message }
+$r.ok = ($r.erros.Count -eq 0)
+$r | ConvertTo-Json -Compress`;
+  const r = await _psJson(ps);
+  try { registrarLog('SERVIDOR', 'modo servidor DESLIGADO'); } catch { /* */ }
+  return r;
+}
+
+// Lê do Windows como as três peças estão agora (para a tela conferir de verdade,
+// não confiar só na chave gravada).
+export async function estadoModoServidorSO() {
+  const ps = `
+$r = @{}
+$v = (Get-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name '${RUN_NOME}' -ErrorAction SilentlyContinue).'${RUN_NOME}'
+$r.inicializacao = [string]$v
+schtasks /Query /TN '${TAREFA_VIGIA}' 2>&1 | Out-Null
+$r.vigia = ($LASTEXITCODE -eq 0)
+function Ler($sub) { $h = powercfg /query SCHEME_CURRENT SUB_SLEEP $sub | Select-String '0x[0-9a-fA-F]{8}' -AllMatches | ForEach-Object { $_.Matches } | ForEach-Object { $_.Value }; if ($h.Count -ge 2) { return [Convert]::ToInt64($h[-2],16) } else { return -1 } }
+$r.standby = (Ler 'STANDBYIDLE')
+$r.hibernar = (Ler 'HIBERNATEIDLE')
+$r.computador = $env:COMPUTERNAME
+$r | ConvertTo-Json -Compress`;
+  const r = await _psJson(ps);
+  const exe = caminhoExe().toLowerCase();
+  return {
+    inicializacao: !!r.inicializacao,
+    inicializacaoCerta: !!r.inicializacao && String(r.inicializacao).toLowerCase().includes(exe),
+    vigia: !!r.vigia,
+    semSuspensao: r.standby === 0 && (r.hibernar === 0 || r.hibernar === -1),
+    standby: r.standby, hibernar: r.hibernar,
+    computador: r.computador || '', exe: caminhoExe()
+  };
+}
+
+// Fechar o servidor de propósito: o vigia não reabre por 30 minutos.
+export async function pausarVigia() {
+  const base = await Neutralino.os.getPath('data');
+  await _garantirDir(`${base}/SalgueiroGestao`);
+  await Neutralino.filesystem.writeFile(`${base}/SalgueiroGestao/servidor-pausa.txt`, new Date().toISOString());
 }

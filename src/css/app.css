@@ -738,3 +738,25 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
 .etq-local th:nth-child(5) { width: 130px !important; }
 .etq-local td:first-child { overflow: hidden; text-overflow: ellipsis; }
 .etq-local input[type="checkbox"] { accent-color: var(--verde); width: 16px; height: 16px; }
+
+/* ---------- Chave liga/desliga (v3.39.0) — componente comum ----------
+   <label class="chave"><input type="checkbox"><span class="chave-trilho"></span>
+     <span class="chave-texto">Rótulo</span></label> */
+.chave { display: inline-flex; align-items: center; gap: 12px; cursor: pointer; user-select: none; min-height: 32px; }
+.chave input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.chave-trilho { position: relative; flex: 0 0 46px; width: 46px; height: 26px; border-radius: 13px;
+  background: #CFC7BC; transition: background .18s ease; box-shadow: inset 0 1px 2px #0002; }
+.chave-trilho::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%;
+  background: var(--branco); box-shadow: 0 1px 3px #0004; transition: transform .18s ease; }
+.chave input:checked + .chave-trilho { background: var(--verde); }
+.chave input:checked + .chave-trilho::after { transform: translateX(20px); }
+.chave input:focus-visible + .chave-trilho { outline: 2px solid var(--dourado); outline-offset: 2px; }
+.chave input:disabled + .chave-trilho { opacity: .5; cursor: wait; }
+.chave-texto { font-weight: 600; font-size: 14px; color: var(--texto); }
+
+/* Lista de conferência com ✓/✗ (painel do servidor) */
+.conferencia { list-style: none; margin: 0; padding: 0; border: 1px solid var(--borda); border-radius: 10px; overflow: hidden; }
+.conferencia li { display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: start; padding: 10px 14px; border-top: 1px solid var(--borda); font-size: 13.5px; }
+.conferencia li:first-child { border-top: 0; }
+.conferencia .ic { font-size: 16px; line-height: 1.25; text-align: center; }
+.conferencia .det { color: var(--texto-suave); font-size: 12.5px; margin-top: 2px; }

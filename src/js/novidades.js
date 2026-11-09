@@ -3,6 +3,15 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.39.0',
+    data: '2026-11-09',
+    itens: [
+      '🖥️ MODO SERVIDOR. Em Configurações → 🖥️ Servidor, uma chave transforma o computador do escritório no servidor da loja: o sistema abre sozinho junto com o Windows (minimizado), reabre sozinho se fechar ou travar, e o computador não entra mais em suspensão na tomada. A tela confere cada item direto no Windows e mostra quais caixas estão conectados agora.',
+      '🛑 FECHAR O SERVIDOR PERGUNTA ANTES. No computador servidor, o X avisa que fechar desliga todos os caixas; o botão padrão é "Deixar aberto", que só minimiza. Fechando de propósito, o sistema espera 30 minutos antes de reabrir sozinho.',
+      '🔌 CHAVE LIGA/DESLIGA DO PENDRIVE. Em Configurações → 💾 Backup, a segunda cópia no pendrive agora é uma chave: ligue quando tiver o pendrive (abre a escolha da unidade) e desligue quando quiser.',
+    ],
+  },
+  {
     versao: '3.38.0',
     data: '2026-11-09',
     itens: [

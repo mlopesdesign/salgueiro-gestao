@@ -47,6 +47,7 @@ let _tamanhoBom = 0;            // tamanho do último banco gravado (trava de en
 let _permitirEncolher = false;  // zerar de fábrica / VACUUM: encolher é esperado
 let _minhaGeracao = null;
 const _ultLogTerminal = new Map();
+const _terminaisVistos = new Map();  // v3.39.0 — aparelho → último contato (painel do servidor)
 const _vendasRecentes = new Map();   // id_unico → resultado da venda (v3.37.0)
 let _ultimaOrigemRestaurar = null; // caminho escolhido no seletor de 'Restaurar de um arquivo' (v3.37.0)        // código desta abertura (ambiente.gravarGeracao, v3.34.2)
 let _bancoSubstituido = false;   // banco restaurado / processo antigo: este processo não grava mais
@@ -263,7 +264,11 @@ const rotas = {
 
   // Configurações (white-label)
   'config:obter': () => config.obter(db),
-  'config:salvar': (p) => config.salvar(db, p, sessao.usuario),
+  'config:salvar': (p) => {
+    // v3.39.0 — modo servidor só pela rota própria (mexe no Windows)
+    if (p && typeof p === 'object' && 'modo_servidor' in p) { p = { ...p }; delete p.modo_servidor; }
+    return config.salvar(db, p, sessao.usuario);
+  },
 
   // Ícone do aplicativo (barra de tarefas / atalho) — gravado na pasta de DADOS,
   // que o auto-updater e o instalador nunca sobrescrevem. Some nunca mais.
@@ -497,6 +502,41 @@ const rotas = {
     return { ok: true, ...st, mesmoDisco: r.mesmoDisco };
   },
   'backup:espelhoDesligar': async () => { await ambiente.desligarEspelho(); return { ok: true }; },
+
+  // v3.39.0 — MODO SERVIDOR (Fase 1): o computador do escritório vira o servidor
+  'servidor:status': async () => {
+    const cfg = config.obter(db).config;
+    let so = null, erroSO = null;
+    try { so = await ambiente.estadoModoServidorSO(); } catch (e) { erroSO = (e && e.message) || String(e); }
+    const agora = Date.now();
+    const terminais = [..._terminaisVistos.values()]
+      .filter(x => agora - x.ultimo < 120000)
+      .sort((a, b) => b.ultimo - a.ultimo);
+    let espelho = null;
+    try { espelho = await ambiente.estadoEspelho(); } catch { /* */ }
+    return { ok: true, modo: cfg.modo_servidor === '1', so, erroSO,
+             rede: { ...rede.status(cfg.rede_porta), ativa_config: cfg.rede_ativa === '1' },
+             terminais, espelho, descarga: ambiente.estadoDescarga(),
+             iniciadoPeloWindows: ambiente.iniciadoComoServidor() };
+  },
+  'servidor:ligar': async (p) => {
+    const ligar = !!(p && p.ligar);
+    let r;
+    try { r = await ambiente.aplicarModoServidor(ligar); }
+    catch (e) { return { ok: false, erro: 'O Windows não aceitou a mudança: ' + ((e && e.message) || e) }; }
+    config.salvar(db, { modo_servidor: ligar ? '1' : '0' }, sessao.usuario);
+    // servidor sem acesso em rede não serve a ninguém: liga junto
+    let rede_msg = null;
+    if (ligar) {
+      const cfg = config.obter(db).config;
+      if (cfg.rede_ativa !== '1' || !rede.status(cfg.rede_porta).ativa) {
+        const rr = await rotas['rede:aplicar']({ ativa: true, porta: Number(cfg.rede_porta) || 8750 });
+        rede_msg = rr && rr.ok ? null : ((rr && rr.erro) || 'não foi possível ligar o acesso em rede');
+      }
+    }
+    return { ok: true, avisos: (r && r.erros) || [], rede_erro: rede_msg };
+  },
+  'servidor:pausar': async () => { await ambiente.pausarVigia(); try { await ambiente.registrarLog('SERVIDOR', 'fechado de propósito — vigia pausado por 30 min'); } catch { /* */ } return { ok: true }; },
 
   // Categorias
   'categorias:listar': () => produtos.listarCategorias(db),
@@ -2515,6 +2555,7 @@ function _consumirTokenDesconto(token) {
 // travaria o caixa.
 const ROTAS_SO_ADMIN = new Set([
   'backup:espelhoEscolher', 'backup:espelhoDesligar',                     // v3.38.0
+  'servidor:ligar',                                                         // v3.39.0
   'recuperacao:posicao', 'recuperacao:previa', 'recuperacao:confirmar',   // v3.34.0
   'estoque:movimentar',      // entrada, saída manual e ajuste de inventário
   'estoques:salvar',         // criar/editar local de estoque
@@ -2538,6 +2579,14 @@ async function processar(canal, payload, sess) {
     if (!rota) return { ok: false, erro: `Rota desconhecida: ${canal}` };
     // v3.37.0 — sessão de TERMINAL é conferida no banco a cada pedido: usuário
     // desativado ou rebaixado perde o acesso na hora (antes valia até 12 h).
+    if (sess !== sessao) {
+      // v3.39.0 — painel do servidor: quem falou com este computador e quando
+      const pl = payload && typeof payload === 'object' ? payload : {};
+      const chave = String(pl._terminal || pl._ip || '?').slice(0, 60);
+      _terminaisVistos.set(chave, { terminal: String(pl._terminal || '').slice(0, 60), ip: String(pl._ip || ''),
+        usuario: (sess.usuario && sess.usuario.nome) || '', ultimo: Date.now() });
+      if (_terminaisVistos.size > 100) _terminaisVistos.delete(_terminaisVistos.keys().next().value);
+    }
     if (sess !== sessao && sess.usuario && db) {
       const u = db.prepare('SELECT id, nome, usuario, perfil, permissoes FROM usuarios WHERE id=? AND ativo=1').get(sess.usuario.id);
       if (!u) { sess.usuario = null; return { ok: false, erro: 'Sessão encerrada: usuário desativado. Entre novamente.' }; }
@@ -2556,7 +2605,7 @@ async function processar(canal, payload, sess) {
       return { ok: false, erro: 'Apenas o administrador pode fazer isto.' };
     }
     // v3.38.0 — mexer no pendrive de segurança só no computador principal
-    if ((canal === 'backup:espelhoEscolher' || canal === 'backup:espelhoDesligar') && sess !== sessao) {
+    if ((canal === 'backup:espelhoEscolher' || canal === 'backup:espelhoDesligar' || canal.startsWith('servidor:')) && sess !== sessao) {
       return { ok: false, erro: 'Isto só pode ser feito no computador principal.' };
     }
     const permNec = PERM_ROTA[canal];
@@ -2771,6 +2820,7 @@ const PERM_ROTA = {
   'backup:listarLocais': 'config.gerenciar', 'backup:restaurarLocal': 'config.gerenciar',
   'backup:preAtualizacao': 'config.gerenciar', 'backup:salvarAgora': 'config.gerenciar',
   'backup:espelhoEscolher': 'config.gerenciar', 'backup:espelhoDesligar': 'config.gerenciar',
+  'servidor:status': 'config.gerenciar', 'servidor:ligar': 'config.gerenciar',
   'rede:status': 'config.gerenciar', 'rede:aplicar': 'config.gerenciar', 'rede:diagnostico': 'config.gerenciar',
   'rede:abrirNavegador': 'config.gerenciar',
   'auth:listarUsuarios': 'usuarios.gerenciar', 'auth:salvarUsuario': 'usuarios.gerenciar',
@@ -3252,6 +3302,16 @@ async function _iniciar() {
         .then(r => { if (!r.ok) console.error('[rede]', r.erro); }), 1200);
     }
   } catch (e) { console.error('[rede] preparo falhou:', e); }
+
+  // v3.39.0 — modo servidor ligado: regrava inicialização/vigia/energia 20 s depois
+  // de abrir, para valerem para o .exe ATUAL (reinstalar em outra pasta não quebra).
+  try {
+    if (config.obter(db).config.modo_servidor === '1') {
+      setTimeout(() => { ambiente.aplicarModoServidor(true).catch(e => {
+        try { ambiente.registrarLog('SERVIDOR', 'reaplicar no boot falhou: ' + ((e && e.message) || e)); } catch { /* */ }
+      }); }, 20000);
+    }
+  } catch { /* */ }
 
   // Backup na nuvem: registra ouvinte OAuth e agenda verificação diária
   try {

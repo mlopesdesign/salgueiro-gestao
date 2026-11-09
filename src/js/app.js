@@ -80,8 +80,12 @@ globalThis.__gravacaoOk = () => {
 };
 
 let _pedidoFechar = null;
+// v3.39.0 — modo servidor: este computador atende os caixas da loja
+function _ehServidor() { try { return NO_APP && getConfig().modo_servidor === '1'; } catch { return false; } }
+function _minimizar() { try { Neutralino.window.minimize().catch(() => {}); } catch { /* */ } }
 window.__pedirFechar = () => {
-  if (!usuario) return Promise.resolve(true);
+  // servidor na tela de entrada: o X só minimiza (para desligar, entre e feche)
+  if (!usuario) { if (_ehServidor()) { _minimizar(); return Promise.resolve(false); } return Promise.resolve(true); }
   if (_pedidoFechar) return _pedidoFechar;
   const p = (async () => {
     // v3.35.0 — CAIXA ABERTO: pop-up VERMELHO. Fechar o sistema com o caixa
@@ -89,12 +93,42 @@ window.__pedirFechar = () => {
     let caixa = null;
     try { const rc = await api('pdv:caixaAtual'); caixa = rc && rc.ok ? rc.caixa : null; } catch { caixa = null; }
     if (caixa) return await _avisoCaixaAberto(caixa);
+    if (_ehServidor()) return await _perguntaFecharServidor();
     return await _perguntaFechar();
   })();
   _pedidoFechar = p;
   p.finally(() => { _pedidoFechar = null; });
   return p;
 };
+
+// v3.39.0 — fechar o SERVIDOR derruba todos os caixas: a pergunta é outra e o
+// padrão (Enter, Esc, clicar fora) é MINIMIZAR. Fechar de propósito pausa o
+// vigia por 30 minutos, senão ele reabriria o sistema no minuto seguinte.
+function _perguntaFecharServidor() {
+  return new Promise((resolve) => {
+    let respondeu = false;
+    const m = modal('Este computador é o SERVIDOR da loja', `
+      <p style="margin:0 0 10px;padding:10px 12px;border-radius:8px;background:#FDF0F0;border:1px solid #E8B8B8;color:var(--vermelho)">
+        ⚠️ Fechar o sistema aqui <b>desliga todos os caixas</b> da loja até ele ser aberto de novo.</p>
+      <p style="margin:0 0 6px">Só quer tirar a janela da frente? Clique em <b>Deixar aberto</b> — ela é minimizada e tudo continua funcionando.</p>
+      <p style="margin:0;color:var(--texto-suave);font-size:12.5px">Fechando de propósito, o sistema não reabre sozinho por 30 minutos.</p>`,
+      async (mm, fechar) => {
+        respondeu = true;
+        try { await api('servidor:pausar'); } catch { /* fecha assim mesmo */ }
+        fechar(); resolve(true);
+      }, 'Fechar o servidor');
+    const bSair = m.querySelector('.btn-salvar');
+    bSair.classList.remove('btn-primario'); bSair.classList.add('btn-perigo');
+    const bFica = m.querySelector('.btn-cancelar');
+    bFica.textContent = 'Deixar aberto';
+    bFica.classList.add('btn-primario');
+    setTimeout(() => { try { bFica.focus(); } catch {} }, 30);
+    const obs = new MutationObserver(() => {
+      if (!document.contains(m)) { obs.disconnect(); if (!respondeu) { _minimizar(); resolve(false); } }
+    });
+    obs.observe(document.body, { childList: true });
+  });
+}
 
 function _perguntaFechar() {
   return new Promise((resolve) => {
@@ -179,7 +213,7 @@ function _avisoCaixaAberto(caixa) {
 const $app = document.getElementById('app');
 let usuario = null;
 let categoriasCache = [];
-let APP_VERSION = '3.38.0'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
+let APP_VERSION = '3.39.0'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
 
 // API dupla: no aplicativo usa IPC (preload); num terminal em rede (navegador),
 // conversa com o servidor do computador principal via HTTP com token de sessão.
@@ -331,6 +365,13 @@ const api = NO_APP
     })
   : criarApiRede();
 const EM_REDE = !NO_APP; // true quando rodando num terminal via navegador
+// v3.39.0 — aberto pelo Windows no modo servidor: fica minimizado (o ajuste da
+// janela feito pela extensão roda antes; por isso espera alguns segundos).
+try {
+  if (NO_APP && Array.isArray(window.NL_ARGS) && window.NL_ARGS.includes('--salg-servidor')) {
+    setTimeout(() => { try { Neutralino.window.minimize().catch(() => {}); } catch { /* */ } }, 9000);
+  }
+} catch { /* */ }
 export { api, el, esc, moeda, toast, modal, ajustarLarguraModal, campoTroco, trocoDinheiro, getConfig, aplicarTema, recarregarConfig, pode, ehAdmin, podeVerTela, getLicenca, setorAtivo, EM_REDE };
 
 async function recarregarVersao() {

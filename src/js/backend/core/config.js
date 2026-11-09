@@ -18,6 +18,7 @@ const PADRAO = {
   impressora_etiqueta: '',    // nome da impressora para etiquetas (vazio = dialogo)
   rede_ativa: '0',            // '1' = servidor de rede ligado
   rede_porta: '8750',         // porta do servidor de rede
+  modo_servidor: '0',         // '1' = este computador é o servidor da loja (v3.39.0)
   desconto_avista_ativo: '0', // '1' = desconto automático dinheiro/PIX habilitado
   desconto_avista_percent: '5',   // percentual de desconto (ex: '5' = 5%)
   desconto_avista_minimo: '100',  // valor mínimo da venda para o desconto se aplicar

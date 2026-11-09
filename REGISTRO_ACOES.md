@@ -22,4 +22,9 @@
 - 2026-11-09 — Auditoria da perda de dados por falta de luz: 3 furos com arquivo e linha (sem descarga física; quick_check ausente; cópias no mesmo HD). CERTO.
 - 2026-11-09 — v3.38.0: descarga física via PS1 + espelho no pendrive + quick_check no boot. Função do PS1 testada no Windows real antes de embutir; 46+11 asserções; regra 6 com diff zero. CERTO.
 - 2026-11-09 — 1º neu build incluiu 5 arquivos src/.fuse_hidden* (lixo do mount, 32 KB cada). ERRADO, pego comparando a lista do .neu com o anterior; refeito sem eles e .gitignore atualizado. Comparar o conteúdo do .neu com o anterior SEMPRE.
+- 2026-11-09 00:49 — Commit 7c86b12 + tag v3.38.0 locais. Publicação pelo vigia BLOQUEADA pela trava de segurança desta sessão (publicar exige OK explícito). Pedido renomeado para tools/publicar/pedido-v3.38.0-AGUARDANDO-OK.json para o vigia (vivo) não publicar sozinho. Nada enviado ao GitHub. CERTO.
+- 2026-11-09 01:03 — Marcio autorizou ("Pode publicar"). Pedido liberado, vigia publicou v3.38.0; API sem login devolve Latest v3.38.0 com resources.neu 6.611.943 bytes, sha256 86661244…542c. CERTO.
+- 2026-11-09 — Fase 1 (modo servidor) v3.39.0. Testei antes no Windows real: Run do HKCU, schtasks e powercfg funcionam SEM administrador; depois os scripts gerados pelo sistema em 8 cenários com .exe de teste (desfeito no fim). CERTO.
+- 2026-11-09 — reg add pelo PowerShell quebrou com aspas no valor. Trocado por New-ItemProperty. CERTO (achado no teste, antes de entrar no código).
+- 2026-11-09 — Comando gerado com o .vbs dentro tinha 7.702 caracteres (limite do cmd.exe 8.191). Corrigido: .vbs gravado pelo JS, comando caiu para ~4.200. CERTO (achado medindo, antes do build).
 

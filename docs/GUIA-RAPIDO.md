@@ -536,6 +536,7 @@ Crédito parcelado. Salve e gere o relatório de evento de novo.
 | Botão de gerar catálogo apagado | Nenhuma categoria marcada. Clique em **Todas** |
 | Pendrive de segurança (faixa laranja no rodapé) | Espete o pendrive de novo. Para ligar: Configurações → 💾 Backup → **🔌 Escolher o pendrive** |
 | "O arquivo do banco de dados tem um defeito" | Não venda e chame o suporte |
+| O sistema reabre sozinho depois que fecho | É o modo servidor. Feche com **Fechar o servidor** (30 min sem reabrir) ou desligue em Configurações → 🖥️ Servidor |
 
 ---
 

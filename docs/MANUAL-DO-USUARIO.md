@@ -1404,6 +1404,31 @@ Ativa o acesso de outros computadores da loja. Veja a seção [Terminal em rede]
 
 Backup manual e restauração. Veja [Backup e segurança](#18-backup-e-segurança).
 
+### Servidor
+
+Para que serve: o computador do escritório vira o **servidor da loja**. Ele guarda o banco de dados e atende todos os caixas pela rede. Servidor que fecha, dorme ou não abre depois de faltar luz deixa a loja inteira parada. Esta tela evita isso. Só o administrador vê, e só no computador principal.
+
+Como ligar:
+
+1. Abra **Configurações → 🖥️ Servidor** no computador do escritório.
+2. Ligue a chave **Modo servidor**.
+3. Confira a lista **Conferência**: todos os itens com ✅.
+
+O que acontece por trás:
+
+| Item | O que faz |
+|---|---|
+| Abre junto com o Windows | O sistema abre sozinho ao ligar o computador, **minimizado**, sem ninguém precisar clicar |
+| Reabre sozinho se fechar | A cada minuto o Windows confere se o sistema está aberto. Fechou ou travou? Abre de novo |
+| Não entra em suspensão | Na tomada, o computador nunca suspende nem hiberna. Ao desligar a chave, volta como era antes |
+| Acesso em rede | É ligado junto, porque o servidor existe para atender os caixas |
+
+Embaixo aparecem os **caixas conectados agora**: aparelho, endereço, quem está usando e o último contato.
+
+> **Fechar o servidor pergunta antes.** O X avisa que fechar desliga todos os caixas. O botão padrão é **Deixar aberto**, que só minimiza. Clicando em **Fechar o servidor**, o sistema não reabre sozinho por 30 minutos, tempo para uma manutenção. Depois disso, o vigia volta a abrir se estiver fechado.
+
+> Na tela de entrada (sem ninguém logado), o X do servidor só minimiza. Para fechar de verdade, entre e feche.
+
 ### Nuvem
 
 Backup automático em Google Drive ou OneDrive.
@@ -1479,7 +1504,7 @@ Como ligar:
 
 1. Espete o pendrive no computador principal e deixe-o lá.
 2. Abra **Configurações → 💾 Backup**.
-3. Clique em **🔌 Escolher o pendrive…** e escolha a unidade dele (ex.: `E:`).
+3. Ligue a chave **Gravar também no pendrive**. Abre uma janela: escolha a unidade dele (ex.: `E:`). Desistiu na janela? A chave volta a ficar desligada.
 4. O sistema cria a pasta **SalgueiroBackup** no pendrive e grava a primeira cópia na hora. O quadro passa a mostrar **Pendrive: gravando**.
 
 O que acontece por trás:
@@ -1495,6 +1520,8 @@ O que acontece por trás:
 - **Tiraram o pendrive?** As vendas continuam salvas no HD e aparece uma **faixa laranja no rodapé** até ele voltar.
 - **Faltou luz e o banco do HD estragou?** Ao abrir, o sistema usa o espelho do pendrive se ele for a melhor cópia íntegra.
 - Escolher uma pasta do **mesmo HD** do sistema funciona, mas o sistema avisa: se o HD estragar, as duas cópias se perdem.
+- **Trocou de pendrive?** Use **🔌 Trocar o pendrive…**, ao lado da chave.
+- **Ainda não tem pendrive?** Deixe a chave desligada. Nada muda no uso e não aparece aviso.
 
 ### Faixa vermelha no topo
 
@@ -1622,6 +1649,8 @@ Use isso depois de atualizar, para saber o que apareceu de novo no sistema.
 | **"Muitas tentativas erradas. Aguarde…"** | Cinco senhas erradas seguidas bloqueiam aquele usuário por 5 minutos (o tempo dobra se continuar errando). Espere e digite com calma |
 | **Faixa vermelha "dados não estão sendo gravados"** | Não feche o sistema; chame o suporte (veja Backup e segurança) |
 | **Faixa laranja "Pendrive de segurança não encontrado"** | Espete o pendrive de novo. As vendas continuam salvas no HD |
+| **O sistema abriu sozinho / reabriu depois que fechei** | É o modo servidor. Para fechar por um tempo, use **Fechar o servidor** (30 minutos sem reabrir). Para acabar com isso: Configurações → 🖥️ Servidor → desligue a chave |
+| **Servidor com item ⚠️ na conferência** | Desligue e ligue de novo a chave **Modo servidor**. Se continuar, chame o suporte |
 | **Aviso "O arquivo do banco de dados tem um defeito"** | Não venda. O arquivo foi guardado; chame o suporte |
 | **"Gravação direta no disco: aguardando reabrir o sistema"** | Normal logo depois de atualizar. Feche e abra o sistema |
 | **"Esta venda já teve devolução… não pode ser cancelada"** | Use Devolver nas peças que restam |

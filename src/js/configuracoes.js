@@ -26,6 +26,7 @@ export async function viewConfiguracoes(alvo) {
         ${setorAtivo('nuvem') ? '<button data-aba="nuvem">☁️ Nuvem</button>' : ''}
         <button data-aba="backup">💾 Backup</button>
         ${setorAtivo('rede') ? '<button data-aba="rede">🌐 Rede</button>' : ''}
+        ${ehAdmin() && !EM_REDE ? '<button data-aba="servidor">🖥️ Servidor</button>' : ''}
         <button data-aba="pdv">🛒 PDV</button>
         <button data-aba="relatorios">📊 Relatórios</button>
         <button data-aba="impressoras">🖨️ Impressoras</button>
@@ -37,7 +38,7 @@ export async function viewConfiguracoes(alvo) {
       <div id="aba-conteudo"></div>
     </div>`);
   const corpo = tela.querySelector('#aba-conteudo');
-  const abas = { aparencia: abaAparencia, loja: abaLoja, lojas: abaLojas, estoques: abaEstoques, pontos: abaPontos, usuarios: abaUsuarios, nuvem: abaNuvem, backup: abaBackup, rede: abaRede, licenca: abaLicenca, pdv: abaPdv, relatorios: abaRelatorios, impressoras: abaImpressoras, atualizacao: abaAtualizacao, clientes: abaCategoriaClientes };
+  const abas = { aparencia: abaAparencia, loja: abaLoja, lojas: abaLojas, estoques: abaEstoques, pontos: abaPontos, usuarios: abaUsuarios, nuvem: abaNuvem, backup: abaBackup, rede: abaRede, servidor: abaServidor, licenca: abaLicenca, pdv: abaPdv, relatorios: abaRelatorios, impressoras: abaImpressoras, atualizacao: abaAtualizacao, clientes: abaCategoriaClientes };
   tela.querySelectorAll('.abas button').forEach(b => {
     b.onclick = () => {
       tela.querySelectorAll('.abas button').forEach(x => x.classList.toggle('ativa', x === b));
@@ -1039,9 +1040,10 @@ async function abaBackup(corpo) {
       tem os mesmos dados, no máximo alguns segundos atrás. As cópias automáticas também vão para lá.
     </p>
     <div id="esp-estado" style="border:1px solid var(--borda);border-radius:10px;padding:12px 14px;margin-bottom:12px">Carregando…</div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap">
-      <button class="btn btn-primario" id="esp-escolher">🔌 Escolher o pendrive…</button>
-      <button class="btn btn-suave" id="esp-desligar" style="display:none">Desligar a segunda cópia</button>
+    <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+      <label class="chave"><input type="checkbox" id="esp-chave"><span class="chave-trilho"></span>
+        <span class="chave-texto">Gravar também no pendrive</span></label>
+      <button class="btn btn-suave" id="esp-escolher" style="display:none">🔌 Trocar o pendrive…</button>
     </div>
     <div class="erro" id="esp-erro" style="margin-top:8px"></div>
 
@@ -1098,21 +1100,26 @@ async function abaBackup(corpo) {
     }
     const erro = r.ultimaErro && r.encontrado ? `<div style="color:var(--vermelho);font-size:13px;margin-top:4px">Último problema: ${esc(r.ultimaErro.erro)} (${quando(r.ultimaErro.quando)})</div>` : '';
     box.innerHTML = linhaEsp + erro + `<div style="margin-top:8px">${linhaDisco}</div>`;
-    painel.querySelector('#esp-desligar').style.display = r.configurado ? '' : 'none';
-    painel.querySelector('#esp-escolher').textContent = r.configurado ? '🔌 Trocar o pendrive…' : '🔌 Escolher o pendrive…';
+    painel.querySelector('#esp-chave').checked = !!r.configurado;
+    painel.querySelector('#esp-escolher').style.display = r.configurado ? '' : 'none';
   }
-  painel.querySelector('#esp-escolher').onclick = async () => {
-    const btn = painel.querySelector('#esp-escolher'), erroEl = painel.querySelector('#esp-erro');
-    erroEl.textContent = ''; btn.disabled = true; const txt = btn.textContent; btn.textContent = '⏳ Gravando no pendrive…';
+  // v3.39.0 — chave liga/desliga (pedido do Marcio): ligar abre a escolha do pendrive
+  async function escolherPendrive() {
+    const chave = painel.querySelector('#esp-chave'), btn = painel.querySelector('#esp-escolher');
+    const erroEl = painel.querySelector('#esp-erro');
+    erroEl.textContent = ''; chave.disabled = true; btn.disabled = true;
+    const box = painel.querySelector('#esp-estado'); box.textContent = '⏳ Escolha o pendrive na janela que abriu…';
     try {
       const r = await api('backup:espelhoEscolher');
       if (!r.ok) { if (r.erro !== 'Operação cancelada.') erroEl.textContent = r.erro; return; }
       toast('Segunda cópia ligada: ' + r.pasta);
       if (r.mesmoDisco) erroEl.textContent = 'Atenção: essa pasta fica no MESMO disco do sistema. Se o HD estragar, as duas cópias se perdem. Prefira um pendrive.';
-    } finally { btn.disabled = false; btn.textContent = txt; await desenharEspelho(); }
-  };
-  painel.querySelector('#esp-desligar').onclick = async () => {
-    if (!confirm('Desligar a segunda cópia? Os dados passam a ficar só no HD deste computador.')) return;
+    } finally { chave.disabled = false; btn.disabled = false; await desenharEspelho(); }
+  }
+  painel.querySelector('#esp-escolher').onclick = escolherPendrive;
+  painel.querySelector('#esp-chave').onchange = async (ev) => {
+    if (ev.target.checked) { await escolherPendrive(); return; }
+    if (!confirm('Desligar a segunda cópia? Os dados passam a ficar só no HD deste computador.')) { ev.target.checked = true; return; }
     await api('backup:espelhoDesligar');
     await desenharEspelho();
   };
@@ -1242,6 +1249,80 @@ async function renderListaBackups(painel) {
 }
 
 // ---- Aba: Acesso em Rede (multiterminal) ----
+// v3.39.0 — MODO SERVIDOR (Fase 1 do projeto Servidor + Terminais)
+async function abaServidor(corpo) {
+  const painel = el(`<div class="painel" style="padding:22px;max-width:680px">
+    <h3 style="margin:0 0 6px">🖥️ Este computador é o servidor da loja</h3>
+    <p style="color:var(--texto-suave);margin:0 0 14px">
+      Ligue no computador que fica no escritório. Ele guarda o banco de dados e atende todos os
+      caixas da loja pela rede. Com a chave ligada, o sistema <b>abre sozinho com o Windows</b>,
+      <b>reabre sozinho se fechar</b> e o computador <b>não entra em suspensão</b> na tomada.
+    </p>
+    <label class="chave"><input type="checkbox" id="sv-chave"><span class="chave-trilho"></span>
+      <span class="chave-texto">Modo servidor</span></label>
+    <div class="erro" id="sv-erro" style="margin-top:8px"></div>
+    <h4 style="margin:20px 0 8px">Conferência</h4>
+    <div id="sv-conf"><p style="color:var(--texto-suave)">Conferindo com o Windows…</p></div>
+    <h4 style="margin:20px 0 8px">Caixas conectados agora</h4>
+    <div id="sv-term"></div>
+    <div style="margin-top:14px"><button class="btn btn-suave" id="sv-atualizar">↻ Conferir de novo</button></div>
+  </div>`);
+  corpo.appendChild(painel);
+  const chave = painel.querySelector('#sv-chave'), erroEl = painel.querySelector('#sv-erro');
+  const item = (ok, titulo, det) => `<li><span class="ic">${ok === null ? '⏳' : ok ? '✅' : '⚠️'}</span>
+    <div><div>${titulo}</div>${det ? `<div class="det">${det}</div>` : ''}</div></li>`;
+  const hora = (ms) => new Date(ms).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  async function desenhar() {
+    const r = await api('servidor:status');
+    if (!r.ok) { painel.querySelector('#sv-conf').innerHTML = `<p style="color:var(--vermelho)">${esc(r.erro)}</p>`; return; }
+    chave.checked = !!r.modo;
+    const so = r.so || {}, rd = r.rede || {}, ds = r.descarga || {}, es = r.espelho || {};
+    const lis = [];
+    if (r.erroSO) lis.push(item(false, 'Não foi possível conferir com o Windows', esc(r.erroSO)));
+    else if (r.modo) {
+      lis.push(item(so.inicializacao && so.inicializacaoCerta, 'Abre junto com o Windows',
+        so.inicializacao ? (so.inicializacaoCerta ? 'Abre minimizado, sem ninguém precisar clicar.' : 'Aponta para outra pasta — desligue e ligue a chave.') : 'Não configurado.'));
+      lis.push(item(so.vigia, 'Reabre sozinho se o sistema fechar', so.vigia
+        ? 'Conferido a cada minuto. Fechado de propósito, espera 30 minutos antes de reabrir.' : 'Vigia ausente.'));
+      lis.push(item(so.semSuspensao, 'Não entra em suspensão na tomada', so.semSuspensao
+        ? 'Suspender e hibernar: nunca.' : 'O Windows ainda pode suspender este computador.'));
+    } else {
+      lis.push(item(false, 'Modo servidor desligado', 'Este computador funciona como um caixa comum: não abre sozinho nem impede a suspensão.'));
+    }
+    lis.push(item(!!rd.ativa, 'Acesso em rede', rd.ativa
+      ? `Porta ${esc(rd.porta)} · endereço deste computador: ${(rd.ips || []).map(esc).join(', ') || '—'}`
+      : 'Desligado — os caixas não conseguem se conectar.'));
+    lis.push(item(ds.estado === 'ativa' ? true : (ds.estado === 'desconhecido' ? null : false), 'Gravação direta no disco',
+      ds.estado === 'ativa' ? 'Ativa: cada gravação só termina no disco.' : 'Passa a valer na próxima vez que o sistema for aberto.'));
+    lis.push(item(es.configurado ? !!es.encontrado : false, 'Segunda cópia no pendrive', es.configurado
+      ? (es.encontrado ? `Gravando em ${esc(es.pasta)}.` : 'Pendrive NÃO encontrado — espete-o de novo.')
+      : 'Desligada. Ligue em Configurações → 💾 Backup quando tiver o pendrive.'));
+    painel.querySelector('#sv-conf').innerHTML = `<ul class="conferencia">${lis.join('')}</ul>
+      ${so.computador ? `<p style="color:var(--texto-suave);font-size:12px;margin:8px 0 0">Computador: <b>${esc(so.computador)}</b></p>` : ''}`;
+    const ts = r.terminais || [];
+    painel.querySelector('#sv-term').innerHTML = ts.length
+      ? `<div style="border:1px solid var(--borda);border-radius:10px;overflow:hidden"><table><thead><tr><th>Aparelho</th><th>Endereço</th><th>Usuário</th><th style="text-align:right">Último contato</th></tr></thead><tbody>
+          ${ts.map(x => `<tr><td>${esc(x.terminal || '—')}</td><td>${esc(x.ip || '—')}</td><td>${esc(x.usuario || 'sem login')}</td><td style="text-align:right">${hora(x.ultimo)}</td></tr>`).join('')}
+        </tbody></table></div>`
+      : '<p style="color:var(--texto-suave);margin:0">Nenhum caixa falou com este computador nos últimos 2 minutos.</p>';
+  }
+  chave.onchange = async () => {
+    const ligar = chave.checked;
+    if (!ligar && !confirm('Desligar o modo servidor? O sistema deixa de abrir sozinho com o Windows e de reabrir se fechar.')) { chave.checked = true; return; }
+    erroEl.textContent = ''; chave.disabled = true;
+    try {
+      const r = await api('servidor:ligar', { ligar });
+      if (!r.ok) { erroEl.textContent = r.erro; chave.checked = !ligar; return; }
+      const av = [...(r.avisos || []), ...(r.rede_erro ? ['acesso em rede: ' + r.rede_erro] : [])];
+      if (av.length) erroEl.textContent = 'Ligado com ressalvas: ' + av.join(' · ');
+      toast(ligar ? 'Modo servidor ligado' : 'Modo servidor desligado');
+      try { await recarregarConfig(); } catch { /* */ }
+    } finally { chave.disabled = false; await desenhar(); }
+  };
+  painel.querySelector('#sv-atualizar').onclick = desenhar;
+  await desenhar();
+}
+
 async function abaRede(corpo) {
   const r = await api('rede:status');
   const painel = el(`<div class="painel" style="padding:22px;max-width:680px">

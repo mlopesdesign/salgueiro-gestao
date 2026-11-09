@@ -239,6 +239,14 @@ ${tab(['Tabela', 'Colunas'], tbs.map(t => [`\`${t.nome}\``, t.colunas.join(', ')
 > (HD + pendrive), mas **nunca** por uma com MENOS vendas que o corrompido.
 > Mudou o PS1? Regenere \`servidor-rede-embutido.js\` (\`node tools/gerar-rede-embutida.js\`).
 
+> **Modo servidor (v3.39.0):** \`ambiente.aplicarModoServidor\` grava
+> \`HKCU\\...\\Run\\SalgueiroGestaoServidor\` (\`--salg-servidor\`), a tarefa
+> \`SalgueiroVigiaServidor\` (a cada minuto, \`wscript\` + \`%APPDATA%\\SalgueiroGestao\\vigia-servidor.vbs\`
+> em latin-1) e zera suspender/hibernar na tomada (valor anterior em \`dados/energia-antes.json\`).
+> Tudo sem administrador. O comando vai por \`-EncodedCommand\` e TEM de caber nos
+> 8.191 caracteres do \`cmd.exe\` — por isso o \`.vbs\` é gravado pelo JS, não dentro do comando.
+> Fechar de propósito grava \`servidor-pausa.txt\` (vigia espera 30 min); o instalador também.
+
 ---
 
 ## 9. Regra de ouro do estoque

@@ -9,14 +9,24 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.38.0 — gravação blindada + pendrive (09/11/2026) · 3.37.0 era a anterior · repositório PÚBLICO por ordem do Marcio |
+| **Versão atual** | 3.39.0 — modo servidor + chave do pendrive (09/11/2026) · 3.38.0 publicada 01:03 · repositório PÚBLICO por ordem do Marcio |
 | **Data do último build** | 2026-11-09 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.38.0 em 2026-11-09 ✓ (33 módulos core · 173 rotas · 37 tabelas) |
-| **5 lugares da versão** | os 5 em 3.38.0 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
+| **GRAPHIFY** | atualizado para 3.39.0 em 2026-11-09 ✓ (33 módulos core · 176 rotas · 37 tabelas) |
+| **5 lugares da versão** | os 5 em 3.39.0 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
 
 ---
+
+## v3.39.0 — MODO SERVIDOR (Fase 1) + chave do pendrive (09/11/2026)
+
+- Fase 1 do projeto `docs/PROJETO-SERVIDOR-SATELITES-LOJA-VIRTUAL.md`: Configurações → 🖥️ Servidor (chave). Abre com o Windows (HKCU Run), vigia a cada minuto (schtasks + .vbs), sem suspensão na tomada, rede ligada junto, painel com conferência real do Windows e caixas conectados. X no servidor pergunta (padrão minimizar); fechar de propósito pausa o vigia 30 min.
+- Peças do Windows testadas no PC do Marcio (8 cenários, .exe de teste, tudo desfeito no fim).
+- Chave liga/desliga do pendrive (pedido do Marcio).
+- Build: `resources.neu` sha256 `e533d0c6…2103` (6.636.123 bytes) · `instalador\Salgueiro Gestao Setup v3.39.0.exe` sha256 `dd85f8f8…0469` (15.598.413 bytes). Backup: `backups\pre-v3.39.0-2026-11-09\`.
+- Testes: v3390 39/39 · tela servidor+pendrive 22/22 · v3380 46/46. Regra 6: diff zero.
+- **Para usar na loja:** no PC do escritório, Configurações → 🖥️ Servidor → ligar a chave.
+- **PRÓXIMO: Fase 2 — Salgueiro Terminal v1.0.0** (programa instalável dos caixas).
 
 ## v3.38.0 — gravação blindada contra falta de luz + pendrive (09/11/2026)
 
@@ -26,6 +36,7 @@
 - Build: `resources.neu` sha256 `86661244575c35513bb6b85d8fdc5e23e9407807c08b36cdc2a961fa6bac542c` (6.611.943 bytes) · `instalador\Salgueiro Gestao Setup v3.38.0.exe` sha256 `ea27a376…d364` (15.584.014 bytes).
 - Backup antes de mexer: `backups\pre-v3.38.0-2026-11-09\` (14 arquivos).
 - Testes: v3380 46/46 · tela backup 11/11 · restauração-gruda 14/14. Falhas antigas inalteradas (codigos-restauracao 1 — 'antes-codigos' removido na 3.36.0; consignado-rel; origem-vendas).
+- **PUBLICADA 09/11 01:03** pelo vigia (commit `7c86b12`, tag `v3.38.0`, Latest, asset conferido sem login). Pendrive: o Marcio ainda não tem — segunda cópia fica DESLIGADA (padrão) até ele escolher um.
 - **Depois de instalar, ligar o pendrive no PC principal:** Configurações › Backup › Escolher o pendrive. A descarga física vale na 2ª abertura após o update.
 
 ## v3.37.0 — correções da auditoria (05/11/2026, noite)
