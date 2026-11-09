@@ -1490,10 +1490,7 @@ const rotas = {
       try {
         const regra = `SalgueiroRede-${porta}`;
         const cmd = `netsh advfirewall firewall delete rule name=${regra}; `
-          + `netsh advfirewall firewall add rule name=${regra} dir=in action=allow protocol=TCP localport=${porta} profile=any; `
-          // v3.40.2 — descoberta do Salgueiro Terminal (UDP 8750, porta fixa do produto)
-          + `netsh advfirewall firewall delete rule name=SalgueiroDescoberta; `
-          + `netsh advfirewall firewall add rule name=SalgueiroDescoberta dir=in action=allow protocol=UDP localport=8750 profile=any`;
+          + `netsh advfirewall firewall add rule name=${regra} dir=in action=allow protocol=TCP localport=${porta} profile=any`;
         await Neutralino.os.execCommand(
           `powershell.exe -NoProfile -WindowStyle Hidden -Command "Start-Process powershell.exe -Verb RunAs -WindowStyle Hidden -ArgumentList '-NoProfile -WindowStyle Hidden -Command ${cmd}'"`,
           { background: true });

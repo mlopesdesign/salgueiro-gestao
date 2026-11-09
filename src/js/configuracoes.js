@@ -1080,7 +1080,6 @@ async function abaBackup(corpo) {
 
   // v3.38.0 — pendrive de segurança + descarga física no disco
   const quando = (ms) => ms ? new Date(ms).toLocaleString('pt-BR') : '—';
-  const mb = (b) => b >= 1073741824 ? `${(b / 1073741824).toFixed(1).replace('.', ',')} GB` : `${Math.round(b / 1048576)} MB`;
   async function desenharEspelho() {
     const box = painel.querySelector('#esp-estado');
     const r = await api('backup:espelhoStatus');
@@ -1097,8 +1096,7 @@ async function abaBackup(corpo) {
       linhaEsp = `<div>🔌 Pendrive: <b style="color:var(--vermelho)">NÃO ENCONTRADO</b> (${esc(r.pasta)}). Espete o pendrive de novo — as vendas continuam salvas no HD.</div>`;
     } else {
       linhaEsp = `<div>🔌 Pendrive: <b style="color:var(--verde)">gravando</b> em <code>${esc(r.pasta)}</code></div>
-        <div style="color:var(--texto-suave);font-size:13px;margin-top:2px">Última gravação: ${quando(r.ultimaOk)} · ${r.copias} cópia(s) guardada(s) no pendrive${r.livre != null ? ` · ${mb(r.livre)} livres de ${mb(r.total)}` : ''}</div>
-        <div style="color:var(--texto-suave);font-size:12px;margin-top:2px">Pendrive cheio não para a gravação: as cópias mais antigas são apagadas para caber a nova${r.apagadasPorEspaco ? ` (${r.apagadasPorEspaco} apagada(s) nesta abertura)` : ''}.</div>`;
+        <div style="color:var(--texto-suave);font-size:13px;margin-top:2px">Última gravação: ${quando(r.ultimaOk)} · ${r.copias} cópia(s) guardada(s) no pendrive</div>`;
     }
     const erro = r.ultimaErro && r.encontrado ? `<div style="color:var(--vermelho);font-size:13px;margin-top:4px">Último problema: ${esc(r.ultimaErro.erro)} (${quando(r.ultimaErro.quando)})</div>` : '';
     box.innerHTML = linhaEsp + erro + `<div style="margin-top:8px">${linhaDisco}</div>`;

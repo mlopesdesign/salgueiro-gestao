@@ -1518,7 +1518,6 @@ O que acontece por trás:
 
 - **A letra do pendrive mudou** (era E:, virou F:)? O sistema o encontra sozinho pela marca.
 - **Tiraram o pendrive?** As vendas continuam salvas no HD e aparece uma **faixa laranja no rodapé** até ele voltar.
-- **O pendrive encheu?** Não precisa fazer nada. Antes de gravar, o sistema confere o espaço e apaga as **cópias mais antigas**, uma a uma, até caber a nova. O espelho do banco e a cópia mais recente nunca são apagados. O quadro mostra o espaço livre.
 - **Faltou luz e o banco do HD estragou?** Ao abrir, o sistema usa o espelho do pendrive se ele for a melhor cópia íntegra.
 - Escolher uma pasta do **mesmo HD** do sistema funciona, mas o sistema avisa: se o HD estragar, as duas cópias se perdem.
 - **Trocou de pendrive?** Use **🔌 Trocar o pendrive…**, ao lado da chave.

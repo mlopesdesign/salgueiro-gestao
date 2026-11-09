@@ -1,10 +1,10 @@
-; Salgueiro Gestao v3.40.2
+; Salgueiro Gestao v3.40.1
 ; Build: /tmp/rel  — gerado pelo pipeline de build (ver CLAUDE.md)
 Unicode True
 !include "LogicLib.nsh"
 
 Name "Salgueiro Gestao"
-OutFile "/tmp/Salgueiro Gestao Setup v3.40.2.exe"
+OutFile "/tmp/Salgueiro Gestao Setup v3.40.1.exe"
 InstallDir "$LOCALAPPDATA\SalgueiroGestao"
 InstallDirRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "InstallLocation"
 RequestExecutionLevel user
@@ -82,12 +82,12 @@ Function .onInit
     ${If} $R1 == ""
       StrCpy $R1 "versao anterior"
     ${EndIf}
-    MessageBox MB_YESNO|MB_ICONQUESTION "Salgueiro Gestao ($R1) ja esta instalado neste computador.$\n$\nDeseja atualizar para a versao 3.40.2?$\n$\nSeus dados, vendas e configuracoes serao preservados." /SD IDYES IDYES prosseguir
+    MessageBox MB_YESNO|MB_ICONQUESTION "Salgueiro Gestao ($R1) ja esta instalado neste computador.$\n$\nDeseja atualizar para a versao 3.40.1?$\n$\nSeus dados, vendas e configuracoes serao preservados." /SD IDYES IDYES prosseguir
     Abort
     prosseguir:
   ${EndIf}
 
-  ; v3.40.2 - modo servidor: pausa o vigia durante a instalacao (senao ele
+  ; v3.40.1 - modo servidor: pausa o vigia durante a instalacao (senao ele
   ; reabriria o sistema no meio da copia dos arquivos). Apagado no fim.
   CreateDirectory "$APPDATA\SalgueiroGestao"
   FileOpen $9 "$APPDATA\SalgueiroGestao\servidor-pausa.txt" w
@@ -100,7 +100,7 @@ Function .onInit
   Sleep 800
 
   ; Remover atalhos antigos
-  ; v3.40.2 - so os atalhos do PROPRIO Salgueiro Gestao. O curinga "Salgueiro*.lnk"
+  ; v3.40.1 - so os atalhos do PROPRIO Salgueiro Gestao. O curinga "Salgueiro*.lnk"
   ; apagava tambem o atalho do Salgueiro Terminal (programa dos caixas).
   Delete "$DESKTOP\Salgueiro Gestao*.lnk"
   Delete "$COMMONDESKTOP\Salgueiro Gestao*.lnk"
@@ -155,7 +155,7 @@ Section "Principal"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "DisplayName" "Salgueiro Gestao"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "UninstallString" "$INSTDIR\uninstall.exe"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "InstallLocation" "$INSTDIR"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "DisplayVersion" "3.40.2"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "DisplayVersion" "3.40.1"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "Publisher" "ML Lopes Design"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "DisplayIcon" "$INSTDIR\icon.ico"
 
@@ -164,17 +164,16 @@ Section "Principal"
   ; netsh via nsExec FALHA EM SILENCIO e o terminal em rede nunca conecta.
   ; Por isso pedimos elevacao explicita aqui (UAC). Se o cliente recusar, o
   ; DIAGNOSTICO-REDE.bat cria a regra depois.
-  ExecShell "runas" "powershell.exe" '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "netsh advfirewall firewall delete rule name=SalgueiroRede; netsh advfirewall firewall add rule name=SalgueiroRede dir=in action=allow protocol=TCP localport=8750 profile=any; netsh advfirewall firewall delete rule name=SalgueiroDescoberta; netsh advfirewall firewall add rule name=SalgueiroDescoberta dir=in action=allow protocol=UDP localport=8750 profile=any"' SW_HIDE
+  ExecShell "runas" "powershell.exe" '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "netsh advfirewall firewall delete rule name=SalgueiroRede; netsh advfirewall firewall add rule name=SalgueiroRede dir=in action=allow protocol=TCP localport=8750 profile=any"' SW_HIDE
   Sleep 1200
 
   Exec '"$INSTDIR\Salgueiro Gestao.exe"'
-  Delete "$APPDATA\SalgueiroGestao\servidor-pausa.txt"   ; v3.40.2 - libera o vigia
+  Delete "$APPDATA\SalgueiroGestao\servidor-pausa.txt"   ; v3.40.1 - libera o vigia
 SectionEnd
 
 Section "Uninstall"
   nsExec::Exec 'netsh advfirewall firewall delete rule name=SalgueiroRede'
-  nsExec::Exec 'netsh advfirewall firewall delete rule name=SalgueiroDescoberta'
-  ; v3.40.2 - modo servidor (o sistema regrava ao abrir, se continuar ligado)
+  ; v3.40.1 - modo servidor (o sistema regrava ao abrir, se continuar ligado)
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "SalgueiroGestaoServidor"
   nsExec::Exec 'schtasks /Delete /TN SalgueiroVigiaServidor /F'
   Delete "$APPDATA\SalgueiroGestao\vigia-servidor.vbs"
