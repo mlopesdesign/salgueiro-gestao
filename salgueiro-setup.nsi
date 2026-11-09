@@ -100,11 +100,13 @@ Function .onInit
   Sleep 800
 
   ; Remover atalhos antigos
-  Delete "$DESKTOP\Salgueiro*.lnk"
-  Delete "$COMMONDESKTOP\Salgueiro*.lnk"
+  ; v3.40.1 - so os atalhos do PROPRIO Salgueiro Gestao. O curinga "Salgueiro*.lnk"
+  ; apagava tambem o atalho do Salgueiro Terminal (programa dos caixas).
+  Delete "$DESKTOP\Salgueiro Gestao*.lnk"
+  Delete "$COMMONDESKTOP\Salgueiro Gestao*.lnk"
   Delete "$SMPROGRAMS\Salgueiro Gestao\*.lnk"
   RMDir  "$SMPROGRAMS\Salgueiro Gestao"
-  Delete "$SMPROGRAMS\Salgueiro*.lnk"
+  Delete "$SMPROGRAMS\Salgueiro Gestao*.lnk"
 
   ; Desinstalar versao anterior silenciosamente
   ${If} $R0 != ""
