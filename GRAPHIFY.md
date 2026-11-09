@@ -3,7 +3,7 @@
 > Mapa técnico gerado automaticamente por `tools/graphify.js`.
 > **Não edite à mão.** Regere com `node tools/graphify.js` a cada alteração estrutural.
 
-**Versão:** 3.39.0 · **Gerado em:** 2026-11-09
+**Versão:** 3.40.0 · **Gerado em:** 2026-11-09
 **Aplicação:** `br.com.mllopes.salgueirogestao` (Neutralino 6 + WebView2)
 **Cliente:** Boutique do Salgueiro · **Autor:** ML Lopes Design
 
@@ -110,26 +110,26 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 |---|---|---|
 | `ambiente.js` | 973 | 19 |
 | `db.js` | 774 | 6 |
-| `servidor-rede-embutido.js` | 971 | 30 |
+| `servidor-rede-embutido.js` | 984 | 30 |
 | `servidor.js` | 3369 | 21 |
 
 ## 6. Telas (`src/js`)
 
 | Arquivo | Linhas | Exporta |
 |---|---|---|
-| `app.js` | 2289 | EM_REDE, ajustarLarguraModal, api, aplicarTema, campoTroco |
+| `app.js` | 2342 | EM_REDE, ajustarLarguraModal, api, aplicarTema, campoTroco |
 | `catalogo.js` | 262 | viewCatalogo |
 | `clientes.js` | 538 | viewClientes |
 | `compras.js` | 229 | viewCompras |
 | `configuracoes.js` | 2129 | viewConfiguracoes |
 | `estoque.js` | 1353 | abrirEtiquetas, ean13Svg, formMovimento, formMovimentoProduto, viewEstoque |
 | `estoques.js` | 989 | viewEstoques |
-| `etiquetas.js` | 169 | abrirEtiquetasLote, imprimirFolhaEtiquetas |
+| `etiquetas.js` | 169 | CSS_ETQ, abrirEtiquetasLote, imprimirFolhaEtiquetas |
 | `financeiro.js` | 261 | viewFinanceiro |
 | `impressao.js` | 179 | LIMITES, PADRAO, aplicarEstiloImpressao, cssCupomArquivo, cssCupomTela |
 | `mensagens.js` | 758 | abrirBalao, encerrarTelaMensagens, iniciarMensagens, pararMensagens, viewMensagens |
 | `neutralino.js` | 2 | — |
-| `novidades.js` | 1182 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
+| `novidades.js` | 1191 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
 | `pdv.js` | 2626 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
 | `ranking.js` | 360 | viewRanking |
 | `relatorios.js` | 1899 | viewRelatorios |
@@ -571,6 +571,14 @@ a rota exige apenas sessão válida.
 > Tudo sem administrador. O comando vai por `-EncodedCommand` e TEM de caber nos
 > 8.191 caracteres do `cmd.exe` — por isso o `.vbs` é gravado pelo JS, não dentro do comando.
 > Fechar de propósito grava `servidor-pausa.txt` (vigia espera 30 min); o instalador também.
+
+> **Salgueiro Terminal (v3.40.0):** projeto próprio em `E:\Projetos\SALGUEIRO TERMINAL`.
+> Contrato com este sistema: PS1 `GET /salgueiro/identificar` (CORS) para a descoberta;
+> `/terminal/versao.txt` ("X.Y.Z sha256") + `/terminal/salgueiro-terminal.neu` (CORS) em
+> `src/terminal/` para a atualização pela rede; no `app.js`, dentro do quadro com
+> `?satelite=1`, `window.print` vira `postMessage({salg:'imprimir'})` quando o terminal
+> tem impressora para o tipo (`cupom`/`etiqueta`/`a4`). O `pdv.js` NÃO foi tocado.
+> Terminal novo = copiar o `resources.neu` dele para `src/terminal/` e regravar o `versao.txt`.
 
 ---
 

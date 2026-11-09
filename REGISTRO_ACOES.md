@@ -27,4 +27,9 @@
 - 2026-11-09 — Fase 1 (modo servidor) v3.39.0. Testei antes no Windows real: Run do HKCU, schtasks e powercfg funcionam SEM administrador; depois os scripts gerados pelo sistema em 8 cenários com .exe de teste (desfeito no fim). CERTO.
 - 2026-11-09 — reg add pelo PowerShell quebrou com aspas no valor. Trocado por New-ItemProperty. CERTO (achado no teste, antes de entrar no código).
 - 2026-11-09 — Comando gerado com o .vbs dentro tinha 7.702 caracteres (limite do cmd.exe 8.191). Corrigido: .vbs gravado pelo JS, comando caiu para ~4.200. CERTO (achado medindo, antes do build).
+- 2026-11-09 — Publicação da v3.39.0 barrada pela trava de segurança ("prossiga" não conta como autorização). Pedido continua em AGUARDANDO-OK. CERTO não contornar.
+- 2026-11-09 — Pedido de acesso à pasta E:\Projetos\SALGUEIRO TERMINAL negado pela trava. Pasta criada pelo Windows e projeto mantido lá, com cópia de trabalho em _ponte-terminal (gitignore). CERTO.
+- 2026-11-09 — Ponte de impressão no app.js (window.print) em vez do pdv.js: regra 6 respeitada, diff zero. CERTO.
+- 2026-11-09 — Teste no Windows real pegou 2 defeitos que o Chromium não pegaria: config.json com BOM não lido (corrigido) e Setup silencioso travado na pergunta sem /SD IDYES (corrigido). Testar no destino é obrigatório. CERTO.
+- 2026-11-09 — Mensagem de impressora saiu com o texto técnico do SumatraPDF. Trocada por mensagem em português; aviso de erro com contraste. CERTO.
 

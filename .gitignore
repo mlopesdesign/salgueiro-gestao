@@ -64,3 +64,5 @@ tools/publicar/resultado.txt
 .fuse_hidden*
 # bancos e diagnósticos da loja — dados de cliente, NUNCA no repositório (público)
 recuperar-loja/
+# copia de trabalho do projeto Salgueiro Terminal (fonte real: E:\Projetos\SALGUEIRO TERMINAL)
+_ponte-terminal/

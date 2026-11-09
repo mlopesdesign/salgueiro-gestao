@@ -1614,6 +1614,32 @@ O sistema se adapta à tela do aparelho:
 
 **O que muda no aparelho pela rede:** a impressão sai pela janela de impressão do próprio aparelho, não pela impressora térmica do balcão. Cupom e vale saem silenciosamente **só no computador principal**; no aparelho pela rede a janela de impressão abre sozinha ao finalizar a venda.
 
+### Salgueiro Terminal — o programa dos caixas
+
+Para que serve: nos computadores de caixa, o navegador dá lugar a um **programa próprio**, o **Salgueiro Terminal**. Ele acha sozinho o computador do escritório, mostra o sistema e **imprime cupom, etiqueta e relatório na impressora do próprio caixa, sem abrir janela**.
+
+Como instalar em cada caixa:
+
+1. Copie o instalador **Salgueiro Terminal Setup** para o computador do caixa e abra-o.
+2. O programa abre sozinho e procura o servidor na rede. Leva alguns segundos.
+3. Achou: aparece a tela de entrada do sistema. Entre com o usuário de quem vai usar o caixa.
+4. Clique no **⚙** no canto inferior esquerdo e escolha as impressoras deste caixa: **Cupom**, **Etiquetas** e **Folhas A4**. Use **Testar** em cada uma.
+
+O que acontece por trás:
+
+| Situação | O que o programa faz |
+|---|---|
+| Servidor encontrado | Guarda o endereço e, nas próximas vezes, conecta direto |
+| Servidor não encontrado | Mostra o aviso e deixa digitar o endereço (aparece em **Configurações → 🖥️ Servidor** no escritório) |
+| O escritório saiu do ar | Avisa por cima da tela e tenta de novo sozinho. **A venda montada continua ali** |
+| O endereço do servidor mudou | Depois de 1 minuto sem resposta, procura de novo sozinho |
+| Impressora não escolhida | Abre a janela de impressão do Windows, como no navegador |
+| Versão nova no escritório | Ao abrir, o caixa se atualiza sozinho **pela rede da loja**, sem internet |
+
+> O computador do escritório precisa estar com o **modo servidor** ligado (Configurações → 🖥️ Servidor) e no **cabo** ou no Wi-Fi da loja. Caixa no Wi-Fi de visitantes nunca encontra o servidor.
+
+> Fechar o programa pergunta antes: uma venda montada e não finalizada naquele caixa seria perdida. As vendas finalizadas ficam guardadas no escritório.
+
 
 ## 21. Atualizações
 
@@ -1650,6 +1676,8 @@ Use isso depois de atualizar, para saber o que apareceu de novo no sistema.
 | **Faixa vermelha "dados não estão sendo gravados"** | Não feche o sistema; chame o suporte (veja Backup e segurança) |
 | **Faixa laranja "Pendrive de segurança não encontrado"** | Espete o pendrive de novo. As vendas continuam salvas no HD |
 | **O sistema abriu sozinho / reabriu depois que fechei** | É o modo servidor. Para fechar por um tempo, use **Fechar o servidor** (30 minutos sem reabrir). Para acabar com isso: Configurações → 🖥️ Servidor → desligue a chave |
+| **Caixa mostra "Servidor não encontrado"** | Confira se o computador do escritório está ligado com o sistema aberto e o modo servidor ligado. Digite o endereço que aparece em Configurações → 🖥️ Servidor |
+| **Caixa diz "a impressora … não respondeu"** | Confira se a impressora está ligada. No ⚙ do caixa, escolha a impressora de novo e use **Testar** |
 | **Servidor com item ⚠️ na conferência** | Desligue e ligue de novo a chave **Modo servidor**. Se continuar, chame o suporte |
 | **Aviso "O arquivo do banco de dados tem um defeito"** | Não venda. O arquivo foi guardado; chame o suporte |
 | **"Gravação direta no disco: aguardando reabrir o sistema"** | Normal logo depois de atualizar. Feche e abra o sistema |

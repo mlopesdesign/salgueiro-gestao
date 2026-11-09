@@ -1,6 +1,6 @@
 // Salgueiro Gestão — interface (SPA sem dependências)
 import { viewEstoque, abrirEtiquetas } from './estoque.js';
-import { abrirEtiquetasLote } from './etiquetas.js';
+import { abrirEtiquetasLote, CSS_ETQ } from './etiquetas.js';
 import { viewPdv, imprimirVale } from './pdv.js';
 import { textoCaixaAberto } from './backend/core/caixa-terminal.js';
 import { viewClientes } from './clientes.js';
@@ -12,7 +12,7 @@ import { viewEstoques } from './estoques.js';
 import { viewConfiguracoes } from './configuracoes.js';
 import { viewMensagens, iniciarMensagens, pararMensagens, encerrarTelaMensagens } from './mensagens.js';
 import { viewCatalogo } from './catalogo.js';
-import { aplicarEstiloImpressao } from './impressao.js';
+import { aplicarEstiloImpressao, cssCupomArquivo, medidasAtivas } from './impressao.js';
 
 // ── Campo de número NÃO muda com a rodinha do mouse (v3.29.0) ────────────────
 // Regra única para TODOS os <input type="number"> do sistema, inclusive os que
@@ -213,7 +213,7 @@ function _avisoCaixaAberto(caixa) {
 const $app = document.getElementById('app');
 let usuario = null;
 let categoriasCache = [];
-let APP_VERSION = '3.39.0'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
+let APP_VERSION = '3.40.0'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
 
 // API dupla: no aplicativo usa IPC (preload); num terminal em rede (navegador),
 // conversa com o servidor do computador principal via HTTP com token de sessão.
@@ -235,6 +235,59 @@ const DIAG_CHAVE = 'salg_diag_eventos';
 // como `_terminal`. Guardado no próprio aparelho; sem armazenamento, vale só
 // enquanto a página estiver aberta.
 let _idMemoria = null;
+// ═══ v3.40.0 — DENTRO DO SALGUEIRO TERMINAL (programa instalado no caixa) ═══
+// O terminal mostra esta tela num quadro (?satelite=1&terminal=NOME). A
+// impressão, que no navegador abriria a janela do Windows, vai para o
+// programa do caixa, que imprime em silêncio na impressora DELE. Nada na
+// tela de vendas muda: quem chama window.print() continua chamando.
+const _qs = (() => { try { return new URLSearchParams(location.search); } catch { return new URLSearchParams(''); } })();
+const SATELITE = (() => { try { return window.parent !== window && _qs.get('satelite') === '1'; } catch { return false; } })();
+let _satImpressoras = {};   // { cupom: true, etiqueta: true, a4: true } — vem do terminal
+if (SATELITE) {
+  try {
+    const nome = String(_qs.get('terminal') || '').replace(/[^\w .-]/g, '').slice(0, 40);
+    if (nome) localStorage.setItem('salg_terminal_id', nome);
+  } catch { /* */ }
+  const _printOrig = window.print.bind(window);
+  window.addEventListener('message', (ev) => {
+    if (ev.source !== window.parent || !ev.data || typeof ev.data !== 'object') return;
+    if (ev.data.salg === 'config') _satImpressoras = ev.data.impressoras || {};
+    // o resultado da impressão ('impresso') é avisado pelo próprio terminal, por cima da tela
+  });
+  window.print = () => {
+    let doc = null;
+    try { doc = _capturarImpressao(); } catch { doc = null; }
+    if (!doc || !_satImpressoras[doc.tipo]) return _printOrig();   // sem impressora local: janela do Windows, como antes
+    window.parent.postMessage({ salg: 'imprimir', id: Date.now() + Math.random(), tipo: doc.tipo, html: doc.html, paisagem: !!doc.paisagem }, '*');
+    // quem limpa a área de impressão espera o fim da impressão
+    setTimeout(() => { try { window.dispatchEvent(new Event('afterprint')); } catch { /* */ } }, 0);
+  };
+  try { window.parent.postMessage({ salg: 'pronto', versao: APP_VERSION }, '*'); } catch { /* */ }
+}
+// Monta o documento que seria impresso: folha A4 (relatórios, balanço,
+// romaneio), etiqueta ou cupom — com o MESMO CSS que o computador principal usa.
+function _capturarImpressao() {
+  const cfg = getConfig() || {};
+  const logo = cfg.logo_cupom || cfg.logo || '';
+  const est = document.getElementById('estilo-folha-a4');
+  if (est) {
+    const m = /#([\w-]+)\{display:none\}/.exec(est.textContent || '');
+    const area = m && document.getElementById(m[1]);
+    if (area) {
+      const estilos = [...document.querySelectorAll('style')].filter(s => s !== est).map(s => s.textContent).join('\n');
+      const paisagem = /landscape/.test(est.textContent);
+      const css = `${estilos}\n@page{size:A4 ${paisagem ? 'landscape' : 'portrait'};margin:12mm}html,body{background:#fff}`;
+      return { tipo: 'a4', paisagem, html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${css}</style></head><body>${area.innerHTML}</body></html>` };
+    }
+  }
+  const area = document.getElementById('area-impressao');
+  if (!area || !area.innerHTML.trim()) return null;
+  const etq = !!area.querySelector('.etiqueta');
+  const css = etq ? CSS_ETQ : cssCupomArquivo(medidasAtivas(cfg));
+  const corpo = area.innerHTML.replace(/__LOGO_URI__/g, logo);
+  return { tipo: etq ? 'etiqueta' : 'cupom', html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${css}</style></head><body>${corpo}</body></html>` };
+}
+
 function _terminalId() {
   try {
     let id = localStorage.getItem('salg_terminal_id');

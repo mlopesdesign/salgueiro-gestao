@@ -1,10 +1,10 @@
-; Salgueiro Gestao v3.39.0
+; Salgueiro Gestao v3.40.0
 ; Build: /tmp/rel  — gerado pelo pipeline de build (ver CLAUDE.md)
 Unicode True
 !include "LogicLib.nsh"
 
 Name "Salgueiro Gestao"
-OutFile "/tmp/Salgueiro Gestao Setup v3.39.0.exe"
+OutFile "/tmp/Salgueiro Gestao Setup v3.40.0.exe"
 InstallDir "$LOCALAPPDATA\SalgueiroGestao"
 InstallDirRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "InstallLocation"
 RequestExecutionLevel user
@@ -82,12 +82,12 @@ Function .onInit
     ${If} $R1 == ""
       StrCpy $R1 "versao anterior"
     ${EndIf}
-    MessageBox MB_YESNO|MB_ICONQUESTION "Salgueiro Gestao ($R1) ja esta instalado neste computador.$\n$\nDeseja atualizar para a versao 3.39.0?$\n$\nSeus dados, vendas e configuracoes serao preservados." IDYES prosseguir
+    MessageBox MB_YESNO|MB_ICONQUESTION "Salgueiro Gestao ($R1) ja esta instalado neste computador.$\n$\nDeseja atualizar para a versao 3.40.0?$\n$\nSeus dados, vendas e configuracoes serao preservados." IDYES prosseguir
     Abort
     prosseguir:
   ${EndIf}
 
-  ; v3.39.0 - modo servidor: pausa o vigia durante a instalacao (senao ele
+  ; v3.40.0 - modo servidor: pausa o vigia durante a instalacao (senao ele
   ; reabriria o sistema no meio da copia dos arquivos). Apagado no fim.
   CreateDirectory "$APPDATA\SalgueiroGestao"
   FileOpen $9 "$APPDATA\SalgueiroGestao\servidor-pausa.txt" w
@@ -153,7 +153,7 @@ Section "Principal"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "DisplayName" "Salgueiro Gestao"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "UninstallString" "$INSTDIR\uninstall.exe"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "InstallLocation" "$INSTDIR"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "DisplayVersion" "3.39.0"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "DisplayVersion" "3.40.0"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "Publisher" "ML Lopes Design"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SalgueiroGestao" "DisplayIcon" "$INSTDIR\icon.ico"
 
@@ -166,12 +166,12 @@ Section "Principal"
   Sleep 1200
 
   Exec '"$INSTDIR\Salgueiro Gestao.exe"'
-  Delete "$APPDATA\SalgueiroGestao\servidor-pausa.txt"   ; v3.39.0 - libera o vigia
+  Delete "$APPDATA\SalgueiroGestao\servidor-pausa.txt"   ; v3.40.0 - libera o vigia
 SectionEnd
 
 Section "Uninstall"
   nsExec::Exec 'netsh advfirewall firewall delete rule name=SalgueiroRede'
-  ; v3.39.0 - modo servidor (o sistema regrava ao abrir, se continuar ligado)
+  ; v3.40.0 - modo servidor (o sistema regrava ao abrir, se continuar ligado)
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "SalgueiroGestaoServidor"
   nsExec::Exec 'schtasks /Delete /TN SalgueiroVigiaServidor /F'
   Delete "$APPDATA\SalgueiroGestao\vigia-servidor.vbs"

@@ -460,6 +460,7 @@ function Iniciar-Http([int]$porta) {
   for ($tent = 1; $tent -le 6; $tent++) {
     try {
       $script:http = Abrir-Listener $porta
+      $script:portaHttp = $porta
       Log-Rede 'SERVIDOR' "ligado na porta $porta"
       Enviar-Evento 'rede.status' @{ ativa = $true; porta = $porta; ips = @(Listar-IPs) }
       return
@@ -528,10 +529,10 @@ function Ler-Requisicao($stream) {
   return $req
 }
 
-function Responder($stream, [int]$codigo, [string]$tipo, [byte[]]$corpo) {
+function Responder($stream, [int]$codigo, [string]$tipo, [byte[]]$corpo, [string]$extra = '') {
   $st = 'OK'
   if ($codigo -eq 404) { $st = 'Not Found' } elseif ($codigo -eq 504) { $st = 'Gateway Timeout' } elseif ($codigo -ge 500) { $st = 'Error' } elseif ($codigo -eq 413) { $st = 'Payload Too Large' }
-  $h = "HTTP/1.1 $codigo $st`r`nContent-Type: $tipo`r`nContent-Length: $($corpo.Length)`r`nConnection: close`r`nCache-Control: no-store`r`n`r`n"
+  $h = "HTTP/1.1 $codigo $st`r`nContent-Type: $tipo`r`nContent-Length: $($corpo.Length)`r`nConnection: close`r`nCache-Control: no-store`r`n$extra`r`n"
   $hb = $enc.GetBytes($h)
   $stream.Write($hb, 0, $hb.Length)
   if ($corpo.Length -gt 0) { $stream.Write($corpo, 0, $corpo.Length) }
@@ -622,6 +623,14 @@ function Atender($c, $req) {
     $q = $caminho.IndexOf('?'); if ($q -ge 0) { $caminho = $caminho.Substring(0, $q) }
     if ($caminho -eq '/') { $caminho = '/index.html' }
     if ($caminho.Contains('..')) { Responder $c.stream 404 'text/plain' $enc.GetBytes('nao'); return }
+    # v3.40.0 - o Salgueiro Terminal (programa dos caixas) procura o servidor
+    # varrendo a rede: esta resposta diz "sou o Salgueiro". CORS liberado porque
+    # o terminal chama de outra origem (a pagina local dele).
+    if ($caminho -eq '/salgueiro/identificar') {
+      $j = (@{ app = 'salgueiro-gestao'; computador = [string]$env:COMPUTERNAME; porta = [int]$script:portaHttp } | ConvertTo-Json -Compress)
+      Responder $c.stream 200 'application/json; charset=utf-8' $enc.GetBytes($j) "Access-Control-Allow-Origin: *`r`n"
+      return
+    }
     # v3.37.0 - so caminho LOCAL do proprio sistema (antes "GET @outro-ip/" buscava
     # qualquer endereco) e nada que nao seja da tela do terminal: codigo do
     # servidor, licenca e bancos nunca saem pela rede.
@@ -654,7 +663,11 @@ function Atender($c, $req) {
         $tipo = 'text/html; charset=utf-8'
         Log-Rede 'TELA' "$($c.ip) abriu o sistema no navegador"
       }
-      Responder $c.stream 200 $tipo $conteudo
+      # v3.40.0 - pacote de atualizacao do Salgueiro Terminal: o terminal baixa
+      # daqui (rede da loja, sem internet), de outra origem -> CORS liberado.
+      $extra = ''
+      if ($cl.StartsWith('/terminal/')) { $extra = "Access-Control-Allow-Origin: *`r`n" }
+      Responder $c.stream 200 $tipo $conteudo $extra
     } catch {
       Log-Rede 'ARQUIVO-404' "$($c.ip) $caminho"
       Responder $c.stream 404 'text/plain; charset=utf-8' $enc.GetBytes('Arquivo nao encontrado.')

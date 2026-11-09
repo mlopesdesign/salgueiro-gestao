@@ -536,6 +536,8 @@ Crédito parcelado. Salve e gere o relatório de evento de novo.
 | Botão de gerar catálogo apagado | Nenhuma categoria marcada. Clique em **Todas** |
 | Pendrive de segurança (faixa laranja no rodapé) | Espete o pendrive de novo. Para ligar: Configurações → 💾 Backup → **🔌 Escolher o pendrive** |
 | "O arquivo do banco de dados tem um defeito" | Não venda e chame o suporte |
+| Caixa novo: instalar o programa | Abra o **Salgueiro Terminal Setup** no caixa; ele acha o escritório sozinho. Escolha as impressoras no ⚙ (canto inferior esquerdo) |
+| Caixa "Servidor não encontrado" | Escritório ligado com o sistema aberto? Digite o endereço que aparece em Configurações → 🖥️ Servidor |
 | O sistema reabre sozinho depois que fecho | É o modo servidor. Feche com **Fechar o servidor** (30 min sem reabrir) ou desligue em Configurações → 🖥️ Servidor |
 
 ---

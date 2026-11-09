@@ -247,6 +247,14 @@ ${tab(['Tabela', 'Colunas'], tbs.map(t => [`\`${t.nome}\``, t.colunas.join(', ')
 > 8.191 caracteres do \`cmd.exe\` — por isso o \`.vbs\` é gravado pelo JS, não dentro do comando.
 > Fechar de propósito grava \`servidor-pausa.txt\` (vigia espera 30 min); o instalador também.
 
+> **Salgueiro Terminal (v3.40.0):** projeto próprio em \`E:\\Projetos\\SALGUEIRO TERMINAL\`.
+> Contrato com este sistema: PS1 \`GET /salgueiro/identificar\` (CORS) para a descoberta;
+> \`/terminal/versao.txt\` ("X.Y.Z sha256") + \`/terminal/salgueiro-terminal.neu\` (CORS) em
+> \`src/terminal/\` para a atualização pela rede; no \`app.js\`, dentro do quadro com
+> \`?satelite=1\`, \`window.print\` vira \`postMessage({salg:'imprimir'})\` quando o terminal
+> tem impressora para o tipo (\`cupom\`/\`etiqueta\`/\`a4\`). O \`pdv.js\` NÃO foi tocado.
+> Terminal novo = copiar o \`resources.neu\` dele para \`src/terminal/\` e regravar o \`versao.txt\`.
+
 ---
 
 ## 9. Regra de ouro do estoque

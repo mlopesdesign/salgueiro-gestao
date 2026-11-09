@@ -3,6 +3,15 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.40.0',
+    data: '2026-11-09',
+    itens: [
+      '🖥️ PROGRAMA PRÓPRIO PARA OS CAIXAS: SALGUEIRO TERMINAL. Os caixas deixam de usar o navegador. O programa acha sozinho o computador do escritório na rede, mostra o sistema e imprime cupom, etiqueta e relatório na impressora do PRÓPRIO caixa, sem abrir janela de impressão. As impressoras de cada caixa são escolhidas no ⚙ do canto da tela.',
+      '🔄 OS CAIXAS SE ATUALIZAM SOZINHOS, SEM INTERNET. Este sistema leva junto a versão mais nova do Salgueiro Terminal; ao abrir, cada caixa confere com o computador do escritório e se atualiza pela rede da loja.',
+      '📡 SE O COMPUTADOR DO ESCRITÓRIO SAIR DO AR, o caixa avisa por cima da tela e tenta de novo sozinho, sem perder a venda montada; se o endereço do servidor mudar, ele procura de novo.',
+    ],
+  },
+  {
     versao: '3.39.0',
     data: '2026-11-09',
     itens: [

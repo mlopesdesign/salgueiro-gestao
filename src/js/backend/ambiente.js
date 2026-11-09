@@ -529,7 +529,7 @@ export async function lerLogs(dia) {
 
 // ── App ──────────────────────────────────────────────────────────────────────
 export function versaoApp() {
-  try { return NL_APPVERSION; } catch { return '3.39.0'; }
+  try { return NL_APPVERSION; } catch { return '3.40.0'; }
 }
 
 // v3.34.2 — o reinício TEM de encerrar este processo. Na loja (27/10) a
