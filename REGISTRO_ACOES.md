@@ -32,4 +32,11 @@
 - 2026-11-09 — Ponte de impressão no app.js (window.print) em vez do pdv.js: regra 6 respeitada, diff zero. CERTO.
 - 2026-11-09 — Teste no Windows real pegou 2 defeitos que o Chromium não pegaria: config.json com BOM não lido (corrigido) e Setup silencioso travado na pergunta sem /SD IDYES (corrigido). Testar no destino é obrigatório. CERTO.
 - 2026-11-09 — Mensagem de impressora saiu com o texto técnico do SumatraPDF. Trocada por mensagem em português; aviso de erro com contraste. CERTO.
+- 2026-11-09 — Criação do repositório privado mlopesdesign/salgueiro-terminal barrada pela trava de segurança. Não contornado. Git local com commit e tag v1.0.0. CERTO.
+- 2026-11-09 — v3.40.0: commit cd8feeb + tag local; pedido em AGUARDANDO-OK. CERTO.
+- 2026-11-09 09:20 — Atalho do Salgueiro Terminal com ícone em branco na área de trabalho do Marcio. ERRADO: instalei pelo Desktop Commander, que roda dentro do app do Claude (MSIX) — o Windows desviou %LOCALAPPDATA% para ...\Packages\Claude_pzs8sxrjxfjjc\LocalCache\. Corrigido: instalação virtual removida e instalação refeita por TAREFA AGENDADA (fora do pacote), conferida atalho/ícone/registro e visualmente. REGRA: instalar ou testar programa no PC do Marcio SEMPRE por tarefa agendada, nunca direto pelo Desktop Commander; e conferir o ícone na área de trabalho por captura de tela.
+- 2026-11-09 09:49 — Salgueiro v3.40.0 instalado no DESKTOP-MARCIO como servidor, por tarefa agendada (fora do Claude). Backup completo antes (64 arquivos, 116 MB). Modo servidor + rede ligados no banco com o sistema fechado (quick_check ok, 2.582 vendas). Conferido: registro 3.40.0, inicia com o Windows, vigia ativo, /salgueiro/identificar na porta 2020 com CORS. CERTO.
+- 2026-11-09 — Instalador do Salgueiro também travaria no /S (MessageBox sem /SD IDYES). Corrigido antes de instalar. CERTO.
+- 2026-11-09 — Instalador do terminal refeito como assistente profissional (MUI2 pt-BR, boas-vindas, pasta, progresso, conclusão com "Abrir agora", arte do Salgueiro, desinstalador com páginas). .nsi com BOM UTF-8 (acentos). Aberto na tela do Marcio por tarefa agendada. CERTO.
+- 2026-11-09 — Varredura do terminal passou a priorizar 192.168.x/10.x; placas virtuais (WSL 172.x, Tailscale 100.x) por último — o PC do Marcio tem as quatro. CERTO.
 

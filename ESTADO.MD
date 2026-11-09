@@ -21,10 +21,10 @@
 ## v3.40.0 + SALGUEIRO TERMINAL 1.0.0 — Fase 2 (09/11/2026)
 
 - **Terminal:** projeto em `E:\Projetos\SALGUEIRO TERMINAL` (a pasta não pôde ser ligada a esta sessão: trabalhei em `_ponte-terminal\` e copiei para lá pelo Windows). Instalador `instalador\Salgueiro Terminal Setup v1.0.0.exe` (13.063.067 bytes, sha256 `101d4dd8…8b8a`), `resources.neu` sha256 `949a5c3e…62bc5`. Instalado no DESKTOP-MARCIO (sem servidor configurado).
-- **Salgueiro v3.40.0:** identificação para a descoberta, pacote do terminal em `src/terminal/`, ponte de impressão no `app.js`. Build `resources.neu` sha256 `aeff547e…ccc1` (7.419.640 bytes) · Setup `852c3d5f…c3d0` (16.344.169 bytes). Backup `backups\pre-v3.40.0-2026-11-09\`.
+- **Salgueiro v3.40.0:** identificação para a descoberta, pacote do terminal em `src/terminal/`, ponte de impressão no `app.js`. Build `resources.neu` sha256 `6c66895a…f439` (7.419.992 bytes) · Setup `8645a3f5…a75a`. Refeito às 09:55 com o pacote do terminal novo (varredura prioriza a rede da loja) e o `/SD IDYES` no instalador. Backup `backups\pre-v3.40.0-2026-11-09\`.
 - Testes: terminal 21/21 (Chromium, tela real dentro) + Windows real (instalação, janela, quadro, ponte de impressão até o SumatraPDF) · v3400 17/17 · regra 6 diff zero.
-- **NÃO PUBLICADAS (3.39.0 e 3.40.0):** a trava de segurança da sessão exige o OK explícito ("publica"). Pedido pronto: `tools\publicar\pedido-v3.39.0-AGUARDANDO-OK.json` (publicar direto a 3.40.0 basta — ela contém a 3.39.0).
-- **Repositório privado do terminal:** pendente (ver REGISTRO).
+- **NÃO PUBLICADAS (3.39.0 e 3.40.0):** a trava de segurança da sessão exige o OK explícito ("publica"). Pedido pronto: `tools\publicar\pedido-v3.40.0-AGUARDANDO-OK.json` → renomear para `pedido.json` (contém a 3.39.0; o pedido da 3.39.0 foi para `falhou\` como substituído). Commit `cd8feeb`, tag `v3.40.0` locais.
+- **Repositório privado do terminal:** criação barrada pela trava de segurança da sessão. Git local pronto em `E:\Projetos\SALGUEIRO TERMINAL` (commit `16b92f7`, tag `v1.0.0`).
 - **PRÓXIMO:** instalar o terminal nos caixas da loja quando a v3.40.0 estiver no escritório com o modo servidor ligado; depois Fase 3 (loja virtual).
 
 ## v3.39.0 — MODO SERVIDOR (Fase 1) + chave do pendrive (09/11/2026)

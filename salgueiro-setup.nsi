@@ -82,7 +82,7 @@ Function .onInit
     ${If} $R1 == ""
       StrCpy $R1 "versao anterior"
     ${EndIf}
-    MessageBox MB_YESNO|MB_ICONQUESTION "Salgueiro Gestao ($R1) ja esta instalado neste computador.$\n$\nDeseja atualizar para a versao 3.40.0?$\n$\nSeus dados, vendas e configuracoes serao preservados." IDYES prosseguir
+    MessageBox MB_YESNO|MB_ICONQUESTION "Salgueiro Gestao ($R1) ja esta instalado neste computador.$\n$\nDeseja atualizar para a versao 3.40.0?$\n$\nSeus dados, vendas e configuracoes serao preservados." /SD IDYES IDYES prosseguir
     Abort
     prosseguir:
   ${EndIf}

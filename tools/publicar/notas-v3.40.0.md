@@ -16,4 +16,4 @@ Esta versão leva junto o Salgueiro Terminal 1.0.0. Ao abrir, cada caixa confere
 Inclui as mudanças da v3.39.0 (modo servidor e chave do pendrive).
 
 ## Arquivo
-- `resources.neu` — SHA256: `aeff547e89b5171ecae40c5ce58abd95f8fd485547159949442d4e5bc0faccc1`
+- `resources.neu` — SHA256: `6c66895a225ef9c7505732347cdea73f0849749779b1f4bf75e26387d4caf439`
