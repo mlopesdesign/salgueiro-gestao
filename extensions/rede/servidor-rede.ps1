@@ -117,6 +117,7 @@ function Bombear-WS([int]$timeoutMs) {
   elseif ($m.event -eq 'rede.imprimir')   { Imprimir-Silencioso $m.data }
   elseif ($m.event -eq 'nuvem.oauthIniciar') { Iniciar-OAuthListener ([int]$m.data.porta) }
   elseif ($m.event -eq 'disco.descarregar') { Descarregar-Arquivos $m.data }
+  elseif ($m.event -eq 'disco.livre')       { Espaco-Livre $m.data }
   return $true
 }
 
@@ -141,6 +142,18 @@ function Descarregar-Arquivos($d) {
   }
   if ($erros.Count -gt 0) { Log-Rede 'DESCARGA' ($erros -join ' | ') }
   Enviar-Evento 'disco.descarregado' @{ id = [string]$d.id; ok = ($erros.Count -eq 0); n = $n; erros = @($erros) }
+}
+
+# v3.40.2 - espaco livre da unidade (pendrive cheio: o app apaga a copia mais
+# antiga antes de gravar a nova).
+function Espaco-Livre($d) {
+  $livre = -1; $total = -1; $erro = ''
+  try {
+    $raiz = [System.IO.Path]::GetPathRoot([string]$d.caminho)
+    $di = New-Object System.IO.DriveInfo $raiz
+    if ($di.IsReady) { $livre = [int64]$di.AvailableFreeSpace; $total = [int64]$di.TotalSize } else { $erro = 'unidade nao pronta' }
+  } catch { $erro = [string]$_.Exception.Message }
+  Enviar-Evento 'disco.livre.resp' @{ id = [string]$d.id; livre = $livre; total = $total; erro = $erro }
 }
 
 function Listar-IPs {
@@ -461,6 +474,7 @@ function Iniciar-Http([int]$porta) {
     try {
       $script:http = Abrir-Listener $porta
       $script:portaHttp = $porta
+      Iniciar-Descoberta
       Log-Rede 'SERVIDOR' "ligado na porta $porta"
       Enviar-Evento 'rede.status' @{ ativa = $true; porta = $porta; ips = @(Listar-IPs) }
       return
@@ -488,7 +502,41 @@ function Iniciar-Http([int]$porta) {
   Log-Rede 'SERVIDOR' ("NAO ligou na porta $porta : " + $ultimoErro + $quem)
   Enviar-Evento 'rede.status' @{ ativa = $false; erro = ("Nao foi possivel abrir a porta $porta." + $quem) }
 }
+# v3.40.2 - DESCOBERTA na rede (porta UDP fixa do produto, 8750): o Salgueiro
+# Terminal manda "SALGUEIRO-PROCURA" em broadcast e o servidor responde
+# "SALGUEIRO-AQUI <porta> <computador>". Assim o terminal acha o servidor em
+# QUALQUER porta HTTP que a loja configurar, sem porta de cliente no codigo.
+$PORTA_DESCOBERTA = 8750
+$script:udp = $null
+function Iniciar-Descoberta {
+  Parar-Descoberta
+  try {
+    $u = New-Object System.Net.Sockets.UdpClient
+    $u.Client.SetSocketOption([System.Net.Sockets.SocketOptionLevel]::Socket, [System.Net.Sockets.SocketOptionName]::ReuseAddress, $true)
+    $u.Client.Bind((New-Object System.Net.IPEndPoint ([System.Net.IPAddress]::Any, $PORTA_DESCOBERTA)))
+    $u.EnableBroadcast = $true
+    $script:udp = $u
+    Log-Rede 'DESCOBERTA' "respondendo na porta UDP $PORTA_DESCOBERTA"
+  } catch { $script:udp = $null; Log-Rede 'DESCOBERTA' ("UDP $PORTA_DESCOBERTA indisponivel: " + $_.Exception.Message) }
+}
+function Parar-Descoberta { if ($script:udp) { try { $script:udp.Close() } catch {}; $script:udp = $null } }
+function Atender-Descoberta {
+  $n = 0
+  while ($script:udp -and $script:udp.Available -gt 0 -and $n -lt 20) {
+    $n++
+    try {
+      $ep = New-Object System.Net.IPEndPoint ([System.Net.IPAddress]::Any, 0)
+      $b = $script:udp.Receive([ref]$ep)
+      if ($enc.GetString($b) -eq 'SALGUEIRO-PROCURA') {
+        $r = $enc.GetBytes("SALGUEIRO-AQUI $($script:portaHttp) $($env:COMPUTERNAME)")
+        [void]$script:udp.Send($r, $r.Length, $ep)
+      }
+    } catch {}
+  }
+}
+
 function Parar-Http {
+  Parar-Descoberta
   if ($script:http) {
     try { $script:http.Stop() } catch {}
     $script:http = $null
@@ -938,6 +986,7 @@ while ($ws.State -eq 'Open') {
       }
       if ($script:conexoes.Count -gt 0) { Servir-Conexoes }
       Vencer-Pendentes
+      if ($script:udp) { Atender-Descoberta }
     }
     if ($script:impressoes.Count -gt 0) { Verificar-Impressoes }
     # Listener temporario para callback OAuth (porta 9741, aceita uma conexao)

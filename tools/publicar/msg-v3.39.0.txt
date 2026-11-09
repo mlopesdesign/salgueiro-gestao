@@ -1,0 +1,11 @@
+v3.39.0 — Modo servidor (Fase 1) · chave do pendrive
+
+- Configurações → Servidor: abre com o Windows, vigia reabre se fechar, sem suspensão na tomada, rede ligada junto
+- Painel com conferência real do Windows e caixas conectados agora
+- X no servidor pergunta (padrão minimizar); fechar de propósito pausa o vigia 30 min
+- Instalador pausa o vigia; desinstalador limpa inicialização, tarefa e .vbs
+- Pendrive: chave liga/desliga
+- Componentes comuns .chave e .conferencia no app.css
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01BLLEj4LTS9Lhwtx2C69fST

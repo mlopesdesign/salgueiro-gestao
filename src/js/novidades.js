@@ -3,6 +3,13 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.40.2',
+    data: '2026-11-09',
+    itens: [
+      '🔌 PENDRIVE CHEIO NÃO PARA A SEGUNDA CÓPIA. Antes de gravar, o sistema confere o espaço livre do pendrive; se não couber, apaga as cópias MAIS ANTIGAS, uma a uma, até caber a nova. O espelho do banco e a cópia mais recente nunca são apagados, e não aparece aviso de "cheio". O espaço livre aparece em Configurações → 💾 Backup.',
+    ],
+  },
+  {
     versao: '3.40.1',
     data: '2026-11-09',
     itens: [

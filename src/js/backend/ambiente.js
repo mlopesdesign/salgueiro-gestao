@@ -529,7 +529,7 @@ export async function lerLogs(dia) {
 
 // ── App ──────────────────────────────────────────────────────────────────────
 export function versaoApp() {
-  try { return NL_APPVERSION; } catch { return '3.40.1'; }
+  try { return NL_APPVERSION; } catch { return '3.40.2'; }
 }
 
 // v3.34.2 — o reinício TEM de encerrar este processo. Na loja (27/10) a
@@ -748,6 +748,7 @@ async function _loopEspelho() {
     try {
       const pasta = await pastaEspelho();
       if (!pasta) { if ((await _cfgEspelho()).pasta) _esp.ultimaErro = { quando: Date.now(), erro: 'pendrive não encontrado' }; continue; }
+      await _garantirEspacoPendrive(pasta, b.length);
       await _escreverAtomico(`${pasta}/${ARQ_ESPELHO}`, b);
       _esp.ultimaOk = Date.now(); _esp.gravacoes++; _esp.ultimaErro = null;
     } catch (e) {
@@ -775,6 +776,7 @@ export async function espelharCopia(nome, bytes) {
     await _garantirDir(dir);
     const destino = `${dir}/${nome}`;
     try { await Neutralino.filesystem.getStats(destino); return destino; } catch { /* não existe: grava */ }
+    await _garantirEspacoPendrive(pasta, bytes.length);
     await copiarBancoPara(destino, bytes);
     await _conferirCabecalho(destino, bytes.length);
     await descarregarNoDisco([destino]);
@@ -793,7 +795,10 @@ export async function estadoEspelho() {
   const pasta = cfg.pasta ? await pastaEspelho() : null;
   let copias = 0;
   if (pasta) { try { copias = (await Neutralino.filesystem.readDirectory(`${pasta}/copias`)).filter(e => e.entry.endsWith('.db')).length; } catch { /* */ } }
+  let espaco = null;
+  if (pasta) { try { espaco = await espacoLivre(pasta); } catch { /* */ } }
   return { configurado: !!cfg.pasta, encontrado: !!pasta, pasta: (pasta || cfg.pasta || '').replace(/\//g, '\\'),
+           livre: espaco ? espaco.livre : null, total: espaco ? espaco.total : null, apagadasPorEspaco: _esp.apagadasPorEspaco || 0,
            desde: cfg.desde || null, ultimaOk: _esp.ultimaOk, ultimaErro: _esp.ultimaErro,
            gravacoes: _esp.gravacoes, copias, descarga: estadoDescarga() };
 }
@@ -969,4 +974,65 @@ export async function pausarVigia() {
   const base = await Neutralino.os.getPath('data');
   await _garantirDir(`${base}/SalgueiroGestao`);
   await Neutralino.filesystem.writeFile(`${base}/SalgueiroGestao/servidor-pausa.txt`, new Date().toISOString());
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// v3.40.2 — PENDRIVE CHEIO: apaga as cópias MAIS ANTIGAS até caber a nova
+// ═════════════════════════════════════════════════════════════════════════════
+// Pedido do Marcio: pendrive cheio não avisa nem para de gravar — abre espaço
+// apagando o que é mais velho, para nunca faltar o backup mais recente.
+// Antes de gravar, mede o espaço livre (extensão: DriveInfo) e apaga cópias de
+// <pasta>/copias, da mais antiga para a mais nova, até sobrar a nova + margem.
+// NUNCA apaga: o espelho do banco (salgueiro-espelho.db e .anterior) nem a
+// cópia mais recente. Sem a extensão (versão antiga, 1º boot após atualizar)
+// não mede e segue como antes — o limite por quantidade continua valendo.
+const MARGEM_PENDRIVE = 8 * 1024 * 1024;
+const _livre = { pend: new Map(), ouvinte: false, semResposta: 0 };
+export async function espacoLivre(caminho) {
+  if (typeof Neutralino === 'undefined' || !Neutralino.extensions || !Neutralino.events) return null;
+  if (_dsc.estado !== 'ativa') return null;                 // extensão antiga: não sabe medir
+  // extensão da v3.38/3.39 (1º boot depois de atualizar) descarrega mas não mede:
+  // depois de uma falta de resposta, não pergunta de novo por 60 s (senão cada
+  // gravação no pendrive esperaria o prazo à toa).
+  if (Date.now() - _livre.semResposta < 60000) return null;
+  if (!_livre.ouvinte) {
+    _livre.ouvinte = true;
+    try { Neutralino.events.on('disco.livre.resp', (ev) => { const d = (ev && ev.detail) || {}; const r = _livre.pend.get(d.id); if (r) { _livre.pend.delete(d.id); r(d); } }); } catch { /* */ }
+  }
+  const id = 'l' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  const resp = new Promise(res => _livre.pend.set(id, res));
+  try { await Neutralino.extensions.dispatch(EXT_REDE, 'disco.livre', { id, caminho: String(caminho) }); }
+  catch { _livre.pend.delete(id); return null; }
+  let tm;
+  const r = await Promise.race([resp, new Promise(res => { tm = setTimeout(() => res(null), 1500); })]);
+  clearTimeout(tm); _livre.pend.delete(id);
+  if (!r) { _livre.semResposta = Date.now(); return null; }
+  if (!(r.livre >= 0)) return null;
+  return { livre: Number(r.livre), total: Number(r.total) };
+}
+// Lista as cópias do pendrive da mais ANTIGA para a mais nova.
+async function _copiasPendrive(dir) {
+  try {
+    const nomes = (await Neutralino.filesystem.readDirectory(dir)).filter(e => e.entry.endsWith('.db')).map(e => e.entry);
+    return nomes.sort((a, b) => dataDoBackup(a) - dataDoBackup(b) || a.localeCompare(b));
+  } catch { return []; }
+}
+export async function _garantirEspacoPendrive(pasta, tamanho) {
+  const precisa = Number(tamanho || 0) + MARGEM_PENDRIVE;
+  for (let volta = 0; volta < 1000; volta++) {
+    const e = await espacoLivre(pasta);
+    if (!e) return { conferido: false };                      // não sabe medir: grava como antes
+    if (e.livre >= precisa) return { conferido: true, livre: e.livre };
+    const copias = await _copiasPendrive(`${pasta}/copias`);
+    if (copias.length <= 1) {                                 // só sobrou a mais recente: não apaga
+      try { registrarLog('ESPELHO', `pendrive sem espaço: ${Math.round(e.livre / 1048576)} MB livres e nenhuma cópia antiga para apagar`); } catch { /* */ }
+      return { conferido: true, livre: e.livre, semEspaco: true };
+    }
+    const velha = copias[0];
+    try { await Neutralino.filesystem.remove(`${pasta}/copias/${velha}`); }
+    catch { return { conferido: true, livre: e.livre, semEspaco: true }; }
+    _esp.apagadasPorEspaco = (_esp.apagadasPorEspaco || 0) + 1;
+    try { registrarLog('ESPELHO', `pendrive cheio: apagada a cópia mais antiga (${velha}) para caber a nova`); } catch { /* */ }
+  }
+  return { conferido: true };
 }

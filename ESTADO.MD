@@ -9,14 +9,23 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.40.1 — Salgueiro Terminal + login com servidor minimizado (09/11/2026) · 3.39.0/3.40.0/3.40.1 NÃO publicadas · 3.38.0 publicada 01:03 · repositório PÚBLICO por ordem do Marcio |
+| **Versão atual** | 3.40.2 — terminal 1.0.1 + pendrive cheio + descoberta sem porta fixa (09/11/2026) · 3.39.0 a 3.40.2 NÃO publicadas · 3.38.0 publicada 01:03 · repositório PÚBLICO por ordem do Marcio |
 | **Data do último build** | 2026-11-09 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
 | **GRAPHIFY** | atualizado para 3.40.0 em 2026-11-09 ✓ |
-| **5 lugares da versão** | os 5 em 3.40.1 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
+| **5 lugares da versão** | os 5 em 3.40.2 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
 
 ---
+
+## v3.40.2 + terminal 1.0.1 (09/11/2026, 19:45)
+
+- Pendrive cheio: apaga as cópias mais antigas até caber a nova (nunca o espelho nem a mais recente). Pedido do Marcio.
+- Terminal sem porta de cliente no código: descoberta por chamada na rede (UDP 8750, porta do produto) + confirmação HTTP. Regra do Marcio: tudo serve para qualquer máquina.
+- Instalador do Salgueiro não apaga mais o atalho do terminal.
+- Instalados no DESKTOP-MARCIO por tarefa agendada: servidor 3.40.2, terminal 1.0.1, os dois atalhos presentes. UDP conferido: resposta com porta 2020 por todas as placas.
+- Build `resources.neu` sha256 `324e035e…6592` (7.431.355 bytes) · Setup Salgueiro `998b1759…52c9` · Setup terminal 1.0.1 `f24550f5…3ddf`.
+- Recomendado: BIOS "Restore on AC Power Loss = Power On" no servidor (o Marcio decidiu religar à mão; sala sempre tem gente). Windows sem senha e sem Windows Update no servidor (confirmado pelo Marcio).
 
 ## v3.40.1 — login de caixa com servidor minimizado (09/11/2026, 10:00)
 
@@ -28,7 +37,7 @@
 - **Terminal:** projeto em `E:\Projetos\SALGUEIRO TERMINAL` (a pasta não pôde ser ligada a esta sessão: trabalhei em `_ponte-terminal\` e copiei para lá pelo Windows). Instalador `instalador\Salgueiro Terminal Setup v1.0.0.exe` (13.063.067 bytes, sha256 `101d4dd8…8b8a`), `resources.neu` sha256 `949a5c3e…62bc5`. Instalado no DESKTOP-MARCIO (sem servidor configurado).
 - **Salgueiro v3.40.0:** identificação para a descoberta, pacote do terminal em `src/terminal/`, ponte de impressão no `app.js`. Build `resources.neu` sha256 `6c66895a…f439` (7.419.992 bytes) · Setup `8645a3f5…a75a`. Refeito às 09:55 com o pacote do terminal novo (varredura prioriza a rede da loja) e o `/SD IDYES` no instalador. Backup `backups\pre-v3.40.0-2026-11-09\`.
 - Testes: terminal 21/21 (Chromium, tela real dentro) + Windows real (instalação, janela, quadro, ponte de impressão até o SumatraPDF) · v3400 17/17 · regra 6 diff zero.
-- **NÃO PUBLICADAS (3.39.0 e 3.40.0):** a trava de segurança da sessão exige o OK explícito ("publica"). Pedido pronto: `tools\publicar\pedido-v3.40.1-AGUARDANDO-OK.json` → renomear para `pedido.json` (a 3.40.0 nunca foi publicada; o pedido dela foi para `falhou\`) (contém a 3.39.0; o pedido da 3.39.0 foi para `falhou\` como substituído). Commit `cd8feeb`, tag `v3.40.0` locais.
+- **NÃO PUBLICADAS (3.39.0 e 3.40.0):** a trava de segurança da sessão exige o OK explícito ("publica"). Pedido pronto: `tools\publicar\pedido-v3.40.2-AGUARDANDO-OK.json` → renomear para `pedido.json` (a 3.40.0 nunca foi publicada; o pedido dela foi para `falhou\`) (contém a 3.39.0; o pedido da 3.39.0 foi para `falhou\` como substituído). Commit `cd8feeb`, tag `v3.40.0` locais.
 - **Repositório privado do terminal:** criação barrada pela trava de segurança da sessão. Git local pronto em `E:\Projetos\SALGUEIRO TERMINAL` (commit `16b92f7`, tag `v1.0.0`).
 - **PRÓXIMO:** instalar o terminal nos caixas da loja quando a v3.40.0 estiver no escritório com o modo servidor ligado; depois Fase 3 (loja virtual).
 
