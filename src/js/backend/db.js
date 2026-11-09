@@ -158,7 +158,13 @@ export async function estaVazio(bytes) {
 // Usada para MOSTRAR ao usuário o que há dentro de cada backup antes de
 // restaurar, e para o boot detectar que o banco em uso está quebrado.
 // `tabelasOk` false = tabela essencial ausente (banco truncado/corrompido).
-export async function radiografar(bytes) {
+// v3.38.0 — { verificar: true } roda o PRAGMA quick_check: confere a estrutura
+// de TODAS as páginas do arquivo. Sem ele, um banco com um pedaço corrompido
+// (desligamento abrupto no meio da escrita) abria, contava as vendas e passava
+// como bom — testado: 4 KB de lixo no meio e ainda "2.582 vendas".
+// É caro (~1 s num banco de 3 MB), por isso só onde decide: boot, escolha da
+// cópia para recuperar e restauração. Sem a opção, integro = null (não conferido).
+export async function radiografar(bytes, opcoes) {
   let t;
   try {
     t = await abrirDeBytes(bytes, async () => {});
@@ -180,10 +186,19 @@ export async function radiografar(bytes) {
     r.tabelasOk = Object.values(r).every(v => v >= 0);
     r.totalDados = Math.max(0, r.produtos) + Math.max(0, r.vendas) + Math.max(0, r.clientes);
     r.temDados = r.totalDados > 0;
+    r.integro = null;
+    if (opcoes && opcoes.verificar) {
+      try {
+        const q = t._db.exec('PRAGMA quick_check');
+        const linhas = q && q[0] ? q[0].values.map(v => String(v[0])) : [];
+        r.integro = linhas.length === 1 && linhas[0] === 'ok';
+        if (!r.integro) r.defeito = linhas.slice(0, 3).join(' | ').slice(0, 300);
+      } catch (e) { r.integro = false; r.defeito = String((e && e.message) || e).slice(0, 300); }
+    }
     return r;
   } catch {
     return { usuarios: -1, produtos: -1, vendas: -1, clientes: -1,
-             tabelasOk: false, totalDados: 0, temDados: false };
+             tabelasOk: false, totalDados: 0, temDados: false, integro: false };
   } finally { try { if (t) t._db.close(); } catch {} }
 }
 
@@ -195,8 +210,8 @@ export async function radiografar(bytes) {
 // radiografia para a tela avisar quando o backup tem menos dados que o atual.
 export async function validarBackup(bytes) {
   if (!bytes || bytes.length < 1024) return false;
-  const r = await radiografar(bytes);
-  return r.tabelasOk && r.usuarios > 0;
+  const r = await radiografar(bytes, { verificar: true });   // v3.38.0: arquivo corrompido não restaura
+  return r.tabelasOk && r.usuarios > 0 && r.integro === true;
 }
 
 export async function criarBanco({ bytes, schema, salvarBytes }) {

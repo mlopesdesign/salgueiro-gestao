@@ -3,7 +3,7 @@
 > Mapa técnico gerado automaticamente por `tools/graphify.js`.
 > **Não edite à mão.** Regere com `node tools/graphify.js` a cada alteração estrutural.
 
-**Versão:** 3.37.0 · **Gerado em:** 2026-11-06
+**Versão:** 3.38.0 · **Gerado em:** 2026-11-09
 **Aplicação:** `br.com.mllopes.salgueirogestao` (Neutralino 6 + WebView2)
 **Cliente:** Boutique do Salgueiro · **Autor:** ML Lopes Design
 
@@ -108,20 +108,20 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 
 | Arquivo | Linhas | Funções |
 |---|---|---|
-| `ambiente.js` | 562 | 8 |
-| `db.js` | 759 | 6 |
-| `servidor-rede-embutido.js` | 947 | 29 |
-| `servidor.js` | 3248 | 21 |
+| `ambiente.js` | 816 | 15 |
+| `db.js` | 774 | 6 |
+| `servidor-rede-embutido.js` | 971 | 30 |
+| `servidor.js` | 3309 | 21 |
 
 ## 6. Telas (`src/js`)
 
 | Arquivo | Linhas | Exporta |
 |---|---|---|
-| `app.js` | 2214 | EM_REDE, ajustarLarguraModal, api, aplicarTema, campoTroco |
+| `app.js` | 2248 | EM_REDE, ajustarLarguraModal, api, aplicarTema, campoTroco |
 | `catalogo.js` | 262 | viewCatalogo |
 | `clientes.js` | 538 | viewClientes |
 | `compras.js` | 229 | viewCompras |
-| `configuracoes.js` | 1991 | viewConfiguracoes |
+| `configuracoes.js` | 2048 | viewConfiguracoes |
 | `estoque.js` | 1353 | abrirEtiquetas, ean13Svg, formMovimento, formMovimentoProduto, viewEstoque |
 | `estoques.js` | 989 | viewEstoques |
 | `etiquetas.js` | 169 | abrirEtiquetasLote, imprimirFolhaEtiquetas |
@@ -129,14 +129,14 @@ index.html  (BOM UTF-8 + meta charset — sem isso o WebView2 quebra os acentos)
 | `impressao.js` | 179 | LIMITES, PADRAO, aplicarEstiloImpressao, cssCupomArquivo, cssCupomTela |
 | `mensagens.js` | 758 | abrirBalao, encerrarTelaMensagens, iniciarMensagens, pararMensagens, viewMensagens |
 | `neutralino.js` | 2 | — |
-| `novidades.js` | 1163 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
+| `novidades.js` | 1173 | CSS_NOVIDADES, NOVIDADES, htmlNovidades |
 | `pdv.js` | 2626 | calcResgateLocal, imprimirVale, modalValeEmitido, viewPdv |
 | `ranking.js` | 360 | viewRanking |
 | `relatorios.js` | 1899 | viewRelatorios |
 
 ---
 
-## 7. Rotas da API (170)
+## 7. Rotas da API (173)
 
 Toda comunicação tela ↔ backend passa por `api('canal:acao', payload)`.
 A coluna **Permissão** vem de `PERMISSAO_ROTA` em `servidor.js` — sem entrada ali,
@@ -182,7 +182,10 @@ a rota exige apenas sessão válida.
 | `backup:restaurarLocal` | `config.gerenciar` | `{` |
 | `backup:listarLocais` | `config.gerenciar` | `{` |
 | `backup:preAtualizacao` | `config.gerenciar` | `{` |
-| `backup:salvarAgora` | `config.gerenciar` | `{ await db.salvarAgora(); return { ok: true }; }` |
+| `backup:salvarAgora` | `config.gerenciar` | `{ await db.salvarAgora(); try { await ambiente.aguardarEspel…` |
+| `backup:espelhoStatus` | — | `({ ok: true, ...(await ambiente.estadoEspelho()) })` |
+| `backup:espelhoEscolher` | `config.gerenciar` | `{` |
+| `backup:espelhoDesligar` | `config.gerenciar` | `{ await ambiente.desligarEspelho(); return { ok: true }; }` |
 
 ### `catalogo:*`
 
@@ -541,6 +544,17 @@ a rota exige apenas sessão válida.
 > em `forma`/`tipo` é preciso reconstruir a tabela (ver migrações em `db.js`).
 > A guarda da migração deve testar o valor **entre aspas** — sem elas o teste casa
 > com nomes de coluna parecidos e a reconstrução nunca roda.
+
+> **Gravação blindada (v3.38.0):** `ambiente._escreverAtomico` grava o `.tmp`,
+> confere o cabeçalho, pede **descarga física** (`disco.descarregar` → PS1
+> `FileStream.Flush($true)` = FlushFileBuffers) e só então troca os arquivos.
+> Sem a extensão (ou com PS1 antigo) segue sem descarga — nunca trava a venda.
+> Toda gravação do banco é **espelhada** no pendrive (`espelharBanco`, config
+> em `dados/espelho.json`, marca `.salgueiro-espelho`, reencontra por letra).
+> No boot o banco passa por `radiografar(bytes, { verificar: true })`
+> (`PRAGMA quick_check`); corrompido → recupera da cópia íntegra com mais vendas
+> (HD + pendrive), mas **nunca** por uma com MENOS vendas que o corrompido.
+> Mudou o PS1? Regenere `servidor-rede-embutido.js` (`node tools/gerar-rede-embutida.js`).
 
 ---
 

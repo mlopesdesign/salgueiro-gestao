@@ -50,6 +50,31 @@ globalThis.__falhaGravacao = (motivo) => {
       + '). Não feche o sistema e chame o suporte — vendas feitas agora podem se perder.';
   } catch { /* sem DOM */ }
 };
+// v3.38.0 — pendrive de segurança sumiu: faixa âmbar fixa (não bloqueia nada;
+// as vendas continuam no HD). Some sozinha quando o pendrive volta.
+function _faixaPendrive(mostrar, pasta) {
+  try {
+    let f = document.getElementById('faixa-pendrive');
+    if (!mostrar) { if (f) f.remove(); return; }
+    if (!f) {
+      f = document.createElement('div');
+      f.id = 'faixa-pendrive';
+      f.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:99998;background:#b26a00;color:#fff;'
+        + 'padding:8px 16px;font:600 13px/1.4 system-ui,sans-serif;text-align:center;box-shadow:0 -2px 8px #0004';
+      document.body.appendChild(f);
+    }
+    f.textContent = '🔌 Pendrive de segurança não encontrado (' + String(pasta || '') + '). Espete-o de novo — '
+      + 'as vendas continuam salvas no HD, mas sem a segunda cópia.';
+  } catch { /* sem DOM */ }
+}
+globalThis.__vigiarPendrive = (apiFn) => {
+  const conferir = async () => {
+    try { const r = await apiFn('backup:espelhoStatus'); _faixaPendrive(!!(r && r.ok && r.configurado && !r.encontrado), r && r.pasta); }
+    catch { /* tenta de novo */ }
+  };
+  setTimeout(conferir, 15000);
+  setInterval(conferir, 60000);
+};
 globalThis.__gravacaoOk = () => {
   try { const f = document.getElementById('faixa-gravacao'); if (f) f.remove(); } catch { /* */ }
 };
@@ -154,7 +179,7 @@ function _avisoCaixaAberto(caixa) {
 const $app = document.getElementById('app');
 let usuario = null;
 let categoriasCache = [];
-let APP_VERSION = '3.37.0'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
+let APP_VERSION = '3.38.0'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
 
 // API dupla: no aplicativo usa IPC (preload); num terminal em rede (navegador),
 // conversa com o servidor do computador principal via HTTP com token de sessão.
@@ -750,6 +775,12 @@ function telaPrincipal() {
       if (rec?.ok && rec.recuperacao) {
         const r = rec.recuperacao;
         // v3.37.0 — banco ausente e NENHUMA cópia com dados: aviso próprio
+        // v3.38.0 — banco com defeito no arquivo e nenhuma cópia íntegra com tantas vendas
+        if (r.defeito) {
+          alert('🛑 O ARQUIVO DO BANCO DE DADOS TEM UM DEFEITO\n\n' + r.backup
+            + '\n\nO arquivo com defeito foi guardado na pasta de dados para análise.');
+          return;
+        }
         if (r.vazio) {
           alert('🛑 BANCO DE DADOS NÃO ENCONTRADO\n\n' + r.backup
             + '\n\nNÃO faça vendas nem cadastros. Restaure um backup em Configurações → Backup '
@@ -775,6 +806,9 @@ function telaPrincipal() {
       }
     } catch {}
   }, 2500);
+
+  // v3.38.0 — vigia o pendrive de segurança (só no computador principal)
+  if (NO_APP && !globalThis.__pendriveVigiado) { globalThis.__pendriveVigiado = true; globalThis.__vigiarPendrive(api); }
 
   // Verificar atualização em background — 8 s após o boot, sem bloquear
   if (NO_APP) setTimeout(async () => {

@@ -18,3 +18,8 @@
 - 2026-11-05 — 36 arquivos gravados no disco com caminho de saída NOVO (outputs/v3370-a); sha256 conferido no disco = nuvem. CERTO.
 - 2026-11-05 — Publicação da v3.37.0 PENDENTE de autorização: criar repo público só de atualizações e abrir o principal temporariamente (repo privado bloqueia o updater: HTTP 404). Nada publicado.
 - 2026-11-06 00:16 — Marcio: "coloca public". Conferido antes: nenhum banco da loja no git (só src/dados-iniciais.db, com dados de demonstração). Commit a32f7e1 + tag v3.37.0 enviados; repo PÚBLICO; vigia publicou; API sem login devolve v3.37.0 com sha256 c0a1367b…5893. CERTO.
+- 2026-11-09 00:30 — Escopo do projeto Servidor + Terminal satélite + integração WooCommerce gravado em docs/PROJETO-SERVIDOR-SATELITES-LOJA-VIRTUAL.md (4 fases, 4 decisões com recomendação). Nenhum código alterado; backup de ESTADO/REGISTRO em backups/pre-escopo-servidor-2026-11-09. CERTO.
+- 2026-11-09 — Auditoria da perda de dados por falta de luz: 3 furos com arquivo e linha (sem descarga física; quick_check ausente; cópias no mesmo HD). CERTO.
+- 2026-11-09 — v3.38.0: descarga física via PS1 + espelho no pendrive + quick_check no boot. Função do PS1 testada no Windows real antes de embutir; 46+11 asserções; regra 6 com diff zero. CERTO.
+- 2026-11-09 — 1º neu build incluiu 5 arquivos src/.fuse_hidden* (lixo do mount, 32 KB cada). ERRADO, pego comparando a lista do .neu com o anterior; refeito sem eles e .gitignore atualizado. Comparar o conteúdo do .neu com o anterior SEMPRE.
+

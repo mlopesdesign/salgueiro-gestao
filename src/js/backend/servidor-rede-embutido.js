@@ -1,5 +1,5 @@
 // AUTO-GERADO por tools/gerar-rede-embutida.js — não editar manualmente.
-// Fonte: extensions/rede/servidor-rede.ps1. Gerado em: 2026-11-06
+// Fonte: extensions/rede/servidor-rede.ps1. Gerado em: 2026-11-09
 export const SERVIDOR_REDE_PS1 = `# Salgueiro Gestão V2 — extensão de acesso em rede (multiterminal) — v3.31.0
 # Servidor HTTP em PowerShell puro (nativo do Windows). Encaminha /api para o
 # aplicativo principal via WebSocket do Neutralino; serve as telas aos terminais.
@@ -118,7 +118,31 @@ function Bombear-WS([int]$timeoutMs) {
   elseif ($m.event -eq 'rede.impressoras'){ Enviar-Evento 'rede.impressoras.resp' @{ impressoras = @(Listar-Impressoras) } }
   elseif ($m.event -eq 'rede.imprimir')   { Imprimir-Silencioso $m.data }
   elseif ($m.event -eq 'nuvem.oauthIniciar') { Iniciar-OAuthListener ([int]$m.data.porta) }
+  elseif ($m.event -eq 'disco.descarregar') { Descarregar-Arquivos $m.data }
   return $true
+}
+
+# v3.38.0 - DESCARGA FISICA NO DISCO. O app grava o banco e o Windows segura
+# o conteudo na memoria (cache de escrita) por alguns segundos. Faltou luz nesse
+# meio tempo = arquivo de zeros. FileStream.Flush($true) chama FlushFileBuffers:
+# so volta quando o conteudo esta no disco de verdade. Vale para o arquivo
+# inteiro, mesmo escrito por outro processo (o Neutralino).
+# Lista vazia = teste de presenca (o app descobre se esta versao sabe fazer isto).
+function Descarregar-Arquivos($d) {
+  $erros = @(); $n = 0
+  foreach ($a in @($d.arquivos)) {
+    if (-not $a) { continue }
+    $fs = $null
+    try {
+      $fs = [System.IO.File]::Open([string]$a, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::ReadWrite)
+      $fs.Flush($true)
+      $n++
+    } catch {
+      $erros += ([string]$a + ': ' + [string]$_.Exception.Message)
+    } finally { if ($fs) { $fs.Dispose() } }
+  }
+  if ($erros.Count -gt 0) { Log-Rede 'DESCARGA' ($erros -join ' | ') }
+  Enviar-Evento 'disco.descarregado' @{ id = [string]$d.id; ok = ($erros.Count -eq 0); n = $n; erros = @($erros) }
 }
 
 function Listar-IPs {
@@ -885,7 +909,7 @@ try {
 }
 
 Log-Rede 'EXTENSAO' ("iniciada pid=$PID app=$ppid")
-Enviar-Evento 'rede.extensao.pronta' @{ ok = $true; v = 2 }
+Enviar-Evento 'rede.extensao.pronta' @{ ok = $true; v = 3 }
 
 $script:ultimoPai = [DateTime]::UtcNow
 # laco principal

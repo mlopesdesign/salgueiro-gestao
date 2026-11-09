@@ -3,6 +3,16 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.38.0',
+    data: '2026-11-09',
+    itens: [
+      '🛡️ FALTA DE LUZ NÃO APAGA MAIS AS VENDAS. Antes, o computador dizia "gravado" mas guardava os dados na memória por alguns segundos; se a energia caísse nesse meio tempo, o arquivo do banco ficava em branco. Agora cada gravação só é dada como pronta depois de estar fisicamente no disco.',
+      '🔌 SEGUNDA CÓPIA NUM PENDRIVE. Em Configurações → Backup, escolha um pendrive que fica sempre espetado no computador: toda gravação vai para o HD E para o pendrive, junto com as cópias automáticas. Se o HD estragar ou o arquivo dele corromper, o pendrive tem os mesmos dados, no máximo alguns segundos atrás. Se a letra do pendrive mudar, o sistema o encontra sozinho; se ele for tirado, aparece uma faixa laranja no rodapé até voltar.',
+      '🔍 CÓPIA ESTRAGADA NÃO É MAIS USADA. Ao abrir, o sistema confere o arquivo do banco página por página. Se achar defeito, volta sozinho para a cópia íntegra com mais vendas (do HD ou do pendrive). Cópia com defeito é descartada, e um arquivo com defeito não pode mais ser restaurado por engano.',
+      '⚠️ Se o banco tiver defeito e nenhuma cópia íntegra tiver todas as vendas, o sistema NÃO troca nada sozinho: guarda o arquivo e avisa para chamar o suporte, para nenhuma venda se perder.',
+    ],
+  },
+  {
     versao: '3.37.0',
     data: '2026-11-05',
     itens: [

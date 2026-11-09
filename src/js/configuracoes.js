@@ -1032,6 +1032,21 @@ async function renderNuvem(alvo) {
 // ---- Aba: Backup manual e restauração ----
 async function abaBackup(corpo) {
   const painel = el(`<div class="painel" style="padding:22px;max-width:680px">
+    <h3 style="margin:0 0 6px">🛡️ Segunda cópia no pendrive</h3>
+    <p style="color:var(--texto-suave);margin:0 0 12px">
+      Cada gravação do sistema vai para <b>dois lugares</b>: o HD deste computador e um pendrive
+      (ou outro disco) que fica <b>sempre espetado</b>. Se faltar luz ou o HD estragar, o pendrive
+      tem os mesmos dados, no máximo alguns segundos atrás. As cópias automáticas também vão para lá.
+    </p>
+    <div id="esp-estado" style="border:1px solid var(--borda);border-radius:10px;padding:12px 14px;margin-bottom:12px">Carregando…</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-primario" id="esp-escolher">🔌 Escolher o pendrive…</button>
+      <button class="btn btn-suave" id="esp-desligar" style="display:none">Desligar a segunda cópia</button>
+    </div>
+    <div class="erro" id="esp-erro" style="margin-top:8px"></div>
+
+    <hr style="border:none;border-top:1px solid var(--borda);margin:22px 0">
+
     <h3 style="margin:0 0 6px">Backup manual</h3>
     <p style="color:var(--texto-suave);margin:0 0 14px">
       Salve uma cópia completa do banco de dados onde quiser (pendrive, pasta na rede, etc.).
@@ -1060,6 +1075,48 @@ async function abaBackup(corpo) {
     <div class="erro" id="bk-erro" style="margin-top:10px"></div>
   </div>`);
   corpo.appendChild(painel);
+
+  // v3.38.0 — pendrive de segurança + descarga física no disco
+  const quando = (ms) => ms ? new Date(ms).toLocaleString('pt-BR') : '—';
+  async function desenharEspelho() {
+    const box = painel.querySelector('#esp-estado');
+    const r = await api('backup:espelhoStatus');
+    if (!r.ok) { box.textContent = r.erro || 'Não foi possível ler o estado.'; return; }
+    const d = r.descarga || {};
+    const linhaDisco = d.estado === 'ativa'
+      ? `<div>💽 Gravação direta no disco: <b style="color:var(--verde)">ativa</b> (${d.ok || 0} gravações confirmadas no disco nesta abertura)</div>`
+      : `<div>💽 Gravação direta no disco: <b style="color:#b26a00">${d.estado === 'desconhecido' ? 'testando…' : 'aguardando reabrir o sistema'}</b>
+           <span style="color:var(--texto-suave)">— passa a valer na próxima vez que o sistema for aberto.</span></div>`;
+    let linhaEsp;
+    if (!r.configurado) {
+      linhaEsp = `<div>🔌 Pendrive: <b style="color:#b26a00">não configurado</b> — hoje os dados ficam só no HD deste computador.</div>`;
+    } else if (!r.encontrado) {
+      linhaEsp = `<div>🔌 Pendrive: <b style="color:var(--vermelho)">NÃO ENCONTRADO</b> (${esc(r.pasta)}). Espete o pendrive de novo — as vendas continuam salvas no HD.</div>`;
+    } else {
+      linhaEsp = `<div>🔌 Pendrive: <b style="color:var(--verde)">gravando</b> em <code>${esc(r.pasta)}</code></div>
+        <div style="color:var(--texto-suave);font-size:13px;margin-top:2px">Última gravação: ${quando(r.ultimaOk)} · ${r.copias} cópia(s) guardada(s) no pendrive</div>`;
+    }
+    const erro = r.ultimaErro && r.encontrado ? `<div style="color:var(--vermelho);font-size:13px;margin-top:4px">Último problema: ${esc(r.ultimaErro.erro)} (${quando(r.ultimaErro.quando)})</div>` : '';
+    box.innerHTML = linhaEsp + erro + `<div style="margin-top:8px">${linhaDisco}</div>`;
+    painel.querySelector('#esp-desligar').style.display = r.configurado ? '' : 'none';
+    painel.querySelector('#esp-escolher').textContent = r.configurado ? '🔌 Trocar o pendrive…' : '🔌 Escolher o pendrive…';
+  }
+  painel.querySelector('#esp-escolher').onclick = async () => {
+    const btn = painel.querySelector('#esp-escolher'), erroEl = painel.querySelector('#esp-erro');
+    erroEl.textContent = ''; btn.disabled = true; const txt = btn.textContent; btn.textContent = '⏳ Gravando no pendrive…';
+    try {
+      const r = await api('backup:espelhoEscolher');
+      if (!r.ok) { if (r.erro !== 'Operação cancelada.') erroEl.textContent = r.erro; return; }
+      toast('Segunda cópia ligada: ' + r.pasta);
+      if (r.mesmoDisco) erroEl.textContent = 'Atenção: essa pasta fica no MESMO disco do sistema. Se o HD estragar, as duas cópias se perdem. Prefira um pendrive.';
+    } finally { btn.disabled = false; btn.textContent = txt; await desenharEspelho(); }
+  };
+  painel.querySelector('#esp-desligar').onclick = async () => {
+    if (!confirm('Desligar a segunda cópia? Os dados passam a ficar só no HD deste computador.')) return;
+    await api('backup:espelhoDesligar');
+    await desenharEspelho();
+  };
+  desenharEspelho();
 
   painel.querySelector('#bk-fazer').onclick = async () => {
     const r = await api('backup:manual');

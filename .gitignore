@@ -59,3 +59,8 @@ _to_delete/
 tools/publicar/vigia-vivo.txt
 tools/publicar/publicar.log
 tools/publicar/resultado.txt
+
+# lixo do mount do Cowork (arquivos abertos e apagados)
+.fuse_hidden*
+# bancos e diagnósticos da loja — dados de cliente, NUNCA no repositório (público)
+recuperar-loja/

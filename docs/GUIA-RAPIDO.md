@@ -534,6 +534,8 @@ Crédito parcelado. Salve e gere o relatório de evento de novo.
 | Peça sem foto no catálogo | Sai um desenho cinza. Cadastre a foto em 👗 Produtos, clicando na imagem |
 | A foto do catálogo cortou a peça | Ela sai quadrada, cortada pelo centro. Refaça com a peça centralizada |
 | Botão de gerar catálogo apagado | Nenhuma categoria marcada. Clique em **Todas** |
+| Pendrive de segurança (faixa laranja no rodapé) | Espete o pendrive de novo. Para ligar: Configurações → 💾 Backup → **🔌 Escolher o pendrive** |
+| "O arquivo do banco de dados tem um defeito" | Não venda e chame o suporte |
 
 ---
 

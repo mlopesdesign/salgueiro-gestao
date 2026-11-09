@@ -159,6 +159,12 @@ async function _escreverAtomico(arquivo, bytes) {
   // começa com o cabeçalho do SQLite nunca vai para o lugar do banco.
   await _conferirCabecalho(tmp, bytes.byteLength);
 
+  // v3.38.0 — DESCARGA FÍSICA: o Windows guarda o que foi escrito na memória e
+  // só leva ao disco segundos depois. Faltou luz nesse meio tempo = arquivo de
+  // zeros (foi o 27/10). Agora o .tmp é empurrado para o disco (FlushFileBuffers,
+  // via extensão) ANTES de tomar o lugar do banco. Sem a extensão, segue como antes.
+  await descarregarNoDisco([tmp]);
+
   // sobra de uma gravação anterior interrompida
   try { await Neutralino.filesystem.remove(old); } catch { /* não existe */ }
 
@@ -239,6 +245,8 @@ export async function salvarCopiaAutomatica(bytes, motivo) {
   const destino = `${dir}/salgueiro-auto-${ts}-${m}.db`;
   await copiarBancoPara(destino, bytes);
   await _conferirCabecalho(destino, bytes.length);
+  await descarregarNoDisco([destino]);
+  espelharCopia(destino.split('/').pop(), bytes);   // pendrive (não espera)
   try {
     const itens = (await Neutralino.filesystem.readDirectory(dir))
       .filter(e => e.entry.endsWith('.db')).map(e => e.entry);
@@ -334,7 +342,11 @@ export async function salvarBackupDiario(bytes) {
     const hoje = new Date().toISOString().slice(0, 10);
     const destino = `${dir}/salgueiro-${hoje}.db`;
     try { await Neutralino.filesystem.getStats(destino); return; } catch { /* não existe ainda */ }
-    if (bytes) await copiarBancoPara(destino, bytes);
+    if (bytes) {
+      await copiarBancoPara(destino, bytes);
+      await descarregarNoDisco([destino]);
+      espelharCopia(`salgueiro-${hoje}.db`, bytes);   // pendrive (não espera)
+    }
     // mantém as últimas 30 diárias e as últimas 20 das outras — pela DATA (v3.33.1)
     const itens = (await Neutralino.filesystem.readDirectory(dir))
       .filter(e => e.entry.endsWith('.db')).map(e => e.entry);
@@ -353,6 +365,8 @@ export async function salvarBackupCarimbado(bytes, rotulo) {
   const hora = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const destino = `${dir}/salgueiro-${rotulo}-${hora}.db`;
   await copiarBancoPara(destino, bytes);
+  await descarregarNoDisco([destino]);
+  espelharCopia(destino.split('/').pop(), bytes);
   return destino;
 }
 
@@ -515,7 +529,7 @@ export async function lerLogs(dia) {
 
 // ── App ──────────────────────────────────────────────────────────────────────
 export function versaoApp() {
-  try { return NL_APPVERSION; } catch { return '3.37.0'; }
+  try { return NL_APPVERSION; } catch { return '3.38.0'; }
 }
 
 // v3.34.2 — o reinício TEM de encerrar este processo. Na loja (27/10) a
@@ -558,4 +572,244 @@ export async function sairApp() {
 export async function carregarSchema() {
   const resp = await fetch('schema.sql');
   return resp.text();
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// v3.38.0 — DESCARGA FÍSICA NO DISCO
+// ═════════════════════════════════════════════════════════════════════════════
+// O Neutralino escreve o arquivo e devolve "ok" com os dados ainda na memória
+// do Windows (cache de escrita). Num desligamento abrupto o Windows já registrou
+// o tamanho e o nome do arquivo, mas não o conteúdo: sobra um arquivo de zeros.
+// A extensão PowerShell (já rodando, é o servidor de rede) abre o arquivo e
+// chama FlushFileBuffers — só volta quando o conteúdo está fisicamente no disco.
+//
+// Nunca trava a gravação: extensão antiga (sem o comando), ausente ou lenta →
+// segue sem a descarga (comportamento de antes) e o estado fica visível na tela
+// de Backup. Depois de 3 faltas seguidas, para de pedir e testa de novo em 60 s.
+const EXT_REDE = 'br.com.mllopes.salgueiro.rede';
+const _dsc = { estado: 'desconhecido', pend: new Map(), ouvinte: false, sondando: null,
+               ok: 0, faltas: 0, seguidas: 0, ultimaOk: null, ultimaFalha: null };
+function _ouvirDescarga() {
+  if (_dsc.ouvinte) return;
+  _dsc.ouvinte = true;
+  try {
+    Neutralino.events.on('disco.descarregado', (ev) => {
+      const d = (ev && ev.detail) || {};
+      const r = _dsc.pend.get(d.id);
+      if (r) { _dsc.pend.delete(d.id); r(d); }
+    });
+  } catch { /* sem eventos */ }
+}
+async function _pedirDescarga(arquivos, prazoMs) {
+  _ouvirDescarga();
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const resp = new Promise(res => _dsc.pend.set(id, res));
+  try { await Neutralino.extensions.dispatch(EXT_REDE, 'disco.descarregar', { id, arquivos }); }
+  catch { _dsc.pend.delete(id); return null; }
+  let tm;
+  const r = await Promise.race([resp, new Promise(res => { tm = setTimeout(() => res(null), prazoMs); })]);
+  clearTimeout(tm);
+  _dsc.pend.delete(id);
+  return r;
+}
+function _sondarDescarga() {
+  if (_dsc.sondando) return _dsc.sondando;
+  _dsc.sondando = (async () => {
+    const r = await _pedirDescarga([], 5000);
+    _dsc.estado = r ? 'ativa' : 'indisponivel';
+    _dsc.sondando = null;
+    if (!r) setTimeout(() => { if (_dsc.estado === 'indisponivel') _dsc.estado = 'desconhecido'; }, 60000);
+    return _dsc.estado;
+  })();
+  return _dsc.sondando;
+}
+export async function descarregarNoDisco(arquivos) {
+  const lista = (arquivos || []).filter(Boolean).map(String);
+  if (!lista.length) return { ok: true };
+  if (typeof Neutralino === 'undefined' || !Neutralino.extensions || !Neutralino.events) {
+    return { ok: false, motivo: 'sem-extensao' };
+  }
+  if (_dsc.estado === 'desconhecido') { _sondarDescarga(); return { ok: false, motivo: 'testando' }; }
+  if (_dsc.estado !== 'ativa') return { ok: false, motivo: 'indisponivel' };
+  const r = await _pedirDescarga(lista, 4000);
+  if (r && r.ok) {
+    _dsc.ok++; _dsc.seguidas = 0; _dsc.ultimaOk = Date.now();
+    return { ok: true };
+  }
+  _dsc.faltas++; _dsc.seguidas++;
+  _dsc.ultimaFalha = { quando: Date.now(), erro: r ? (r.erros || []).join(' · ') : 'sem resposta da extensão' };
+  try { registrarLog('DESCARGA-FALHOU', `${lista.join(', ')} — ${_dsc.ultimaFalha.erro}`); } catch { /* */ }
+  if (_dsc.seguidas >= 3) {
+    _dsc.estado = 'indisponivel';
+    setTimeout(() => { if (_dsc.estado === 'indisponivel') _dsc.estado = 'desconhecido'; }, 60000);
+  }
+  return { ok: false, motivo: 'falhou' };
+}
+export function estadoDescarga() {
+  return { estado: _dsc.estado, ok: _dsc.ok, faltas: _dsc.faltas,
+           ultimaOk: _dsc.ultimaOk, ultimaFalha: _dsc.ultimaFalha };
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// v3.38.0 — ESPELHO NO PENDRIVE (segunda gravação, outro dispositivo)
+// ═════════════════════════════════════════════════════════════════════════════
+// Toda gravação do banco vai também para um pendrive que fica sempre espetado
+// (ou outro disco). Se o HD morrer ou o arquivo dele corromper, o espelho tem
+// o mesmo conteúdo — no máximo alguns segundos atrás.
+//
+//   <pasta>/salgueiro-espelho.db           espelho do banco (atômico + descarga)
+//   <pasta>/salgueiro-espelho.db.anterior  a gravação anterior do espelho
+//   <pasta>/copias/*.db                    as mesmas cópias automáticas/diárias do HD
+//   <pasta>/.salgueiro-espelho             marca com o código desta instalação
+//
+// A letra do pendrive pode mudar (E: hoje, F: amanhã). Se a pasta sumir, o
+// sistema procura de D: a Z: uma pasta SalgueiroBackup com a MESMA marca.
+// A configuração fica em dados/espelho.json (fora do banco: precisa valer no
+// boot, antes do banco abrir, para a recuperação usar o espelho).
+export const PASTA_ESPELHO = 'SalgueiroBackup';
+const MARCA_ESPELHO = '.salgueiro-espelho';
+const ARQ_ESPELHO = 'salgueiro-espelho.db';
+const _esp = { cfg: null, encontrado: false, pastaAtual: null, ultimaBusca: 0,
+               gravando: null, pendente: null, ultimaOk: null, ultimaErro: null, gravacoes: 0 };
+
+async function _cfgEspelho() {
+  if (_esp.cfg) return _esp.cfg;
+  try { const tx = await lerTextoDados('espelho.json'); _esp.cfg = tx ? JSON.parse(tx) : {}; }
+  catch { _esp.cfg = {}; }
+  return _esp.cfg;
+}
+async function _gravarCfgEspelho(cfg) {
+  _esp.cfg = cfg;
+  await escreverTextoDados('espelho.json', JSON.stringify(cfg, null, 2));
+}
+async function _marcaConfere(pasta, id) {
+  try { return String(await Neutralino.filesystem.readFile(`${pasta}/${MARCA_ESPELHO}`)).trim() === id; }
+  catch { return false; }
+}
+// Devolve a pasta do espelho que está acessível agora, ou null.
+export async function pastaEspelho() {
+  const cfg = await _cfgEspelho();
+  if (!cfg.pasta || !cfg.id) { _esp.encontrado = false; return null; }
+  if (await _marcaConfere(cfg.pasta, cfg.id)) { _esp.encontrado = true; _esp.pastaAtual = cfg.pasta; return cfg.pasta; }
+  _esp.encontrado = false;
+  // procura em outras letras — no máximo a cada 30 s (cada letra ausente custa pouco)
+  if (Date.now() - _esp.ultimaBusca < 30000) return null;
+  _esp.ultimaBusca = Date.now();
+  for (const L of 'DEFGHIJKLMNOPQRSTUVWXYZ') {
+    const cand = `${L}:/${PASTA_ESPELHO}`;
+    if (cand === cfg.pasta) continue;
+    if (await _marcaConfere(cand, cfg.id)) {
+      try { registrarLog('ESPELHO', `pendrive reencontrado em ${cand} (antes ${cfg.pasta})`); } catch { /* */ }
+      await _gravarCfgEspelho({ ...cfg, pasta: cand });
+      _esp.encontrado = true; _esp.pastaAtual = cand;
+      return cand;
+    }
+  }
+  return null;
+}
+
+// Liga o espelho numa pasta escolhida (ex.: "E:/" ou "E:/Backups").
+// Cria <escolhida>/SalgueiroBackup (se a escolhida já não for ela) e a marca.
+export async function configurarEspelho(escolhida) {
+  let base = String(escolhida || '').replace(/\\/g, '/').replace(/\/+$/, '');
+  if (!base) throw new Error('Pasta não informada.');
+  const pasta = base.split('/').pop().toLowerCase() === PASTA_ESPELHO.toLowerCase() ? base : `${base}/${PASTA_ESPELHO}`;
+  const dados = (await dirDados()).replace(/\\/g, '/').toLowerCase();
+  if (pasta.toLowerCase().startsWith(dados.split('/salgueirogestao')[0] + '/salgueirogestao')) {
+    throw new Error('Escolha outro lugar: esta pasta é a do próprio sistema.');
+  }
+  await _garantirDir(`${pasta}/copias`);
+  const cfgAtual = await _cfgEspelho();
+  const id = cfgAtual.id || ('esp-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
+  await Neutralino.filesystem.writeFile(`${pasta}/${MARCA_ESPELHO}`, id);
+  if (!(await _marcaConfere(pasta, id))) throw new Error('Não foi possível gravar nesta pasta (protegida contra gravação?).');
+  await _gravarCfgEspelho({ pasta, id, desde: cfgAtual.desde || new Date().toISOString() });
+  _esp.encontrado = true; _esp.pastaAtual = pasta; _esp.ultimaErro = null;
+  try { registrarLog('ESPELHO', `ligado em ${pasta}`); } catch { /* */ }
+  return { pasta, mesmoDisco: pasta.slice(0, 2).toLowerCase() === dados.slice(0, 2) };
+}
+export async function desligarEspelho() {
+  const cfg = await _cfgEspelho();
+  await _gravarCfgEspelho({ id: cfg.id });   // mantém o código: religar na mesma pasta reconhece
+  _esp.encontrado = false; _esp.pastaAtual = null;
+  try { registrarLog('ESPELHO', 'desligado'); } catch { /* */ }
+}
+
+// Espelha o banco. Não espera: a venda nunca fica presa no pendrive. Se chegar
+// gravação nova enquanto uma está em andamento, guarda só a MAIS RECENTE.
+export function espelharBanco(bytes) {
+  if (!bytes || !bytes.length) return;
+  _esp.pendente = bytes;
+  if (!_esp.gravando) _esp.gravando = _loopEspelho().finally(() => { _esp.gravando = null; });
+}
+async function _loopEspelho() {
+  while (_esp.pendente) {
+    const b = _esp.pendente; _esp.pendente = null;
+    try {
+      const pasta = await pastaEspelho();
+      if (!pasta) { if ((await _cfgEspelho()).pasta) _esp.ultimaErro = { quando: Date.now(), erro: 'pendrive não encontrado' }; continue; }
+      await _escreverAtomico(`${pasta}/${ARQ_ESPELHO}`, b);
+      _esp.ultimaOk = Date.now(); _esp.gravacoes++; _esp.ultimaErro = null;
+    } catch (e) {
+      _esp.ultimaErro = { quando: Date.now(), erro: String((e && e.message) || e) };
+      try { registrarLog('ESPELHO-FALHOU', _esp.ultimaErro.erro); } catch { /* */ }
+    }
+  }
+}
+// Espera o espelho terminar (restaurar / fechar o sistema).
+export async function aguardarEspelho(prazoMs = 15000) {
+  if (!_esp.gravando) return true;
+  let tm;
+  const r = await Promise.race([_esp.gravando.then(() => true),
+    new Promise(res => { tm = setTimeout(() => res(false), prazoMs); })]);
+  clearTimeout(tm);
+  return r;
+}
+// Mesma cópia automática/diária, também no pendrive (com a mesma limpeza).
+export async function espelharCopia(nome, bytes) {
+  try {
+    if (!nome || !bytes || !bytes.length) return null;
+    const pasta = await pastaEspelho();
+    if (!pasta) return null;
+    const dir = `${pasta}/copias`;
+    await _garantirDir(dir);
+    const destino = `${dir}/${nome}`;
+    try { await Neutralino.filesystem.getStats(destino); return destino; } catch { /* não existe: grava */ }
+    await copiarBancoPara(destino, bytes);
+    await _conferirCabecalho(destino, bytes.length);
+    await descarregarNoDisco([destino]);
+    try {
+      const itens = (await Neutralino.filesystem.readDirectory(dir)).filter(e => e.entry.endsWith('.db')).map(e => e.entry);
+      for (const antigo of backupsParaApagar(itens)) { try { await Neutralino.filesystem.remove(`${dir}/${antigo}`); } catch {} }
+    } catch { /* limpeza fica para a próxima */ }
+    return destino;
+  } catch (e) {
+    try { registrarLog('ESPELHO-FALHOU', `cópia ${nome}: ${(e && e.message) || e}`); } catch { /* */ }
+    return null;
+  }
+}
+export async function estadoEspelho() {
+  const cfg = await _cfgEspelho();
+  const pasta = cfg.pasta ? await pastaEspelho() : null;
+  let copias = 0;
+  if (pasta) { try { copias = (await Neutralino.filesystem.readDirectory(`${pasta}/copias`)).filter(e => e.entry.endsWith('.db')).length; } catch { /* */ } }
+  return { configurado: !!cfg.pasta, encontrado: !!pasta, pasta: (pasta || cfg.pasta || '').replace(/\//g, '\\'),
+           desde: cfg.desde || null, ultimaOk: _esp.ultimaOk, ultimaErro: _esp.ultimaErro,
+           gravacoes: _esp.gravacoes, copias, descarga: estadoDescarga() };
+}
+// Arquivos do pendrive que servem para a recuperação do boot.
+export async function candidatosEspelho() {
+  const pasta = await pastaEspelho();
+  if (!pasta) return [];
+  const out = [];
+  for (const nome of [ARQ_ESPELHO, ARQ_ESPELHO + '.anterior', ARQ_ESPELHO + '.old', ARQ_ESPELHO + '.tmp']) {
+    try { const st = await Neutralino.filesystem.getStats(`${pasta}/${nome}`); if (st && st.size) out.push({ caminho: `${pasta}/${nome}`, nome: `pendrive: ${nome}`, data: Date.now() - out.length }); } catch { /* */ }
+  }
+  try {
+    for (const e of await Neutralino.filesystem.readDirectory(`${pasta}/copias`)) {
+      if (!e.entry.endsWith('.db')) continue;
+      out.push({ caminho: `${pasta}/copias/${e.entry}`, nome: `pendrive: ${e.entry}`, data: dataDoBackup(e.entry) });
+    }
+  } catch { /* sem cópias */ }
+  return out;
 }

@@ -228,6 +228,17 @@ ${tab(['Tabela', 'Colunas'], tbs.map(t => [`\`${t.nome}\``, t.colunas.join(', ')
 > A guarda da migração deve testar o valor **entre aspas** — sem elas o teste casa
 > com nomes de coluna parecidos e a reconstrução nunca roda.
 
+> **Gravação blindada (v3.38.0):** \`ambiente._escreverAtomico\` grava o \`.tmp\`,
+> confere o cabeçalho, pede **descarga física** (\`disco.descarregar\` → PS1
+> \`FileStream.Flush($true)\` = FlushFileBuffers) e só então troca os arquivos.
+> Sem a extensão (ou com PS1 antigo) segue sem descarga — nunca trava a venda.
+> Toda gravação do banco é **espelhada** no pendrive (\`espelharBanco\`, config
+> em \`dados/espelho.json\`, marca \`.salgueiro-espelho\`, reencontra por letra).
+> No boot o banco passa por \`radiografar(bytes, { verificar: true })\`
+> (\`PRAGMA quick_check\`); corrompido → recupera da cópia íntegra com mais vendas
+> (HD + pendrive), mas **nunca** por uma com MENOS vendas que o corrompido.
+> Mudou o PS1? Regenere \`servidor-rede-embutido.js\` (\`node tools/gerar-rede-embutida.js\`).
+
 ---
 
 ## 9. Regra de ouro do estoque

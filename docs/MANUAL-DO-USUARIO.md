@@ -1459,6 +1459,43 @@ Se o arquivo do banco **sumir** ou vier **estragado** (queda de energia, computa
 
 > Apareceu o aviso **⚠️ RECUPERAÇÃO AUTOMÁTICA**? Confira as últimas vendas antes de continuar. Se aparecer **🛑 BANCO DE DADOS NÃO ENCONTRADO**, não venda: restaure um backup do pendrive ou chame o suporte.
 
+### Falta de luz e desligamento abrupto
+
+O Windows costuma dizer "gravado" e guardar os dados na memória por alguns segundos antes de levá-los ao disco. Se a energia cair nesse intervalo, o arquivo do banco pode ficar em branco ou com um pedaço estragado. Por isso, desde a 3.38.0:
+
+1. **Cada gravação só termina quando os dados estão no disco de verdade.** O sistema força a gravação física antes de trocar o arquivo antigo pelo novo. Se faltar luz no meio, fica o arquivo antigo inteiro ou o novo inteiro, nunca um pela metade.
+2. **Ao abrir, o banco é conferido página por página.** Se houver defeito, o sistema volta sozinho para a cópia **íntegra** com mais vendas, do HD ou do pendrive. Cópia com defeito é descartada.
+3. **Se nenhuma cópia íntegra tiver todas as vendas,** o sistema **não troca nada sozinho**. Ele guarda o arquivo com defeito e mostra **🛑 O ARQUIVO DO BANCO DE DADOS TEM UM DEFEITO**. Não venda e chame o suporte.
+
+> Em **Configurações → 💾 Backup** aparece **💽 Gravação direta no disco: ativa**. Logo depois de atualizar, ela pode aparecer como "aguardando reabrir o sistema": ela passa a valer na próxima vez que o sistema for aberto.
+
+> **Recomendação forte:** ligue o computador principal (e o roteador) num **nobreak**. Nenhum programa substitui energia estável. O nobreak dá tempo de fechar o sistema com calma.
+
+### Segunda cópia no pendrive
+
+Para que serve: o backup automático fica no mesmo HD do sistema. Se o HD estragar, ele vai junto. Com o pendrive, **toda gravação vai para dois lugares**: o HD e um pendrive que fica **sempre espetado** no computador.
+
+Como ligar:
+
+1. Espete o pendrive no computador principal e deixe-o lá.
+2. Abra **Configurações → 💾 Backup**.
+3. Clique em **🔌 Escolher o pendrive…** e escolha a unidade dele (ex.: `E:`).
+4. O sistema cria a pasta **SalgueiroBackup** no pendrive e grava a primeira cópia na hora. O quadro passa a mostrar **Pendrive: gravando**.
+
+O que acontece por trás:
+
+| No pendrive | O que é |
+|---|---|
+| `salgueiro-espelho.db` | O banco inteiro, atualizado a cada gravação (no máximo segundos atrás do HD) |
+| `salgueiro-espelho.db.anterior` | A gravação anterior do espelho |
+| `copias\` | As mesmas cópias automáticas e diárias do HD |
+| `.salgueiro-espelho` | A marca que identifica esta loja. Não apague |
+
+- **A letra do pendrive mudou** (era E:, virou F:)? O sistema o encontra sozinho pela marca.
+- **Tiraram o pendrive?** As vendas continuam salvas no HD e aparece uma **faixa laranja no rodapé** até ele voltar.
+- **Faltou luz e o banco do HD estragou?** Ao abrir, o sistema usa o espelho do pendrive se ele for a melhor cópia íntegra.
+- Escolher uma pasta do **mesmo HD** do sistema funciona, mas o sistema avisa: se o HD estragar, as duas cópias se perdem.
+
 ### Faixa vermelha no topo
 
 Se o computador não conseguir gravar os dados (disco cheio, antivírus segurando o arquivo), aparece uma **faixa vermelha fixa** no alto da tela dizendo que os dados não estão sendo gravados. **Não feche o sistema** e chame o suporte — as vendas feitas nesse momento podem se perder se o sistema for fechado. A faixa some sozinha quando a gravação volta a funcionar.
@@ -1584,6 +1621,9 @@ Use isso depois de atualizar, para saber o que apareceu de novo no sistema.
 | **Esqueci a senha** | Peça a um administrador para redefinir |
 | **"Muitas tentativas erradas. Aguarde…"** | Cinco senhas erradas seguidas bloqueiam aquele usuário por 5 minutos (o tempo dobra se continuar errando). Espere e digite com calma |
 | **Faixa vermelha "dados não estão sendo gravados"** | Não feche o sistema; chame o suporte (veja Backup e segurança) |
+| **Faixa laranja "Pendrive de segurança não encontrado"** | Espete o pendrive de novo. As vendas continuam salvas no HD |
+| **Aviso "O arquivo do banco de dados tem um defeito"** | Não venda. O arquivo foi guardado; chame o suporte |
+| **"Gravação direta no disco: aguardando reabrir o sistema"** | Normal logo depois de atualizar. Feche e abra o sistema |
 | **"Esta venda já teve devolução… não pode ser cancelada"** | Use Devolver nas peças que restam |
 | **Desconto na peça pedindo senha do administrador** | É de propósito: desconto manual, no total ou na peça, sempre passa pelo administrador |
 | **Produto não aparece na busca** | Verifique se está ativo e se tem o código de barras correto |

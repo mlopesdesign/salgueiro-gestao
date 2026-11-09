@@ -475,7 +475,28 @@ const rotas = {
   },
 
   // Chamada logo antes do restartProcess do updater: nada pendente se perde.
-  'backup:salvarAgora': async () => { await db.salvarAgora(); return { ok: true }; },
+  'backup:salvarAgora': async () => { await db.salvarAgora(); try { await ambiente.aguardarEspelho(); } catch { /* */ } return { ok: true }; },
+
+  // v3.38.0 — espelho no pendrive (segunda gravação) + estado da descarga física
+  'backup:espelhoStatus': async () => ({ ok: true, ...(await ambiente.estadoEspelho()) }),
+  'backup:espelhoEscolher': async () => {
+    let pasta = null;
+    try { pasta = await Neutralino.os.showFolderDialog('Escolha o pendrive (ou outro disco) para a segunda cópia'); } catch { /* */ }
+    if (!pasta) return { ok: false, erro: 'Operação cancelada.' };
+    let r;
+    try { r = await ambiente.configurarEspelho(pasta); }
+    catch (e) { return { ok: false, erro: (e && e.message) || String(e) }; }
+    // primeira gravação na hora, e já com as cópias de hoje
+    await db.salvarAgora();
+    const bytes = db.exportar();
+    ambiente.espelharBanco(bytes);
+    const ok = await ambiente.aguardarEspelho(30000);
+    try { await ambiente.espelharCopia(`salgueiro-${new Date().toISOString().slice(0, 10)}.db`, bytes); } catch { /* */ }
+    const st = await ambiente.estadoEspelho();
+    if (!ok || !st.ultimaOk) return { ok: false, erro: 'A pasta foi marcada, mas a primeira gravação não terminou: ' + ((st.ultimaErro && st.ultimaErro.erro) || 'confira o pendrive') };
+    return { ok: true, ...st, mesmoDisco: r.mesmoDisco };
+  },
+  'backup:espelhoDesligar': async () => { await ambiente.desligarEspelho(); return { ok: true }; },
 
   // Categorias
   'categorias:listar': () => produtos.listarCategorias(db),
@@ -2435,6 +2456,8 @@ async function _restaurarBytes(bytes, opcoes) {
   try { if (_dbTimerLimpar) _dbTimerLimpar(); } catch { /* */ }
   try {
     await ambiente.salvarBanco(bytes);
+    ambiente.espelharBanco(bytes);                 // v3.38.0 — o pendrive acompanha a restauração
+    try { await ambiente.aguardarEspelho(); } catch { /* */ }
   } catch (e) {
     // v3.37.0 — falhou ao gravar o backup: o banco atual continua no disco e
     // este processo VOLTA a gravar normalmente (antes ficava mudo até fechar).
@@ -2491,6 +2514,7 @@ function _consumirTokenDesconto(token) {
 // (pdv.registrarVenda → estoques.aplicar), não por estas rotas. Incluí-las aqui
 // travaria o caixa.
 const ROTAS_SO_ADMIN = new Set([
+  'backup:espelhoEscolher', 'backup:espelhoDesligar',                     // v3.38.0
   'recuperacao:posicao', 'recuperacao:previa', 'recuperacao:confirmar',   // v3.34.0
   'estoque:movimentar',      // entrada, saída manual e ajuste de inventário
   'estoques:salvar',         // criar/editar local de estoque
@@ -2530,6 +2554,10 @@ async function processar(canal, payload, sess) {
     // errada para quem tem a permissão mas não é admin.
     if (ROTAS_SO_ADMIN.has(canal) && (!sess.usuario || sess.usuario.perfil !== 'admin')) {
       return { ok: false, erro: 'Apenas o administrador pode fazer isto.' };
+    }
+    // v3.38.0 — mexer no pendrive de segurança só no computador principal
+    if ((canal === 'backup:espelhoEscolher' || canal === 'backup:espelhoDesligar') && sess !== sessao) {
+      return { ok: false, erro: 'Isto só pode ser feito no computador principal.' };
     }
     const permNec = PERM_ROTA[canal];
     if (permNec && !permissoes.pode(sess.usuario, permNec)) {
@@ -2742,6 +2770,7 @@ const PERM_ROTA = {
   'backup:manual': 'config.gerenciar', 'backup:restaurar': 'config.gerenciar',
   'backup:listarLocais': 'config.gerenciar', 'backup:restaurarLocal': 'config.gerenciar',
   'backup:preAtualizacao': 'config.gerenciar', 'backup:salvarAgora': 'config.gerenciar',
+  'backup:espelhoEscolher': 'config.gerenciar', 'backup:espelhoDesligar': 'config.gerenciar',
   'rede:status': 'config.gerenciar', 'rede:aplicar': 'config.gerenciar', 'rede:diagnostico': 'config.gerenciar',
   'rede:abrirNavegador': 'config.gerenciar',
   'auth:listarUsuarios': 'usuarios.gerenciar', 'auth:salvarUsuario': 'usuarios.gerenciar',
@@ -2820,10 +2849,16 @@ async function _iniciar() {
   //     antes isso criava um banco novo vazio e apagava o .anterior bom).
   // Escolhe, entre o .anterior e TODAS as cópias, a que tem MAIS VENDAS
   // (empate: a mais nova) — uma cópia vazia recente nunca vence uma cheia.
-  const _radAtual = bytesExistentes ? await radiografar(bytesExistentes)
+  // v3.38.0 — o banco do disco passa pelo PRAGMA quick_check: arquivo com um
+  // pedaço corrompido (desligamento no meio da escrita) também dispara a recuperação.
+  const _radAtual = bytesExistentes ? await radiografar(bytesExistentes, { verificar: true })
                                     : { tabelasOk: false, temDados: false, totalDados: 0, vendas: 0, produtos: 0 };
   const _ausente = !bytesExistentes && (_jaInicializado || _temCopias);
-  const _precisaRecuperar = _ausente || (bytesExistentes && (!_radAtual.tabelasOk || !_radAtual.temDados));
+  const _corrompido = !!(bytesExistentes && _radAtual.tabelasOk && _radAtual.integro === false);
+  if (_corrompido) {
+    try { await ambiente.registrarLog('BANCO-CORROMPIDO', `quick_check reprovou o salgueiro.db (${_radAtual.vendas} vendas legíveis): ${_radAtual.defeito || ''}`); } catch { /* */ }
+  }
+  const _precisaRecuperar = _ausente || _corrompido || (bytesExistentes && (!_radAtual.tabelasOk || !_radAtual.temDados));
   if (_precisaRecuperar) {
     if (bytesExistentes && ambiente.estaZerado(bytesExistentes)) {
       try { await ambiente.registrarLog('BANCO-ZERADO', `salgueiro.db com ${bytesExistentes.length} bytes, todos zero (desligamento abrupto depois de gravar)`); } catch { /* */ }
@@ -2843,15 +2878,39 @@ async function _iniciar() {
         if (/^banco-com-problema-/.test(b.nome)) continue;   // é o banco ruim de outra vez
         cands.push({ nome: b.nome, origem: b.nome, data: b.data || ambiente.dataDoBackup(b.nome, b.quando) });
       }
-      let melhor = null;
+      // v3.38.0 — o espelho do pendrive também concorre (fica segundos atrás do HD)
+      try {
+        for (const e of await ambiente.candidatosEspelho()) cands.push({ ...e, origem: e.nome });
+      } catch { /* sem pendrive */ }
+      // 1ª passada (barata): conta. 2ª passada: quick_check na ordem de
+      // preferência (mais vendas, depois mais nova) até achar a primeira íntegra.
+      const contadas = [];
       for (const c of cands) {
         let bytes = c.bytes;
-        if (!bytes) { try { bytes = await ambiente.lerBackupLocal(c.nome); } catch { continue; } }
+        if (!bytes) {
+          try { bytes = c.caminho ? await ambiente.lerArquivoBinario(c.caminho) : await ambiente.lerBackupLocal(c.nome); }
+          catch { continue; }
+        }
         const r = await radiografar(bytes);
         if (!r.tabelasOk || !r.temDados) continue;
-        if (!melhor || r.vendas > melhor.r.vendas || (r.vendas === melhor.r.vendas && (c.data || 0) > (melhor.c.data || 0))) {
-          melhor = { c, r, bytes };
-        }
+        contadas.push({ c, r, bytes });
+      }
+      contadas.sort((a, b) => (b.r.vendas - a.r.vendas) || ((b.c.data || 0) - (a.c.data || 0)));
+      let melhor = null;
+      for (const x of contadas) {
+        const v = await radiografar(x.bytes, { verificar: true });
+        if (v.integro) { melhor = { c: x.c, r: v, bytes: x.bytes }; break; }
+        try { await ambiente.registrarLog('COPIA-CORROMPIDA', `${x.c.nome} reprovada no quick_check: ${v.defeito || ''}`); } catch { /* */ }
+      }
+      // Banco do disco corrompido mas com MAIS vendas que a melhor cópia íntegra:
+      // trocar apagaria vendas. Não troca sozinho — guarda o arquivo e avisa.
+      if (melhor && _corrompido && melhor.r.vendas < _radAtual.vendas) {
+        const hora = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        try { await ambiente.copiarBancoPara(`${await ambiente.dirDados()}/banco-com-problema-${hora}.db`, bytesExistentes); } catch { /* */ }
+        RECUPERACAO_BOOT = { backup: `O banco tem um DEFEITO no arquivo e a melhor cópia íntegra (${melhor.c.nome}) tem menos vendas `
+          + `(${melhor.r.vendas} contra ${_radAtual.vendas}). Nada foi trocado. Chame o suporte antes de vender.`, defeito: true };
+        try { await ambiente.registrarLog('RECUPERACAO', `banco corrompido mantido: melhor cópia íntegra ${melhor.c.nome} tem ${melhor.r.vendas} vendas contra ${_radAtual.vendas}`); } catch { /* */ }
+        melhor = null;
       }
       if (melhor) {
         const hora = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -2866,7 +2925,7 @@ async function _iniciar() {
         RECUPERACAO_BOOT = { backup: melhor.c.origem, vendas: melhor.r.vendas, produtos: melhor.r.produtos,
                              data: melhor.c.data || Date.now() };
         try {
-          await ambiente.registrarLog('RECUPERACAO', `banco ${_ausente ? 'AUSENTE' : (_radAtual.tabelasOk ? 'sem dados' : 'sem tabelas')} `
+          await ambiente.registrarLog('RECUPERACAO', `banco ${_ausente ? 'AUSENTE' : _corrompido ? 'CORROMPIDO' : (_radAtual.tabelasOk ? 'sem dados' : 'sem tabelas')} `
             + `→ restaurado de ${melhor.c.nome} (${melhor.r.vendas} vendas, ${melhor.r.produtos} produtos)`);
         } catch { /* */ }
         console.warn(`[recuperação] restaurado de ${melhor.c.nome}`);
@@ -2924,6 +2983,7 @@ async function _iniciar() {
       return;
     }
     await ambiente.salvarBanco(bytes);   // erro sobe para db._salvarEmDisco → faixa vermelha
+    ambiente.espelharBanco(bytes);       // v3.38.0 — segunda gravação no pendrive (não espera)
     _tamanhoBom = bytes.length;
     _permitirEncolher = false;
     try { if (typeof globalThis.__gravacaoOk === 'function') globalThis.__gravacaoOk(); } catch { /* */ }
@@ -3223,6 +3283,7 @@ async function _iniciar() {
     try { await ambiente.registrarLog('APP', 'fechado pelo usuário (X / Alt+F4)'); } catch (_) {}
     try { await db.salvarAgora(); } catch (_) {}
     try { await copiaSeguranca('ao-fechar'); } catch (_) {}   // v3.34.0
+    try { await ambiente.aguardarEspelho(); } catch (_) {}     // v3.38.0 — pendrive em dia antes de sair
     await ambiente.sairApp();
   };
 }

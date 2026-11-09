@@ -9,14 +9,24 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.37.0 — publicada 06/11/2026 00:16 (Latest, asset conferido sem login) · repositório PÚBLICO por ordem do Marcio |
-| **Data do último build** | 2026-11-05 |
+| **Versão atual** | 3.38.0 — gravação blindada + pendrive (09/11/2026) · 3.37.0 era a anterior · repositório PÚBLICO por ordem do Marcio |
+| **Data do último build** | 2026-11-09 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
-| **GRAPHIFY** | atualizado para 3.37.0 em 2026-11-05 ✓ (33 módulos core · 170 rotas · 37 tabelas) |
-| **5 lugares da versão** | os 5 em 3.37.0 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
+| **GRAPHIFY** | atualizado para 3.38.0 em 2026-11-09 ✓ (33 módulos core · 173 rotas · 37 tabelas) |
+| **5 lugares da versão** | os 5 em 3.38.0 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
 
 ---
+
+## v3.38.0 — gravação blindada contra falta de luz + pendrive (09/11/2026)
+
+- Pedido do Marcio: perda de dados por falta de luz / desligamento abrupto; **gravar em dois lugares** (HD + pendrive sempre espetado) como terceira segurança (ele já tem espelhamento de HD e Google Drive).
+- Furos achados (arquivo e linha na versão anterior): `ambiente.js:151` `_escreverAtomico` sem descarga física (a conferência lia o cache); `db.js:161` `radiografar` só contava linhas (banco com 4 KB de lixo passava com 2.582 vendas); todas as cópias em `%APPDATA%` no mesmo HD.
+- Feito: descarga física via PS1 (`disco.descarregar`, testada no Windows: 3 MB/237 ms); espelho no pendrive + cópias; `PRAGMA quick_check` no boot/escolha de cópia/restauração; tela em Configurações › Backup; faixa laranja se o pendrive sumir.
+- Build: `resources.neu` sha256 `86661244575c35513bb6b85d8fdc5e23e9407807c08b36cdc2a961fa6bac542c` (6.611.943 bytes) · `instalador\Salgueiro Gestao Setup v3.38.0.exe` sha256 `ea27a376…d364` (15.584.014 bytes).
+- Backup antes de mexer: `backups\pre-v3.38.0-2026-11-09\` (14 arquivos).
+- Testes: v3380 46/46 · tela backup 11/11 · restauração-gruda 14/14. Falhas antigas inalteradas (codigos-restauracao 1 — 'antes-codigos' removido na 3.36.0; consignado-rel; origem-vendas).
+- **Depois de instalar, ligar o pendrive no PC principal:** Configurações › Backup › Escolher o pendrive. A descarga física vale na 2ª abertura após o update.
 
 ## v3.37.0 — correções da auditoria (05/11/2026, noite)
 
@@ -37,6 +47,8 @@ O "dois cliques em PUBLICAR.bat" está REVOGADO. Detalhe: regra 3 do `REGRAS-CRI
 **v3.30.0 publicada assim** (07/10/2026 00:24 UTC, 6.485.691 bytes conferidos).
 
 ## PLANO DA SEMANA DE 09/11/2026 (ordem do Marcio, 05/11 22:23)
+
+> **09/11/2026 — ESCOPO GRAVADO:** `docs/PROJETO-SERVIDOR-SATELITES-LOJA-VIRTUAL.md`. PC do escritório vira servidor (modo servidor), PDVs recebem o programa "Salgueiro Terminal" (interface vem do servidor, impressão local, atualiza pela rede da loja), loja virtual Woo via fila no servidor + plugin "ML Salgueiro Sync" (PDV manda no estoque, SKU = código de barras). Aguardando as 4 decisões da seção 6; próxima etapa: Fase 1 (modo servidor).
 
 **Ponto de retorno:** `backups\ESTADO-v3.36.0-FUNCIONANDO-2026-11-05\` — instalador
 v3.36.0, resources.neu (f48d6bf4…), código da tag, bundle git completo, LEIA-ME.
