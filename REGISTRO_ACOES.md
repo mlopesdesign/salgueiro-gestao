@@ -46,3 +46,7 @@
 - 2026-11-09 19:49 — Marcio mandou voltar: reinstalados servidor 3.40.1 e terminal 1.0.0 (ultima versao que funcionava). 1a tentativa deixou a pasta sem o .exe (atalho em branco); 2a instalacao completou. Porta 2020 respondendo, dois atalhos com icone. Codigo do repositorio revertido para 3.40.1 (git revert). ERRADO meu: mexi na descoberta/porta sem ordem. Regra: so mexer no que foi mandado.
 
 - 2026-11-12 14:31 — Copiados para o pendrive F: (ESD-USB, 8 GB) os instaladores Salgueiro Terminal Setup v1.0.0.exe e Salgueiro Gestao Setup v3.40.1.exe (versoes em uso), hash conferido igual ao original. CERTO. Proximo assunto anotado: PDV virtual 'Carrinho' (usuario/loja acessado pelo telefone na rua), mesmo esquema da loja virtual — aguardando ordem do Marcio.
+- 2026-11-12 17:15 — Publicada a 3.40.1 por ordem do Marcio. O vigia de publicação falhou duas vezes ao enviar o código (sem mensagem); enviei código, tag e release direto pelo git/gh. CERTO.
+- 2026-11-12 17:40 — Errado meu antes: deixei o Marcio achar que o modo servidor estava online. Regra: ao fim de cada entrega dizer claramente se está PUBLICADA ou não.
+- 2026-11-12 18:00 — 3.40.2 + terminal 1.0.1. Teste real no Windows: vigia por Register-ScheduledTask sem admin, rodando a cada minuto, 0 detecções; terminal 1.0.0 → 1.0.1 pela rede ficou aberto (achado: a 1.0.0 fechava depois de se atualizar — a 1.0.1 corrige); 1.0.1 → 1.0.2 de teste pela troca adiada reabriu. Instalador silencioso parou no UAC do firewall (sem gente na frente) — matei o Setup, o UAC ficou na tela. CERTO, com essa ressalva.
+

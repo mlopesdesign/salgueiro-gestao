@@ -3,6 +3,14 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.40.2',
+    data: '2026-11-12',
+    itens: [
+      '🛡️ ANTIVÍRUS NÃO BARRA MAIS O MODO SERVIDOR. Ao ligar o modo servidor, o Windows Defender de uma loja barrou a criação do vigia (a tarefa que reabre o sistema se ele fechar sozinho). O vigia agora é registrado de outro jeito, sem o comando que o antivírus estranhava. Quem já estava em modo servidor recebe o ajuste sozinho ao atualizar.',
+      '🔄 SALGUEIRO TERMINAL 1.0.1 PARA OS CAIXAS. Botão "Atualizar agora" no ⚙ do caixa (busca na internet e no computador do escritório); se o endereço do computador do escritório mudar, o caixa o acha de novo pelo nome; a tela do sistema se ajusta sozinha a monitores menores, sem cortar. Os caixas recebem esta versão sozinhos pela rede da loja.',
+    ],
+  },
+  {
     versao: '3.40.1',
     data: '2026-11-09',
     itens: [

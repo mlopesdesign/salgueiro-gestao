@@ -5,16 +5,26 @@
 
 ---
 
+
+## Sessão 12/11/2026 (tarde)
+
+- 3.40.1 publicada (o Marcio tinha segurado a publicação; o cliente atualizou e ficou na 3.38.0 sem modo servidor). Instalada no cliente pelo pendrive.
+- No cliente o Defender barrou `schtasks /Create ... wscript vigia-servidor.vbs` → 3.40.2 registra o vigia por `Register-ScheduledTask`.
+- No cliente o terminal 1.0.0 não achou o servidor sozinho (192.168.15.77:2020; manual funcionou) → terminal 1.0.1: acha pelo nome do computador, mostra a rede do caixa quando não acha, botão Atualizar agora (internet + servidor), autoajuste de resolução, janela cabe no monitor, reabre sozinho depois de atualizar.
+- Pendrive F: com Setup Terminal 1.0.0 e Gestão 3.40.1 (12/11 14:31).
+- Pendência no PC do Marcio: um pedido de permissão (UAC) do firewall ficou aberto na tela desde 17:43 (teste do instalador). Pode cancelar.
+- Monitor do cliente (VGA, 1440×900) com imagem mais larga: ajuste Coarse/H-Position/Auto do próprio monitor.
+
 ## 1. Situação geral
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.40.1 — Salgueiro Terminal + login com servidor minimizado (09/11/2026) · 3.39.0/3.40.0/3.40.1 NÃO publicadas · 3.38.0 publicada 01:03 · repositório PÚBLICO por ordem do Marcio |
+| **Versão atual** | 3.40.2 — vigia sem bloqueio do Defender + Salgueiro Terminal 1.0.1 (12/11/2026) · publicada |
 | **Data do último build** | 2026-11-09 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
 | **GRAPHIFY** | atualizado para 3.40.0 em 2026-11-09 ✓ |
-| **5 lugares da versão** | os 5 em 3.40.1 ✓ (neutralino.config.json, app.js, ambiente.js, novidades.js, salgueiro-setup.nsi) |
+| **5 lugares da versão** | os 5 em 3.40.2 ✓ |
 
 ---
 

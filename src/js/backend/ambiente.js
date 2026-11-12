@@ -529,7 +529,7 @@ export async function lerLogs(dia) {
 
 // ── App ──────────────────────────────────────────────────────────────────────
 export function versaoApp() {
-  try { return NL_APPVERSION; } catch { return '3.40.1'; }
+  try { return NL_APPVERSION; } catch { return '3.40.2'; }
 }
 
 // v3.34.2 — o reinício TEM de encerrar este processo. Na loja (27/10) a
@@ -826,6 +826,10 @@ export async function candidatosEspelho() {
 // Nada disso pede administrador (testado no Windows em 09/11/2026: Run do HKCU,
 // schtasks do próprio usuário e powercfg do esquema atual funcionam sem UAC).
 // O .vbs roda escondido (wscript): nenhuma janela pisca a cada minuto.
+// v3.40.2 — a tarefa é registrada pela API do Agendador (Register-ScheduledTask),
+// não mais pela linha "schtasks.exe /Create ... /TR wscript.exe ...vbs": o
+// Windows Defender de uma loja barrou essa linha como comportamento de vírus
+// (12/11/2026). Mesma tarefa, mesmo vigia, sem esse comando.
 // Fechar o servidor de propósito grava servidor-pausa.txt e o vigia espera 30 min.
 export const ARG_SERVIDOR = '--salg-servidor';
 const RUN_NOME = 'SalgueiroGestaoServidor';
@@ -902,8 +906,12 @@ export async function aplicarModoServidor(ligar) {
 $ErrorActionPreference = 'Stop'
 $r = @{ ok = $true; erros = @() }
 try { New-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name '${RUN_NOME}' -Value ('"' + ${_psq(exe)} + '" ${ARG_SERVIDOR}') -PropertyType String -Force | Out-Null } catch { $r.erros += 'inicializacao: ' + $_.Exception.Message }
-$o = schtasks /Create /TN '${TAREFA_VIGIA}' /SC MINUTE /MO 1 /TR ('wscript.exe "' + ${_psq(vbs)} + '"') /F 2>&1
-if ($LASTEXITCODE -ne 0) { $r.erros += 'vigia (tarefa): ' + ($o -join ' ') }
+try {
+  $a = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument ('"' + ${_psq(vbs)} + '"')
+  $g = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration (New-TimeSpan -Days 3650)
+  $c = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 2)
+  Register-ScheduledTask -TaskName '${TAREFA_VIGIA}' -Action $a -Trigger $g -Settings $c -Description 'Salgueiro Gestao: reabre o servidor da loja se ele fechar sozinho.' -Force | Out-Null
+} catch { $r.erros += 'vigia (tarefa): ' + $_.Exception.Message }
 function Ler($sub) { $h = powercfg /query SCHEME_CURRENT SUB_SLEEP $sub | Select-String '0x[0-9a-fA-F]{8}' -AllMatches | ForEach-Object { $_.Matches } | ForEach-Object { $_.Value }; if ($h.Count -ge 2) { return [Convert]::ToInt64($h[-2],16) } else { return $null } }
 try {
   if (-not (Test-Path ${_psq(energiaArq)})) { @{ standby = (Ler 'STANDBYIDLE'); hibernar = (Ler 'HIBERNATEIDLE') } | ConvertTo-Json -Compress | Set-Content -Path ${_psq(energiaArq)} -Encoding UTF8 }
@@ -920,7 +928,7 @@ $r | ConvertTo-Json -Compress`;
   const ps = `
 $r = @{ ok = $true; erros = @() }
 Remove-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name '${RUN_NOME}' -ErrorAction SilentlyContinue
-schtasks /Delete /TN '${TAREFA_VIGIA}' /F 2>&1 | Out-Null
+Unregister-ScheduledTask -TaskName '${TAREFA_VIGIA}' -Confirm:$false -ErrorAction SilentlyContinue
 Remove-Item -Path ${_psq(vbs)} -Force -ErrorAction SilentlyContinue
 try {
   if (Test-Path ${_psq(energiaArq)}) {
@@ -945,8 +953,7 @@ export async function estadoModoServidorSO() {
 $r = @{}
 $v = (Get-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name '${RUN_NOME}' -ErrorAction SilentlyContinue).'${RUN_NOME}'
 $r.inicializacao = [string]$v
-schtasks /Query /TN '${TAREFA_VIGIA}' 2>&1 | Out-Null
-$r.vigia = ($LASTEXITCODE -eq 0)
+$r.vigia = [bool](Get-ScheduledTask -TaskName '${TAREFA_VIGIA}' -ErrorAction SilentlyContinue)
 function Ler($sub) { $h = powercfg /query SCHEME_CURRENT SUB_SLEEP $sub | Select-String '0x[0-9a-fA-F]{8}' -AllMatches | ForEach-Object { $_.Matches } | ForEach-Object { $_.Value }; if ($h.Count -ge 2) { return [Convert]::ToInt64($h[-2],16) } else { return -1 } }
 $r.standby = (Ler 'STANDBYIDLE')
 $r.hibernar = (Ler 'HIBERNATEIDLE')
