@@ -50,3 +50,4 @@
 - 2026-11-12 17:40 — Errado meu antes: deixei o Marcio achar que o modo servidor estava online. Regra: ao fim de cada entrega dizer claramente se está PUBLICADA ou não.
 - 2026-11-12 18:00 — 3.40.2 + terminal 1.0.1. Teste real no Windows: vigia por Register-ScheduledTask sem admin, rodando a cada minuto, 0 detecções; terminal 1.0.0 → 1.0.1 pela rede ficou aberto (achado: a 1.0.0 fechava depois de se atualizar — a 1.0.1 corrige); 1.0.1 → 1.0.2 de teste pela troca adiada reabriu. Instalador silencioso parou no UAC do firewall (sem gente na frente) — matei o Setup, o UAC ficou na tela. CERTO, com essa ressalva.
 
+- 2026-11-12 18:22 — Terminal 1.0.1: impressoras escolhidas sozinhas na primeira vez (Marcio: terminais abriam a janela do Windows). Conferido no Windows real. Rebuild de terminal, Salgueiro e instaladores. CERTO.
