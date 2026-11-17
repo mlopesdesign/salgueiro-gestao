@@ -3,6 +3,15 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.41.0',
+    data: '2026-11-16',
+    itens: [
+      '🏷️ DESCONTO À VISTA SÓ QUANDO A CAIXA MARCAR. Na tela de pagamento apareceu a caixinha "Dar desconto à vista" — começa desmarcada. Marcada, o desconto entra com as mesmas regras de antes (Pix ou dinheiro, a partir do valor mínimo); desmarcada, a venda sai sem desconto. Se marcar e a venda não se encaixar nas regras, a tela diz o motivo.',
+      '🖨️ ESTOQUE PARA O ESTOQUISTA, SEM VALORES. Em Relatórios → 📦 Estoque, depois de gerar, há dois botões: "Imprimir com valores" (como está na tela) e "Imprimir para conferência (sem valores)" — só as quantidades, sem custo, sem preço de venda e sem o que foi vendido, com a coluna "Contado" para anotar à mão.',
+      '📊 COMPARATIVO ENTRE LOJAS OBEDECE À DATA E HORA. Em Relatórios → Por loja → "Todas — comparativo entre lojas", o resultado agora conta só as vendas entre a abertura e o fechamento escolhidos (antes contava os dias inteiros das duas datas). O período aparece no topo do relatório.',
+    ],
+  },
+  {
     versao: '3.40.2',
     data: '2026-11-12',
     itens: [

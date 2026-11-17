@@ -205,9 +205,28 @@ function consignadosMensal(db, p) {
 }
 
 // Receita separada por loja no período (com total consolidado)
+// v3.41.0 — o comparativo entre lojas obedece à DATA E HORA escolhidas na
+// tela (abertura → fechamento), igual ao relatório de uma loja. Antes recebia
+// só o DIA de cada ponta e contava os dias inteiros: num evento sábado 20h →
+// domingo 4h entravam todas as vendas de sábado e de domingo (Marcio, 16/11).
+// p: { inicio:'YYYY-MM-DD HH:MM', fim:'YYYY-MM-DD HH:MM' } ou, como antes,
+//    { de:'YYYY-MM-DD', ate:'YYYY-MM-DD' } (dias inteiros).
 function receitaPorLoja(db, p) {
-  const de = p.de || new Date().toISOString().slice(0, 8) + '01';
-  const ate = p.ate || new Date().toISOString().slice(0, 10);
+  p = p || {};
+  const RX = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/, RD = /^\d{4}-\d{2}-\d{2}$/;
+  const limpa = (s) => String(s || '').replace('T', ' ').trim();
+  let inicio, fim;
+  if (RX.test(limpa(p.inicio)) && RX.test(limpa(p.fim))) {
+    inicio = limpa(p.inicio).slice(0, 16) + ':00';
+    fim = limpa(p.fim).slice(0, 16) + ':59';
+  } else {
+    const agora = new Date();
+    const hoje = new Date(agora.getTime() - agora.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    const de = RD.test(p.de || '') ? p.de : hoje.slice(0, 8) + '01';
+    const ate = RD.test(p.ate || '') ? p.ate : hoje;
+    inicio = de + ' 00:00:00'; fim = ate + ' 23:59:59';
+  }
+  if (fim < inicio) return { ok: false, erro: 'O fechamento precisa ser depois da abertura.' };
   const linhas = db.prepare(`
     SELECT l.id loja_id, l.nome loja,
            COUNT(v.id) qtd,
@@ -215,14 +234,14 @@ function receitaPorLoja(db, p) {
            COALESCE(AVG(${_recebido}),0) ticket
     FROM lojas l
     LEFT JOIN vendas v ON v.loja_id = l.id AND v.status='concluida'
-                       AND date(v.criado_em) BETWEEN ? AND ?
+                       AND v.criado_em BETWEEN ? AND ?
     WHERE l.ativo = 1
     GROUP BY l.id, l.nome
     ORDER BY total DESC, l.nome
-  `).all(de, ate);
+  `).all(inicio, fim);
   let total = 0, qtd = 0;
   for (const l of linhas) { total += l.total; qtd += l.qtd; l.total = arred(l.total); l.ticket = arred(l.ticket); }
-  return { ok: true, de, ate, lojas: linhas, total: arred(total), qtd };
+  return { ok: true, inicio, fim, de: inicio.slice(0, 10), ate: fim.slice(0, 10), lojas: linhas, total: arred(total), qtd };
 }
 
 // ── Produtos mais vendidos (v3.30.0) ──────────────────────────────────────

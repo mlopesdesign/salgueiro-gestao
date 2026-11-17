@@ -975,11 +975,15 @@ async function abaEvento(corpo, opcoes) {
 
   async function gerar() {
     if (porLoja && lojaSel() === 'comp') {
-      // Comparativo entre as lojas (a tela antiga da aba), no dia da abertura
-      // até o dia do fechamento.
+      // Comparativo entre as lojas: obedece à data E hora de abertura e
+      // fechamento, como o relatório de uma loja (v3.41.0 — antes contava os
+      // dias inteiros das duas pontas).
+      const ini = q('#ev-ini').value, fimV = q('#ev-fim').value;
+      if (!ini || !fimV) { toast('Informe abertura e fechamento.', true); return; }
+      if (fimV <= ini) { toast('O fechamento precisa ser depois da abertura.', true); return; }
       res.innerHTML = '';
       dados = null;
-      await abaPorLoja(res, { de: String(q('#ev-ini').value).slice(0, 10), ate: String(q('#ev-fim').value).slice(0, 10) });
+      await abaPorLoja(res, { inicio: ini, fim: fimV });
       q('#ev-print').disabled = false;
       q('#ev-xlsx').disabled = true;
       return;
@@ -1080,8 +1084,11 @@ async function abaPorLoja(corpo, per) {
       </td></tr>`;
   }).join('');
 
+  const _fmt = (s) => { const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})/.exec(String(s || '')); return m ? `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}` : ''; };
+  const periodoTxt = r.inicio && r.fim ? `${_fmt(r.inicio)} → ${_fmt(r.fim)}` : '';
   const bloco = el(`
     <div>
+      ${periodoTxt ? `<div class="painel" style="margin-bottom:14px"><div class="barra"><b>📅 Período</b><span>${esc(periodoTxt)}</span></div></div>` : ''}
       <div class="cards">
         <div class="card"><div class="rotulo">Lojas ativas</div><div class="valor">${r.lojas.length}</div></div>
         <div class="card"><div class="rotulo">Vendas (todas)</div><div class="valor">${r.qtd}</div></div>
@@ -1364,6 +1371,11 @@ async function abaEstoque(corpo) {
         <button class="btn btn-primario" id="es-gerar">Gerar relatório</button>
         <button class="btn btn-suave" id="es-xlsx" disabled>📊 Excel</button>
       </div>
+      <div class="est-opcoes est-imprimir">
+        <button class="btn btn-suave" id="es-imp-valores" disabled title="Imprime como está na tela, com os valores marcados">🖨️ Imprimir com valores</button>
+        <button class="btn btn-suave" id="es-imp-conferencia" disabled title="Só quantidades: sem custo, sem preço de venda e sem o que foi vendido">🖨️ Imprimir para conferência (sem valores)</button>
+        <span class="est-dica" style="margin:0">Para o estoquista: <b>sem valores</b> sai só com as quantidades e a coluna “Contado” para anotar.</span>
+      </div>
       <p class="est-dica">
         Para <b>bater o estoque com o físico</b>, marque “Contado”, imprima e conte peça por peça.
         Para <b>conferir uma remessa</b>, use “Cadastrados de/até”.
@@ -1407,6 +1419,8 @@ async function abaEstoque(corpo) {
     if (!r.ok) { q('#es-saida').innerHTML = `<div class="vazio">${esc(r.erro || 'Erro ao gerar.')}</div>`; return; }
     ultimo = r;
     q('#es-xlsx').disabled = !r.produtos.length;
+    q('#es-imp-valores').disabled = !r.produtos.length;
+    q('#es-imp-conferencia').disabled = !r.produtos.length;
     q('#es-saida').innerHTML = montarHtml(r, opcoes());
   }
 
@@ -1418,6 +1432,26 @@ async function abaEstoque(corpo) {
     }));
   // ligar a movimentação exige ir ao banco de novo (os dados não vêm por padrão)
   q('#es-mov').addEventListener('change', () => { if (ultimo) gerar(); });
+
+  // v3.41.0 — impressão com e sem valores (pedido do Marcio, 17/11/2026): a
+  // folha que vai para o estoquista conferir não pode mostrar custo, preço de
+  // venda nem o que foi vendido. A versão "sem valores" monta a folha com essas
+  // colunas DESLIGADAS (independe das caixinhas da tela) e liga o "Contado".
+  const _filtrosTxt = () => {
+    const sel = (s) => (q(s).selectedOptions[0] || {}).textContent || '';
+    const partes = [sel('#es-cat'), sel('#es-forn'), sel('#es-sit')];
+    if (q('#es-de').value || q('#es-ate').value) partes.push(`cadastrados ${dataBr(q('#es-de').value)} a ${dataBr(q('#es-ate').value)}`);
+    return partes.filter(Boolean).join(' · ');
+  };
+  q('#es-imp-valores').onclick = () => {
+    if (!ultimo) return;
+    imprimirRelatorio(`Estoque — ${_filtrosTxt()}`, montarHtml(ultimo, opcoes()));
+  };
+  q('#es-imp-conferencia').onclick = () => {
+    if (!ultimo) return;
+    const o = { ...opcoes(), custo: false, venda: false, mov: false, dataVenda: false, contado: true };
+    imprimirRelatorio(`Conferência de estoque (sem valores) — ${_filtrosTxt()}`, montarHtml(ultimo, o));
+  };
 
   q('#es-xlsx').onclick = () => {
     if (!ultimo) return;

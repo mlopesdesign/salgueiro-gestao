@@ -848,11 +848,23 @@ function modalPagamento(total, descontoGeral, pontosResgate, aoConcluir, descont
   const minimoAvista  = Number(cfg.desconto_avista_minimo || 100);
 
   let descontoAvista = 0; // calculado em desenhar()
+  // v3.41.0 — o desconto à vista deixou de ser automático para todo mundo
+  // (ordem do Marcio, 16/11/2026): só entra quando a caixa marca a caixinha.
+  // Começa DESMARCADA. As regras (percentual, mínimo, Pix/dinheiro, sem taxa,
+  // categoria prevalece) continuam as mesmas.
+  let querAvista = false;
   let freteValor = 0, freteTipo = '';   // v3.31.0 — só em loja com entrega
 
   const pagamentos = [{ forma: 'dinheiro', valor: total, parcelas: 1 }];
 
   const m = modal(`Pagamento — total ${moeda(total)}`, `
+    ${ativoAvista ? `<label id="pg-avista-opcao" style="display:flex;align-items:center;gap:10px;cursor:pointer;
+       border:1px solid var(--borda,#E3DCD2);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:13.5px;font-weight:600">
+       <input type="checkbox" id="pg-avista-chk" style="width:18px;height:18px;margin:0;cursor:pointer">
+       <span>Dar desconto à vista de ${(pctAvista * 100).toFixed(0)}%
+         <span style="font-weight:400;color:var(--texto-suave,#7A7A7A)">— Pix ou dinheiro, compras a partir de ${moeda(minimoAvista)}</span></span>
+     </label>
+     <div id="pg-avista-aviso" style="display:none;font-size:12.5px;color:#8a6d0b;margin:-4px 0 10px 4px"></div>` : ''}
     <div id="pg-avista-badge" style="display:none;background:#e8f5e9;border:1px solid var(--verde,#2e7d32);border-radius:8px;padding:8px 12px;margin-bottom:10px;color:var(--verde,#2e7d32);font-weight:600;font-size:13px"></div>
     ${aCusto
       // Já está no modo custo: deixa claro aqui também, senão o operador
@@ -949,7 +961,7 @@ function modalPagamento(total, descontoGeral, pontosResgate, aoConcluir, descont
   // Calcula desconto à vista: só se ativoAvista, total >= mínimo,
   // cliente NÃO tem desconto de categoria, e TODOS os pagamentos são dinheiro ou pix
   function calcAvista() {
-    if (!ativoAvista || total < minimoAvista) return 0;
+    if (!ativoAvista || !querAvista || total < minimoAvista) return 0;
     if (cliente && (cliente.categoria_desconto || 0) > 0) return 0; // categoria prevalece
     if (pagamentos.length === 0) return 0;
     const soAvista = pagamentos.every(p => p.forma === 'dinheiro' || p.forma === 'pix');
@@ -1047,6 +1059,27 @@ function modalPagamento(total, descontoGeral, pontosResgate, aoConcluir, descont
           <span style="opacity:.85">${formasComTaxa.join(' · ')} — assim a loja recebe
           o custo inteiro. Em dinheiro ou PIX não há acréscimo.</span>`;
       } else $tx.style.display = 'none';
+    }
+
+    // Caixinha do desconto à vista: liga/desliga e diz por que não aplicou
+    const $chk = m.querySelector('#pg-avista-chk');
+    if ($chk && !$chk._ligado) {
+      $chk._ligado = true;
+      $chk.onchange = () => {
+        querAvista = $chk.checked;
+        if (!querAvista && descontoAvista > 0 && pagamentos.length === 1) pagamentos[0].valor = arred(total + freteValor);
+        desenhar();
+      };
+    }
+    const $avAviso = m.querySelector('#pg-avista-aviso');
+    if ($avAviso) {
+      let motivo = '';
+      if (querAvista && descontoAvista === 0) {
+        if (total < minimoAvista) motivo = `Não se aplica: a compra está abaixo de ${moeda(minimoAvista)}.`;
+        else if (cliente && (cliente.categoria_desconto || 0) > 0) motivo = 'Não se aplica: o cliente já tem o desconto da categoria.';
+        else motivo = 'Não se aplica: o pagamento precisa ser todo em Pix ou dinheiro (sem taxa).';
+      }
+      $avAviso.textContent = motivo; $avAviso.style.display = motivo ? '' : 'none';
     }
 
     // Badge de desconto à vista

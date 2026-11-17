@@ -6,6 +6,17 @@
 ---
 
 
+## Sessão 17/11/2026
+
+- Estoque: impressão com valores e para conferência (sem valores). Entra na 3.41.0, publicada a pedido do Marcio ("me entregue agora para atualização online").
+
+## Sessão 16/11/2026
+
+- Pedido 1: desconto à vista (5% Pix/dinheiro acima do mínimo) deixa de ser automático — caixinha "Dar desconto à vista" na tela de pagamento, desmarcada por padrão; regras iguais. Mexe em `pdv.js` (só `modalPagamento`) por ordem direta do Marcio; troca/devolução/vales: diff zero.
+- Pedido 2: comparativo entre lojas passa a usar data E hora de abertura/fechamento (antes: dias inteiros das duas datas).
+- Dúvida enviada ao Marcio: dinheiro também depende da caixinha, ou só o Pix?
+- Testes: v3410 16/16 (banco real), tela de pagamento real no jsdom 11/11 (`testes/dom-pagamento/`).
+
 ## Sessão 12/11/2026 (tarde)
 
 - 3.40.1 publicada (o Marcio tinha segurado a publicação; o cliente atualizou e ficou na 3.38.0 sem modo servidor). Instalada no cliente pelo pendrive.
@@ -19,12 +30,12 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.40.2 — vigia sem bloqueio do Defender + Salgueiro Terminal 1.0.1 (12/11/2026) · publicada |
+| **Versão atual** | 3.41.0 — desconto à vista facultativo + comparativo por data e hora (16/11/2026) · NÃO publicada (última publicada: 3.40.1; a 3.40.2 nunca foi publicada e vai dentro da 3.41.0) |
 | **Data do último build** | 2026-11-09 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
 | **GRAPHIFY** | atualizado para 3.40.0 em 2026-11-09 ✓ |
-| **5 lugares da versão** | os 5 em 3.40.2 ✓ |
+| **5 lugares da versão** | os 5 em 3.41.0 ✓ |
 
 ---
 
