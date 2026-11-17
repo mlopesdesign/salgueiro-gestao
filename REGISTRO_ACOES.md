@@ -53,3 +53,4 @@
 - 2026-11-12 18:22 — Terminal 1.0.1: impressoras escolhidas sozinhas na primeira vez (Marcio: terminais abriam a janela do Windows). Conferido no Windows real. Rebuild de terminal, Salgueiro e instaladores. CERTO.
 - 2026-11-16 12:05 — v3.41.0: desconto à vista facultativo (caixinha, desmarcada) + comparativo entre lojas pela data e hora. pdv.js alterado SÓ no modalPagamento por ordem direta do Marcio (regra 6 é sobre troca: trocas/devolucoes/vales diff zero). Testes 16/16 + 11/11. ESTADO dizia 3.40.2 publicada — ERRADO, corrigido (última publicada 3.40.1).
 - 2026-11-17 14:10 — Estoque com/sem valores (botões na aba Estoque). 3.41.0 gerada: SHA 820fec7e17d08b79061c788c7242f0ae9dc258c9717b75a6067af5da2541a878. Testes 16 + 11 + 10 OK.
+- 2026-11-17 14:12 — Marcio confirmou: desconto à vista com caixinha vale para Pix e dinheiro (já publicado assim na 3.41.0). CERTO.

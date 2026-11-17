@@ -14,7 +14,7 @@
 
 - Pedido 1: desconto à vista (5% Pix/dinheiro acima do mínimo) deixa de ser automático — caixinha "Dar desconto à vista" na tela de pagamento, desmarcada por padrão; regras iguais. Mexe em `pdv.js` (só `modalPagamento`) por ordem direta do Marcio; troca/devolução/vales: diff zero.
 - Pedido 2: comparativo entre lojas passa a usar data E hora de abertura/fechamento (antes: dias inteiros das duas datas).
-- Dúvida enviada ao Marcio: dinheiro também depende da caixinha, ou só o Pix?
+- Confirmado pelo Marcio (17/11): a caixinha vale para Pix e dinheiro.
 - Testes: v3410 16/16 (banco real), tela de pagamento real no jsdom 11/11 (`testes/dom-pagamento/`).
 
 ## Sessão 12/11/2026 (tarde)
