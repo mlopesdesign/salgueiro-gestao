@@ -3,6 +3,13 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.41.1',
+    data: '2026-11-17',
+    itens: [
+      '📋 ESTOQUE › EXPORTAR PDF COM OU SEM VALORES. Ao clicar em "📄 Exportar PDF" na tela Estoque, a janela pergunta: "Com valores" (preço e total, como antes) ou "Sem valores" — só as quantidades, para o estoquista conferir, sem preço e sem total.',
+    ],
+  },
+  {
     versao: '3.41.0',
     data: '2026-11-16',
     itens: [

@@ -30,12 +30,12 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.41.0 — desconto à vista facultativo + comparativo por data e hora (16/11/2026) · NÃO publicada (última publicada: 3.40.1; a 3.40.2 nunca foi publicada e vai dentro da 3.41.0) |
+| **Versão atual** | 3.41.1 — Estoque › Exportar PDF com/sem valores (17/11/2026) · publicada |
 | **Data do último build** | 2026-11-09 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
 | **GRAPHIFY** | atualizado para 3.40.0 em 2026-11-09 ✓ |
-| **5 lugares da versão** | os 5 em 3.41.0 ✓ |
+| **5 lugares da versão** | os 5 em 3.41.1 ✓ |
 
 ---
 

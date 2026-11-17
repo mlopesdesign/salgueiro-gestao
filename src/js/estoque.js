@@ -63,6 +63,16 @@ async function exportarEstoquePdf() {
   modal('Exportar estoque em PDF', `
     <div style="width:min(460px,86vw)">
       ${_blocoEscopo()}
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+        <label class="campo-check" style="display:flex;align-items:center;gap:10px;cursor:pointer">
+          <input type="radio" name="est-pdf-valores" value="com" checked style="width:16px;height:16px">
+          <span>💲 <b>Com valores</b> — preço e total de cada peça</span>
+        </label>
+        <label class="campo-check" style="display:flex;align-items:center;gap:10px;cursor:pointer">
+          <input type="radio" name="est-pdf-valores" value="sem" style="width:16px;height:16px">
+          <span>📋 <b>Sem valores</b> — só quantidades, para o estoquista conferir</span>
+        </label>
+      </div>
       <label class="campo-check" style="display:flex;align-items:center;gap:10px;cursor:pointer">
         <input id="est-pdf-foto" type="checkbox" style="width:16px;height:16px">
         <span>📷 Incluir a foto de cada peça</span>
@@ -74,13 +84,16 @@ async function exportarEstoquePdf() {
     </div>
   `, async (mm, fechar) => {
     const incluirFoto = !!mm.querySelector('#est-pdf-foto')?.checked;
+    const comValores = (mm.querySelector('input[name=est-pdf-valores]:checked') || {}).value !== 'sem';
     const filtro = _filtroEscolhido(mm);
     fechar();
-    await _gerarEstoquePdf(incluirFoto, filtro);
+    await _gerarEstoquePdf(incluirFoto, filtro, comValores);
   }, 'Gerar PDF');
 }
 
-async function _gerarEstoquePdf(incluirFoto, filtro) {
+// v3.41.1 — comValores=false: folha para o estoquista conferir, só com
+// quantidades (sem preço e sem total). Pedido do Marcio, 17/11/2026.
+async function _gerarEstoquePdf(incluirFoto, filtro, comValores = true) {
   toast('Gerando PDF…');
   const r = await api('estoque:listarCompleto', { filtro });
   if (!r.ok) { toast(r.erro, true); return; }
@@ -129,15 +142,15 @@ async function _gerarEstoquePdf(incluirFoto, filtro) {
       <td class="cod">${esc(v.codigo_barras || '')}</td>
       <td class="num"><b>${v.estoque}</b></td>
       ${porLoja}
-      <td class="num">${moedaFmt(v.preco_venda || 0)}</td>
-      <td class="num">${moedaFmt((v.estoque || 0) * (v.preco_venda || 0))}</td>
+      ${comValores ? `<td class="num">${moedaFmt(v.preco_venda || 0)}</td>
+      <td class="num">${moedaFmt((v.estoque || 0) * (v.preco_venda || 0))}</td>` : ''}
     </tr>`;
   }).join('');
   const thFoto = incluirFoto ? '<th class="est-foto">Foto</th>' : '';
   const thLojas = locais.map(l => `<th class="num">${esc(l.nome)}</th>`).join('');
   const colspanTot = (incluirFoto ? 6 : 5);
   const deitado = locais.length >= 2;   // muitas colunas: folha deitada
-  const titulo = r.filtrado ? r.descricao : 'Estoque completo';
+  const titulo = (r.filtrado ? r.descricao : 'Estoque completo') + (comValores ? '' : ' — conferência (sem valores)');
   const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">
     <title>Estoque — ${esc(titulo)}</title>
     <style>
@@ -167,9 +180,9 @@ async function _gerarEstoquePdf(incluirFoto, filtro) {
     <h3>${esc(titulo)}</h3>
     <p class="sub">Gerado em ${data} · ${r.variacoes.length} variações · ${r.totalPecas} peças</p>
     <table>
-      <thead><tr>${thFoto}<th>Produto</th><th>Ref</th><th>Cor</th><th>Tam</th><th>Cód. barras</th><th class="num">Qtd</th>${thLojas}<th class="num">Preço</th><th class="num">Total</th></tr></thead>
+      <thead><tr>${thFoto}<th>Produto</th><th>Ref</th><th>Cor</th><th>Tam</th><th>Cód. barras</th><th class="num">Qtd</th>${thLojas}${comValores ? '<th class="num">Preço</th><th class="num">Total</th>' : ''}</tr></thead>
       <tbody>${linhas}</tbody>
-      <tfoot><tr><td colspan="${colspanTot}">TOTAIS</td><td class="num">${r.totalPecas}</td>${totLoja.map(t => `<td class="num">${t}</td>`).join('')}<td></td><td class="num">${moedaFmt(r.totalVenda)}</td></tr></tfoot>
+      <tfoot><tr><td colspan="${colspanTot}">TOTAIS</td><td class="num">${r.totalPecas}</td>${totLoja.map(t => `<td class="num">${t}</td>`).join('')}${comValores ? `<td></td><td class="num">${moedaFmt(r.totalVenda)}</td>` : ''}</tr></tfoot>
     </table></body></html>`;
   const w = window.open('', '_blank', 'width=1000,height=700');
   if (!w) { toast('Permita popups para exportar PDF.', true); return; }
