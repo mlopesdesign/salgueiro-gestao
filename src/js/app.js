@@ -213,7 +213,7 @@ function _avisoCaixaAberto(caixa) {
 const $app = document.getElementById('app');
 let usuario = null;
 let categoriasCache = [];
-let APP_VERSION = '3.41.1'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
+let APP_VERSION = '3.41.2'; // fallback; valor real vem de NL_APPVERSION via api('app:versao')
 
 // API dupla: no aplicativo usa IPC (preload); num terminal em rede (navegador),
 // conversa com o servidor do computador principal via HTTP com token de sessão.
@@ -243,6 +243,24 @@ let _idMemoria = null;
 const _qs = (() => { try { return new URLSearchParams(location.search); } catch { return new URLSearchParams(''); } })();
 const SATELITE = (() => { try { return window.parent !== window && _qs.get('satelite') === '1'; } catch { return false; } })();
 let _satImpressoras = {};   // { cupom: true, etiqueta: true, a4: true } — vem do terminal
+// v3.41.2 — "Ajustes deste caixa" vira item do menu, logo abaixo de
+// Mensagens (pedido do Marcio, 19/11: o ⚙ solto no canto inferior
+// esquerdo era apertado sem querer). Só aparece quando o terminal avisa que
+// sabe abrir os ajustes por mensagem (Salgueiro Terminal 1.0.2+).
+let _satAjustesMenu = false;
+function _itemAjustesCaixa() {
+  if (!SATELITE || !_satAjustesMenu) return;
+  const nav = document.querySelector('.sidebar .menu');
+  if (!nav || nav.querySelector('[data-id="ajustes-caixa"]')) return;
+  const a = document.createElement('a');
+  a.dataset.id = 'ajustes-caixa';
+  a.textContent = '🖨️ Ajustes deste caixa';
+  a.onclick = () => { try { window.parent.postMessage({ salg: 'ajustes' }, '*'); } catch { /* */ } };
+  // logo abaixo de Mensagens (correção do Marcio, 19/11); sem Mensagens no
+  // menu desse usuário, antes de Configurações; sem as duas, no fim
+  const msg = nav.querySelector('[data-id="mensagens"]'), cfgItem = nav.querySelector('[data-id="config"]');
+  if (msg) msg.after(a); else if (cfgItem) cfgItem.before(a); else nav.appendChild(a);
+}
 if (SATELITE) {
   try {
     const nome = String(_qs.get('terminal') || '').replace(/[^\w .-]/g, '').slice(0, 40);
@@ -251,7 +269,11 @@ if (SATELITE) {
   const _printOrig = window.print.bind(window);
   window.addEventListener('message', (ev) => {
     if (ev.source !== window.parent || !ev.data || typeof ev.data !== 'object') return;
-    if (ev.data.salg === 'config') _satImpressoras = ev.data.impressoras || {};
+    if (ev.data.salg === 'config') {
+      _satImpressoras = ev.data.impressoras || {};
+      // v3.41.2 — terminal 1.0.2+ avisa que abre os Ajustes pelo menu
+      if (ev.data.ajustesPeloMenu) { _satAjustesMenu = true; _itemAjustesCaixa(); }
+    }
     // o resultado da impressão ('impresso') é avisado pelo próprio terminal, por cima da tela
   });
   window.print = () => {
@@ -262,7 +284,7 @@ if (SATELITE) {
     // quem limpa a área de impressão espera o fim da impressão
     setTimeout(() => { try { window.dispatchEvent(new Event('afterprint')); } catch { /* */ } }, 0);
   };
-  try { window.parent.postMessage({ salg: 'pronto', versao: APP_VERSION }, '*'); } catch { /* */ }
+  try { window.parent.postMessage({ salg: 'pronto', versao: APP_VERSION, ajustesNoMenu: true }, '*'); } catch { /* */ }
 }
 // Monta o documento que seria impresso: folha A4 (relatórios, balanço,
 // romaneio), etiqueta ou cupom — com o MESMO CSS que o computador principal usa.
@@ -835,6 +857,7 @@ function telaPrincipal() {
   }
   shell.querySelector('#sair').onclick = async () => { await api('auth:logout'); telaLogin(); };
   $app.appendChild(shell);
+  _itemAjustesCaixa();   // terminal: "Ajustes deste caixa" abaixo de Configurações
 
   // ── Gaveta do menu (celular/tablet pela rede) ────────────────────────────
   // Em tela pequena o menu de 220px sai da frente e volta pelo ☰. No desktop

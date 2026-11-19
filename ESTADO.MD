@@ -6,6 +6,10 @@
 ---
 
 
+## Sessão 19/11/2026
+
+- Terminal: ⚙ do canto vira item "Ajustes deste caixa" no menu, abaixo de Mensagens (correção do Marcio: abaixo de Mensagens, não de Configurações). 3.41.2 + terminal 1.0.2.
+
 ## Sessão 17/11/2026
 
 - Estoque: impressão com valores e para conferência (sem valores). Entra na 3.41.0, publicada a pedido do Marcio ("me entregue agora para atualização online").
@@ -30,12 +34,12 @@
 
 | Item | Valor |
 |---|---|
-| **Versão atual** | 3.41.1 — Estoque › Exportar PDF com/sem valores (17/11/2026) · publicada |
+| **Versão atual** | 3.41.2 — Ajustes do caixa no menu + Terminal 1.0.2 (19/11/2026) · publicada |
 | **Data do último build** | 2026-11-09 |
 | **Máquina de trabalho** | Desktop — `E:\Projetos\LOJA FISICA SALGUEIRO V2` |
 | **session-lock** | gravado em 2026-08-04 pelo desktop (D:) — pode estar desatualizado |
 | **GRAPHIFY** | atualizado para 3.40.0 em 2026-11-09 ✓ |
-| **5 lugares da versão** | os 5 em 3.41.1 ✓ |
+| **5 lugares da versão** | os 5 em 3.41.2 ✓ |
 
 ---
 

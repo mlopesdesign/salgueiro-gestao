@@ -3,6 +3,13 @@
 // técnico. A cada release nova, acrescente um bloco NO TOPO da lista.
 export const NOVIDADES = [
   {
+    versao: '3.41.2',
+    data: '2026-11-19',
+    itens: [
+      '🖨️ AJUSTES DO CAIXA NO MENU. Nos caixas com o Salgueiro Terminal, o ⚙ solto no canto inferior esquerdo (que era apertado sem querer) virou o item "🖨️ Ajustes deste caixa" no menu, logo abaixo de Mensagens. Os caixas recebem o Salgueiro Terminal 1.0.2 sozinhos pela rede da loja.',
+    ],
+  },
+  {
     versao: '3.41.1',
     data: '2026-11-17',
     itens: [

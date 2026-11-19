@@ -55,3 +55,4 @@
 - 2026-11-17 14:10 — Estoque com/sem valores (botões na aba Estoque). 3.41.0 gerada: SHA 820fec7e17d08b79061c788c7242f0ae9dc258c9717b75a6067af5da2541a878. Testes 16 + 11 + 10 OK.
 - 2026-11-17 14:12 — Marcio confirmou: desconto à vista com caixinha vale para Pix e dinheiro (já publicado assim na 3.41.0). CERTO.
 - 2026-11-17 14:20 — ERRADO na 3.41.0: pus a opção sem valores no relatório de Relatórios › Estoque; o Marcio usa Estoque › Exportar PDF. Corrigido na 3.41.1 (rádio com/sem valores na janela do PDF). Teste 8/8 com dados reais. Regra: conferir qual tela o Marcio usa antes de mexer.
+- 2026-11-19 11:55 — 3.41.2 + terminal 1.0.2: Ajustes do caixa como item do menu abaixo de Mensagens; ⚙ do canto só fora do sistema. Testes 42/42. CERTO.
